@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,6 +18,7 @@ package com.jpexs.decompiler.flash.action.model;
 
 import com.jpexs.decompiler.flash.SourceGeneratorLocalData;
 import com.jpexs.decompiler.flash.action.model.operations.SubtractActionItem;
+import com.jpexs.decompiler.flash.action.parser.script.ActionSourceGenerator;
 import com.jpexs.decompiler.flash.action.parser.script.VariableActionItem;
 import com.jpexs.decompiler.flash.action.swf4.ActionPop;
 import com.jpexs.decompiler.flash.action.swf4.ActionPush;
@@ -101,6 +102,9 @@ public class PostDecrementActionItem extends ActionItem implements SetTypeAction
 
     @Override
     public List<GraphSourceItem> toSourceIgnoreReturnValue(SourceGeneratorLocalData localData, SourceGenerator generator) throws CompilationException {
+        ActionSourceGenerator asGenerator = (ActionSourceGenerator) generator;
+        String charset = asGenerator.getCharset();  
+        
         List<GraphSourceItem> ret = new ArrayList<>();
 
         GraphTargetItem val = object;
@@ -124,9 +128,9 @@ public class PostDecrementActionItem extends ActionItem implements SetTypeAction
             ret.add(new ActionSetMember());
         } else if ((val instanceof DirectValueActionItem) && ((DirectValueActionItem) val).value instanceof RegisterNumber) {
             RegisterNumber rn = (RegisterNumber) ((DirectValueActionItem) val).value;
-            ret.add(new ActionPush(new RegisterNumber(rn.number)));
+            ret.add(new ActionPush(new RegisterNumber(rn.number), charset));
             ret.add(new ActionDecrement());
-            ret.add(new ActionStoreRegister(rn.number));
+            ret.add(new ActionStoreRegister(rn.number, charset));
             ret.add(new ActionPop());
         } else if (val instanceof GetPropertyActionItem) {
             GetPropertyActionItem gp = (GetPropertyActionItem) val;

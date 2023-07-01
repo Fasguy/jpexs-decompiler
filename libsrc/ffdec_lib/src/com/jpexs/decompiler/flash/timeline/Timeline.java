@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -16,7 +16,10 @@
  */
 package com.jpexs.decompiler.flash.timeline;
 
+import com.jpexs.decompiler.flash.AppResources;
 import com.jpexs.decompiler.flash.SWF;
+import com.jpexs.decompiler.flash.TagRemoveListener;
+import com.jpexs.decompiler.flash.configuration.Configuration;
 import com.jpexs.decompiler.flash.exporters.BlendModeSetable;
 import com.jpexs.decompiler.flash.exporters.FrameExporter;
 import com.jpexs.decompiler.flash.exporters.commonshape.ExportRectangle;
@@ -41,6 +44,7 @@ import com.jpexs.decompiler.flash.tags.base.CharacterIdTag;
 import com.jpexs.decompiler.flash.tags.base.CharacterTag;
 import com.jpexs.decompiler.flash.tags.base.DisplayObjectCacheKey;
 import com.jpexs.decompiler.flash.tags.base.DrawableTag;
+import com.jpexs.decompiler.flash.tags.base.FontTag;
 import com.jpexs.decompiler.flash.tags.base.ImageTag;
 import com.jpexs.decompiler.flash.tags.base.MorphShapeTag;
 import com.jpexs.decompiler.flash.tags.base.PlaceObjectTypeTag;
@@ -49,6 +53,8 @@ import com.jpexs.decompiler.flash.tags.base.RenderContext;
 import com.jpexs.decompiler.flash.tags.base.ShapeTag;
 import com.jpexs.decompiler.flash.tags.base.SoundStreamHeadTypeTag;
 import com.jpexs.decompiler.flash.tags.base.TextTag;
+import com.jpexs.decompiler.flash.tags.gfx.DefineExternalStreamSound;
+import com.jpexs.decompiler.flash.types.BlendMode;
 import com.jpexs.decompiler.flash.types.CLIPACTIONS;
 import com.jpexs.decompiler.flash.types.CXFORMWITHALPHA;
 import com.jpexs.decompiler.flash.types.ColorTransform;
@@ -71,14 +77,19 @@ import java.awt.geom.AffineTransform;
 import java.awt.geom.Area;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.Stack;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.imageio.ImageIO;
 import org.w3c.dom.Element;
 
 /**
@@ -111,7 +122,7 @@ public class Timeline {
 
     private final Map<ASMSource, Integer> actionFrames = new HashMap<>();
 
-    private final Map<SoundStreamHeadTypeTag, List<SoundStreamBlockTag>> soundStramBlocks = new HashMap<>();
+    private final Map<Integer, List<SoundStreamBlockTag>> soundStramBlocks = new LinkedHashMap<>();
 
     private AS2Package as2RootPackage;
 
@@ -132,12 +143,12 @@ public class Timeline {
         }
     }
 
-    public List<Frame> getFrames() {
+    public synchronized List<Frame> getFrames() {
         ensureInitialized();
         return frames;
     }
 
-    public Frame getFrame(int index) {
+    public synchronized Frame getFrame(int index) {
         ensureInitialized();
         if (index >= frames.size()) {
             return null;
@@ -145,7 +156,7 @@ public class Timeline {
         return frames.get(index);
     }
 
-    public void addFrame(Frame frame) {
+    public synchronized void addFrame(Frame frame) {
         ensureInitialized();
         frames.add(frame);
         maxDepth = getMaxDepthInternal();
@@ -164,7 +175,7 @@ public class Timeline {
 
     public List<SoundStreamBlockTag> getSoundStreamBlocks(SoundStreamHeadTypeTag head) {
         ensureInitialized();
-        return soundStramBlocks.get(head);
+        return soundStramBlocks.get(head.getCharacterId());
     }
 
     public Tag getParentTag() {
@@ -175,7 +186,7 @@ public class Timeline {
         reset(swf, swf, 0, swf.displayRect);
     }
 
-    public void reset(SWF swf, Timelined timelined, int id, RECT displayRect) {
+    public synchronized void reset(SWF swf, Timelined timelined, int id, RECT displayRect) {
         initialized = false;
         frames.clear();
         depthMaxFrame.clear();
@@ -189,7 +200,7 @@ public class Timeline {
         this.displayRect = displayRect;
         this.frameRate = swf.frameRate;
         this.timelined = timelined;
-        as2RootPackage = new AS2Package(null, null, swf);
+        as2RootPackage = new AS2Package(null, null, swf, false, false);
     }
 
     public final int getMaxDepth() {
@@ -197,7 +208,7 @@ public class Timeline {
         return maxDepth;
     }
 
-    private int getMaxDepthInternal() {
+    private synchronized int getMaxDepthInternal() {
         int max_depth = 0;
         for (Frame f : frames) {
             for (int depth : f.layers.keySet()) {
@@ -213,12 +224,12 @@ public class Timeline {
         return max_depth;
     }
 
-    public int getFrameCount() {
+    public synchronized int getFrameCount() {
         ensureInitialized();
         return frames.size();
     }
 
-    public int getRealFrameCount() {
+    public synchronized int getRealFrameCount() {
         ensureInitialized();
 
         int cnt = 1;
@@ -254,7 +265,7 @@ public class Timeline {
         this.displayRect = displayRect;
         this.frameRate = swf.frameRate;
         this.timelined = timelined;
-        as2RootPackage = new AS2Package(null, null, swf);
+        as2RootPackage = new AS2Package(null, null, swf, false, false);
     }
 
     public int getFrameWithLabel(String label) {
@@ -264,17 +275,18 @@ public class Timeline {
         return -1;
     }
 
-    private void initialize() {
+    private synchronized void initialize() {
         int frameIdx = 0;
         Frame frame = new Frame(this, frameIdx++);
         frame.layersChanged = true;
         boolean newFrameNeeded = false;
         for (Tag t : timelined.getTags()) {
+            newFrameNeeded = true;
             boolean isNested = ShowFrameTag.isNestedTagType(t.getId());
             if (isNested) {
-                newFrameNeeded = true;
                 frame.innerTags.add(t);
             }
+            frame.allInnerTags.add(t);
 
             if (t instanceof ASMSourceContainer) {
                 ASMSourceContainer asmSourceContainer = (ASMSourceContainer) t;
@@ -288,25 +300,20 @@ public class Timeline {
             }
 
             if (t instanceof FrameLabelTag) {
-                newFrameNeeded = true;
                 frame.label = ((FrameLabelTag) t).getLabelName();
                 frame.namedAnchor = ((FrameLabelTag) t).isNamedAnchor();
                 labelToFrame.put(frame.label, frames.size());
             } else if (t instanceof StartSoundTag) {
-                newFrameNeeded = true;
                 frame.sounds.add(((StartSoundTag) t).soundId);
                 frame.soundClasses.add(null);
                 frame.soundInfos.add(((StartSoundTag) t).soundInfo);
             } else if (t instanceof StartSound2Tag) {
-                newFrameNeeded = true;
                 frame.sounds.add(-1);
                 frame.soundClasses.add(((StartSound2Tag) t).soundClassName);
                 frame.soundInfos.add(((StartSoundTag) t).soundInfo);
             } else if (t instanceof SetBackgroundColorTag) {
-                newFrameNeeded = true;
                 frame.backgroundColor = ((SetBackgroundColorTag) t).backgroundColor;
             } else if (t instanceof PlaceObjectTypeTag) {
-                newFrameNeeded = true;
                 PlaceObjectTypeTag po = (PlaceObjectTypeTag) t;
                 int depth = po.getDepth();
                 DepthState fl = frame.layers.get(depth);
@@ -317,17 +324,44 @@ public class Timeline {
                 frame.layersChanged = true;
                 fl.placeObjectTag = po;
                 fl.minPlaceObjectNum = Math.max(fl.minPlaceObjectNum, po.getPlaceObjectNum());
-                int characterId = po.getCharacterId();
-                if (characterId != -1) {
-                    fl.characterId = characterId;
-                    fl.hasImage = po.hasImage();
-                }
-                CharacterTag character = swf.getCharacter(characterId);
-                if (character instanceof DefineSpriteTag) {
-                    if (swf.getCyclicCharacters().contains(characterId)) {
+                
+                boolean wasEmpty = fl.characterId == -1 && fl.className == null;
+
+                if (po.flagMove() || wasEmpty) {
+                    int characterId = po.getCharacterId();
+                    if (characterId != -1) {
+                        fl.characterId = characterId;
+                        fl.hasImage = po.hasImage();
+                    }
+                    CharacterTag character = swf.getCharacter(characterId);
+                    if (character instanceof DefineSpriteTag) {
+                        if (swf.getCyclicCharacters().contains(characterId)) {
+                            fl.characterId = -1;
+                        }
+                    }                    
+                    String className = po.getClassName();
+                    if (className != null) {
+                        fl.className = className;
+                        character = swf.getCharacterByClass(className);
+                        if (character instanceof DefineSpriteTag) {
+                            if (swf.getCyclicCharacters().contains(characterId)) {
+                                fl.className = null;
+                            }
+                        }
+                    }
+                    //Special case, as FontTags are sometimes added to stage (like intestdata/as2.swf, Sprite 10)
+                    //Do not display them.
+                    //Steps to reproduce: Create new static text and set its orientation to vertical
+                    //TODO: handle this better. Do not treat FontTag as drawable for example
+                    if (character instanceof FontTag) {
                         fl.characterId = -1;
+                        fl.className = null;
+                        fl.key = true;
+                    } else {
+                        fl.key = characterId != -1 || className != null;
                     }
                 }
+
                 if (po.flagMove()) {
                     MATRIX matrix2 = po.getMatrix();
                     if (matrix2 != null) {
@@ -340,6 +374,11 @@ public class Timeline {
                     ColorTransform colorTransForm2 = po.getColorTransform();
                     if (colorTransForm2 != null) {
                         fl.colorTransForm = colorTransForm2;
+                    }
+
+                    String className2 = po.getClassName();
+                    if (className2 != null) {
+                        fl.className = className2;
                     }
 
                     CLIPACTIONS clipActions2 = po.getClipActions();
@@ -367,7 +406,7 @@ public class Timeline {
                     }
 
                     fl.isVisible = po.isVisible();
-                } else {
+                } else if (wasEmpty) {
                     fl.matrix = po.getMatrix();
                     fl.instanceName = po.getInstanceName();
                     fl.colorTransForm = po.getColorTransform();
@@ -379,15 +418,13 @@ public class Timeline {
                     fl.clipDepth = po.getClipDepth();
                     fl.isVisible = po.isVisible();
                 }
-                fl.key = characterId != -1;
+                
             } else if (t instanceof RemoveTag) {
-                newFrameNeeded = true;
                 RemoveTag r = (RemoveTag) t;
                 int depth = r.getDepth();
                 frame.layers.remove(depth);
                 frame.layersChanged = true;
             } else if (t instanceof DoActionTag) {
-                newFrameNeeded = true;
                 frame.actions.add((DoActionTag) t);
                 actionFrames.put((DoActionTag) t, frame.frame);
             } else if (t instanceof ShowFrameTag) {
@@ -413,23 +450,24 @@ public class Timeline {
         createASPackages();
         if (timelined instanceof SWF) {
             // popuplate only for main timeline
-            populateSoundStreamBlocks(0, timelined.getTags());
+            populateSoundStreamBlocks(-1, timelined.getTags());
         }
 
         initialized = true;
     }
 
-    private void detectTweens() {
-        for (int d = 1; d <= maxDepth; d++) {
+    private synchronized void detectTweens() {
+        for (int d = 0; d <= maxDepth; d++) {
             int characterId = -1;
+            String charClassName = null;
             int len = 0;
             for (int f = 0; f <= frames.size(); f++) {
                 DepthState ds = f >= frames.size() ? null : frames.get(f).layers.get(d);
 
-                if (ds != null && characterId != -1 && ds.characterId == characterId) {
+                if (ds != null && (characterId != -1 || charClassName != null) && (ds.characterId == characterId && Objects.equals(ds.className, charClassName))) {
                     len++;
                 } else {
-                    if (characterId != -1) {
+                    if (characterId != -1 || charClassName != null) {
                         int startPos = f - len;
                         List<DepthState> matrices = new ArrayList<>(len);
                         for (int k = 0; k < len; k++) {
@@ -452,13 +490,14 @@ public class Timeline {
                 }
 
                 characterId = ds == null ? -1 : ds.characterId;
+                charClassName = ds == null ? null : ds.className;
             }
         }
     }
 
-    private void calculateMaxDepthFrames() {
+    private synchronized void calculateMaxDepthFrames() {
         depthMaxFrame.clear();
-        for (int d = 1; d <= maxDepth; d++) {
+        for (int d = 0; d <= maxDepth; d++) {
             for (int f = frames.size() - 1; f >= 0; f--) {
                 if (frames.get(f).layers.get(d) != null) {
                     depthMaxFrame.put(d, f);
@@ -482,14 +521,49 @@ public class Timeline {
 
                 String[] pathParts = path.contains(".") ? path.split("\\.") : new String[]{path};
                 AS2Package pkg = as2RootPackage;
+
+                boolean isNamedPackages = "__Packages".equals(pathParts[0]);
+
                 for (int pos = 0; pos < pathParts.length - 1; pos++) {
+                    if (Configuration.flattenASPackages.get()) {
+                        if (isNamedPackages && pos == 0) {
+                            //nothing
+                        } else {
+
+                            String fullPath;
+                            if (isNamedPackages) {
+                                fullPath = path.substring(pathParts[0].length() + 1, path.length() - pathParts[pathParts.length - 1].length() - 1);
+                            } else {
+                                fullPath = path.substring(0, path.length() - pathParts[pathParts.length - 1].length() - 1);
+                            }
+
+                            AS2Package subPkg = pkg.subPackages.get(fullPath);
+                            if (subPkg == null) {
+                                subPkg = new AS2Package(fullPath, pkg, swf, true, false);
+                                pkg.subPackages.put(fullPath, subPkg);
+                            }
+                            pkg = subPkg;
+                            break;
+                        }
+                    }
+
                     String pathPart = pathParts[pos];
                     AS2Package subPkg = pkg.subPackages.get(pathPart);
                     if (subPkg == null) {
-                        subPkg = new AS2Package(pathPart, pkg, swf);
+                        subPkg = new AS2Package(pathPart, pkg, swf, false, false);
                         pkg.subPackages.put(pathPart, subPkg);
                     }
 
+                    pkg = subPkg;
+                }
+
+                if (Configuration.flattenASPackages.get() && ((pathParts.length == 2 && isNamedPackages) || pathParts.length == 1)) {
+                    String fullPath = AppResources.translate("package.default");
+                    AS2Package subPkg = pkg.subPackages.get(fullPath);
+                    if (subPkg == null) {
+                        subPkg = new AS2Package(fullPath, pkg, swf, true, true);
+                        pkg.subPackages.put(fullPath, subPkg);
+                    }
                     pkg = subPkg;
                 }
 
@@ -503,9 +577,14 @@ public class Timeline {
         for (Tag t : tags) {
             if (t instanceof SoundStreamHeadTypeTag) {
                 SoundStreamHeadTypeTag head = (SoundStreamHeadTypeTag) t;
-                head.setVirtualCharacterId(containerId);
+                head.setCharacterId(containerId);
                 blocks = new ArrayList<>();
-                soundStramBlocks.put(head, blocks);
+                soundStramBlocks.put(containerId, blocks);
+                continue;
+            }
+            if (t instanceof DefineExternalStreamSound) {
+                DefineExternalStreamSound externalStream = (DefineExternalStreamSound) t;
+                externalStream.setCharacterId(containerId);
                 continue;
             }
 
@@ -540,13 +619,12 @@ public class Timeline {
         Frame frameObj = getFrame(frame);
         for (int depth : frameObj.layers.keySet()) {
             DepthState layer = frameObj.layers.get(depth);
-            if (layer.characterId != -1) {
-                if (!swf.getCharacters().containsKey(layer.characterId)) {
-                    continue;
-                }
-                usedCharacters.add(layer.characterId);
-                swf.getCharacter(layer.characterId).getNeededCharactersDeep(usedCharacters);
+            CharacterTag ch = layer.getCharacter();
+            if (ch == null) {
+                continue;
             }
+            usedCharacters.add(ch.getCharacterId());
+            ch.getNeededCharactersDeep(usedCharacters);
         }
     }
 
@@ -563,17 +641,8 @@ public class Timeline {
         return modified;
     }
 
-    public boolean removeCharacter(int characterId) {
-        boolean modified = false;
-        for (int i = 0; i < timelined.getTags().size(); i++) {
-            Tag t = timelined.getTags().get(i);
-            if (t instanceof CharacterIdTag && ((CharacterIdTag) t).getCharacterId() == characterId) {
-                timelined.removeTag(i);
-                i--;
-                modified = true;
-            }
-        }
-        return modified;
+    public boolean removeCharacter(int characterId, TagRemoveListener listener) {
+        return swf.removeCharacterFromTimeline(characterId, this, listener);
     }
 
     public double roundToPixel(double val) {
@@ -621,7 +690,7 @@ public class Timeline {
      toImage(frame, time, renderContext, image, isClip, transforms[i], absoluteTransformation, colorTransform, targetRect[i]);
      }
      }*/
-    private void drawDrawable(Matrix strokeTransform, DepthState layer, Matrix layerMatrix, Graphics2D g, ColorTransform colorTransForm, int blendMode, List<Clip> clips, Matrix transformation, boolean isClip, int clipDepth, Matrix absMat, int time, int ratio, RenderContext renderContext, SerializableImage image, SerializableImage fullImage, DrawableTag drawable, List<FILTER> filters, double unzoom, ColorTransform clrTrans, boolean sameImage, ExportRectangle viewRect, Matrix fullTransformation, boolean scaleStrokes, int drawMode) {
+    private void drawDrawable(Matrix strokeTransform, DepthState layer, Matrix layerMatrix, Graphics2D g, ColorTransform colorTransForm, int blendMode, int parentBlendMode, List<Clip> clips, Matrix transformation, boolean isClip, int clipDepth, Matrix absMat, int time, int ratio, RenderContext renderContext, SerializableImage image, SerializableImage fullImage, DrawableTag drawable, List<FILTER> filters, double unzoom, ColorTransform clrTrans, boolean sameImage, ExportRectangle viewRect, Matrix fullTransformation, boolean scaleStrokes, int drawMode, boolean canUseSmoothing) {
         Matrix drawMatrix = new Matrix();
         int drawableFrameCount = drawable.getNumFrames();
         if (drawableFrameCount == 0) {
@@ -659,12 +728,14 @@ public class Timeline {
         fg.setStroke(new BasicStroke(1));
         fg.setTransform(new AffineTransform());
         fg.drawRect((int) (viewRectZoom.xMin / SWF.unitDivisor + 5), (int) (viewRectZoom.yMin / SWF.unitDivisor + 5), (int) (viewRectZoom.getWidth() / SWF.unitDivisor - 5), (int) (viewRectZoom.getHeight() / SWF.unitDivisor - 5));
-*/
+         */
         if (!viewRectZoom.intersects(fullRect)) {
-            //System.err.println("hidden " + layer.characterId);           
+            if (clipDepth > -1) {
+                Clip clip = new Clip(new Area(), clipDepth);
+                clips.add(clip);
+            }
             return;
         }
-
         strokeTransform = strokeTransform.concatenate(layerMatrix);
 
         boolean cacheAsBitmap = layer.cacheAsBitmap() && layer.placeObjectTag != null && drawable.isSingleFrame();
@@ -687,8 +758,8 @@ public class Timeline {
         if (cacheAsBitmap && renderContext.displayObjectCache != null) {
             DisplayObjectCacheKey key = new DisplayObjectCacheKey(layer.placeObjectTag, unzoom, viewRect);
             img = renderContext.displayObjectCache.get(key);
-        }
-
+        }       
+        
         int stateCount = renderContext.stateUnderCursor == null ? 0 : renderContext.stateUnderCursor.size();
         int dframe;
         if (fontFrameNum != -1) {
@@ -696,7 +767,7 @@ public class Timeline {
         } else {
             dframe = time % drawableFrameCount;
         }
-
+        int dtime = time - dframe;
         ExportRectangle viewRect2 = new ExportRectangle(viewRect);
 
         if (filters != null && filters.size() > 0) {
@@ -711,12 +782,12 @@ public class Timeline {
             }
             rect.xMin -= deltaXMax * unzoom * SWF.unitDivisor;
             rect.xMax += deltaXMax * unzoom * SWF.unitDivisor;
-            rect.yMin -= deltaYMax * unzoom * SWF.unitDivisor;
+            rect.yMin -= deltaXMax * unzoom * SWF.unitDivisor;
             rect.yMax += deltaYMax * unzoom * SWF.unitDivisor;
             viewRect2.xMin -= deltaXMax * SWF.unitDivisor;
             viewRect2.xMax += deltaXMax * SWF.unitDivisor;
-            viewRect2.yMin -= deltaXMax * SWF.unitDivisor;
-            viewRect2.yMax += deltaXMax * SWF.unitDivisor;
+            viewRect2.yMin -= deltaYMax * SWF.unitDivisor;
+            viewRect2.yMax += deltaYMax * SWF.unitDivisor;
         }
 
         rect.xMin -= SWF.unitDivisor;
@@ -746,13 +817,14 @@ public class Timeline {
             //strokeTransform = strokeTransform.clone();
             //strokeTransform.translate(-rect.xMin, -rect.yMin);
             if (drawable instanceof ButtonTag) {
+                dtime = time;
                 dframe = ButtonTag.FRAME_UP;
                 if (renderContext.cursorPosition != null) {
                     int dx = (int) (viewRect.xMin * unzoom);
                     int dy = (int) (viewRect.yMin * unzoom);
-                    Point cursorPositionInView = new Point(renderContext.cursorPosition.x - dx, renderContext.cursorPosition.y - dy);
+                    Point cursorPositionInView = new Point((int) Math.round(renderContext.cursorPosition.x * unzoom) - dx, (int) Math.round(renderContext.cursorPosition.y * unzoom) - dy);
 
-                    Shape buttonShape = drawable.getOutline(ButtonTag.FRAME_HITTEST, time, ratio, renderContext, absMat, true);
+                    Shape buttonShape = ((ButtonTag) drawable).getOutline(true, ButtonTag.FRAME_HITTEST, dtime, ratio, renderContext, absMat, true, viewRect, unzoom);
                     if (buttonShape.contains(cursorPositionInView)) {
                         renderContext.mouseOverButton = (ButtonTag) drawable;
                         if (renderContext.mouseButton > 0) {
@@ -773,7 +845,6 @@ public class Timeline {
             if (clipDepth > -1) {
                 canUseSameImage = false;
             }
-
 
             Matrix mfull = fullTransformation.concatenate(layerMatrix);
             if (canUseSameImage && sameImage) {
@@ -797,6 +868,11 @@ public class Timeline {
             }
 
             ColorTransform clrTrans2 = clrTrans;
+
+            if (blendMode > 1) {
+                clrTrans2 = null;
+            }
+
             if (clipDepth > -1) {
                 //Make transparent colors opaque, mask should be only made by shapes
                 CXFORMWITHALPHA clrMask = new CXFORMWITHALPHA();
@@ -810,12 +886,18 @@ public class Timeline {
             }
 
             if (!(drawable instanceof ImageTag) || (swf.isAS3() && layer.hasImage)) {
-                drawable.toImage(dframe, time, ratio, renderContext, img, fullImage, isClip || clipDepth > -1, m, strokeTransform, absMat, mfull, clrTrans2, unzoom, sameImage, viewRect2, scaleStrokes, drawMode);
+                drawable.toImage(dframe, dtime, ratio, renderContext, img, fullImage, isClip || clipDepth > -1, m, strokeTransform, absMat, mfull, clrTrans2, unzoom, sameImage, viewRect2, scaleStrokes, drawMode, layer.blendMode, canUseSmoothing);
             } else {
                 // todo: show one time warning
             }
 
             if (filters != null) {
+                /*try {
+                    ImageIO.write(img.getBufferedImage(), "PNG", new File("c:\\FlashRelated\\gwint\\out.png"));
+                } catch (IOException ex) {
+                    Logger.getLogger(Timeline.class.getName()).log(Level.SEVERE, null, ex);
+                }
+                System.exit(0);*/
                 for (FILTER filter : filters) {
                     img = filter.apply(img, unzoom);
                 }
@@ -839,46 +921,46 @@ public class Timeline {
         } else {
             switch (blendMode) {
                 case 0:
-                case 1:
+                case BlendMode.NORMAL:
                     g.setComposite(AlphaComposite.SrcOver);
                     break;
-                case 2: // Layer
+                case BlendMode.LAYER:
                     g.setComposite(AlphaComposite.SrcOver);
                     break;
-                case 3:
+                case BlendMode.MULTIPLY:
                     g.setComposite(BlendComposite.Multiply);
                     break;
-                case 4:
+                case BlendMode.SCREEN:
                     g.setComposite(BlendComposite.Screen);
                     break;
-                case 5:
+                case BlendMode.LIGHTEN:
                     g.setComposite(BlendComposite.Lighten);
                     break;
-                case 6:
+                case BlendMode.DARKEN:
                     g.setComposite(BlendComposite.Darken);
                     break;
-                case 7:
+                case BlendMode.DIFFERENCE:
                     g.setComposite(BlendComposite.Difference);
                     break;
-                case 8:
+                case BlendMode.ADD:
                     g.setComposite(BlendComposite.Add);
                     break;
-                case 9:
+                case BlendMode.SUBTRACT:
                     g.setComposite(BlendComposite.Subtract);
                     break;
-                case 10:
+                case BlendMode.INVERT:
                     g.setComposite(BlendComposite.Invert);
                     break;
-                case 11:
+                case BlendMode.ALPHA:
                     g.setComposite(BlendComposite.Alpha);
                     break;
-                case 12:
+                case BlendMode.ERASE:
                     g.setComposite(BlendComposite.Erase);
                     break;
-                case 13:
+                case BlendMode.OVERLAY:
                     g.setComposite(BlendComposite.Overlay);
                     break;
-                case 14:
+                case BlendMode.HARDLIGHT:
                     g.setComposite(BlendComposite.HardLight);
                     break;
                 default: // Not implemented
@@ -901,15 +983,15 @@ public class Timeline {
             clips.add(clip);
         } else {
             if (renderContext.cursorPosition != null) {
-                int dx = (int) (viewRect.xMin * unzoom);
-                int dy = (int) (viewRect.yMin * unzoom);
-                Point cursorPositionInView = new Point(renderContext.cursorPosition.x - dx, renderContext.cursorPosition.y - dy);
+                int dx = (int) Math.round(viewRect.xMin * unzoom);
+                int dy = (int) Math.round(viewRect.yMin * unzoom);
+                Point cursorPositionInView = new Point((int) Math.round(renderContext.cursorPosition.x * unzoom) - dx, (int) Math.round(renderContext.cursorPosition.y * unzoom) - dy);
                 if (drawable instanceof DefineSpriteTag) {
                     if (renderContext.stateUnderCursor.size() > stateCount) {
                         renderContext.stateUnderCursor.add(layer);
                     }
                 } else if (absMat.transform(new ExportRectangle(boundRect)).contains(cursorPositionInView)) {
-                    Shape shape = drawable.getOutline(dframe, time, layer.ratio, renderContext, absMat, true);
+                    Shape shape = drawable.getOutline(true, dframe, dtime, layer.ratio, renderContext, absMat, true, viewRect, unzoom);
                     if (shape.contains(cursorPositionInView)) {
                         renderContext.stateUnderCursor.add(layer);
                     }
@@ -920,25 +1002,19 @@ public class Timeline {
                 Graphics2D g2 = (Graphics2D) renderContext.borderImage.getGraphics();
                 g2.setPaint(Color.red);
                 g2.setStroke(new BasicStroke(2));
-                Shape shape = drawable.getOutline(dframe, time, layer.ratio, renderContext, absMat.preConcatenate(Matrix.getScaleInstance(1 / SWF.unitDivisor)), true);
+                Shape shape = drawable.getOutline(true, dframe, dtime, layer.ratio, renderContext, absMat.preConcatenate(Matrix.getScaleInstance(1 / SWF.unitDivisor)), true, viewRect, unzoom);
                 g2.draw(shape);
             }
-
-            /*if (sameImage && canUseSameImage) {
-                if (g instanceof GraphicsGroupable) {
-                    ((GraphicsGroupable) g).drawGroup(img.getGraphics());
-                }
-            }*/
             if (!(sameImage && canUseSameImage)) {
                 g.setTransform(drawMatrix.toTransform());
-                g.drawImage(img.getBufferedImage(), 0, 0, null);
-                //g.setColor(Color.red);
-                //g.drawRect(0, 0, img.getWidth(), img.getHeight());
-                /*try {
-                    ImageIO.write(img.getBufferedImage(), "PNG", new File("out.png"));
-                } catch (IOException ex) {
-                    Logger.getLogger(Timeline.class.getName()).log(Level.SEVERE, null, ex);
-                }*/
+
+                if (blendMode > 1 && clrTrans != null) {
+                    img = clrTrans.apply(img);
+                }
+
+                if (!((blendMode == 11 || blendMode == 12) && parentBlendMode <= 1)) { //alpha and erase modes require parent blendmode not normal
+                    g.drawImage(img.getBufferedImage(), 0, 0, null);
+                }
             }
             if (g instanceof BlendModeSetable) {
                 ((BlendModeSetable) g).setBlendMode(0);
@@ -946,7 +1022,7 @@ public class Timeline {
         }
     }
 
-    public void toImage(int frame, int time, RenderContext renderContext, SerializableImage image, SerializableImage fullImage, boolean isClip, Matrix transformation, Matrix strokeTransformation, Matrix absoluteTransformation, ColorTransform colorTransform, double unzoom, boolean sameImage, ExportRectangle viewRect, Matrix fullTransformation, boolean scaleStrokes, int drawMode) {
+    public void toImage(int frame, int time, RenderContext renderContext, SerializableImage image, SerializableImage fullImage, boolean isClip, Matrix transformation, Matrix strokeTransformation, Matrix absoluteTransformation, ColorTransform colorTransform, double unzoom, boolean sameImage, ExportRectangle viewRect, Matrix fullTransformation, boolean scaleStrokes, int drawMode, int blendMode, boolean canUseSmoothing) {
         //double unzoom = SWF.unitDivisor;
         //unzoom = SWF.unitDivisor;
         if (getFrameCount() <= frame) {
@@ -972,7 +1048,7 @@ public class Timeline {
 
         int maxDepth = getMaxDepth();
         int clipCount = 0;
-        for (int i = 1; i <= maxDepth; i++) {
+        for (int i = 0; i <= maxDepth; i++) {
             boolean clipChanged = clipCount != clips.size();
             for (int c = 0; c < clips.size(); c++) {
                 if (clips.get(c).depth < i) {
@@ -1011,119 +1087,112 @@ public class Timeline {
                 continue;
             }
             DepthState layer = frameObj.layers.get(i);
-            if (!swf.getCharacters().containsKey(layer.characterId)) {
-                continue;
-            }
             if (!layer.isVisible) {
                 continue;
             }
 
-            CharacterTag character = swf.getCharacter(layer.characterId);
+            CharacterTag character = layer.getCharacter();
+            if (character == null) {
+                continue;
+            }
             Matrix layerMatrix = new Matrix(layer.matrix);
-            boolean zeroScale = false;
-            if (Double.compare(layerMatrix.scaleX, 0.0) == 0 || Double.compare(layerMatrix.scaleY, 0.0) == 0) {
-                zeroScale = true;
-                //Avoid problems in PDF export and elsewhere
+
+            Matrix mat = transformation.concatenate(layerMatrix);
+            Matrix absMat = absoluteTransformation.concatenate(layerMatrix);
+
+            ColorTransform clrTrans = colorTransform;
+            if (layer.colorTransForm != null) {
+                clrTrans = clrTrans == null ? layer.colorTransForm : colorTransform.merge(layer.colorTransForm);
             }
 
-            if (!zeroScale) {
-                Matrix mat = transformation.concatenate(layerMatrix);
-                Matrix absMat = absoluteTransformation.concatenate(layerMatrix);
+            boolean showPlaceholder = false;
 
-                ColorTransform clrTrans = colorTransform;
-                if (layer.colorTransForm != null && layer.blendMode <= 1) { // Normal blend mode
-                    clrTrans = clrTrans == null ? layer.colorTransForm : colorTransform.merge(layer.colorTransForm);
+            if (drawMode != DRAW_MODE_ALL && drawMode != DRAW_MODE_SPRITES && !(character instanceof ShapeTag)) {
+                continue;
+            }
+            if (drawMode != DRAW_MODE_ALL && drawMode != DRAW_MODE_SHAPES && (character instanceof ShapeTag)) {
+                continue;
+            }
+            if (character instanceof DrawableTag) {
+
+                RECT scalingRect = null;
+                DefineScalingGridTag sgt = character.getScalingGridTag();
+                if (sgt != null) {
+                    scalingRect = sgt.splitter;
                 }
 
-                boolean showPlaceholder = false;
-
-                if (drawMode != DRAW_MODE_ALL && drawMode != DRAW_MODE_SPRITES && !(character instanceof ShapeTag)) {
-                    continue;
-                }
-                if (drawMode != DRAW_MODE_ALL && drawMode != DRAW_MODE_SHAPES && (character instanceof ShapeTag)) {
-                    continue;
-                }
-                if (character instanceof DrawableTag) {
-
-                    RECT scalingRect = null;
-                    DefineScalingGridTag sgt = character.getScalingGridTag();
-                    if (sgt != null) {
-                        scalingRect = sgt.splitter;
-                    }
-
-                    if (scalingRect != null) {
-                        ExportRectangle[] sourceRect = new ExportRectangle[9];
-                        ExportRectangle[] targetRect = new ExportRectangle[9];
-                        Matrix[] transforms = new Matrix[9];
-                        DrawableTag dr = (DrawableTag) character;
-                        ExportRectangle boundsRect = new ExportRectangle(dr.getRect());
-                        ExportRectangle targetBoundsRect = layerMatrix.transform(boundsRect);
-                        DefineScalingGridTag.getSlices(targetBoundsRect, boundsRect, new ExportRectangle(scalingRect), sourceRect, targetRect, transforms);
-                        Shape c = g.getClip();
-                        AffineTransform origTransform = g.getTransform();
-                        int s = 0;
-                        for (int sy = 0; sy < 3; sy++) {
-                            for (int sx = 0; sx < 3; sx++) {
-                                g.setTransform(new AffineTransform());
-                                ExportRectangle p1 = transformation.transform(targetRect[s]);
-                                if (sx == 0) {
-                                    p1.xMin = 0;
-                                }
-                                if (sy == 0) {
-                                    p1.yMin = 0;
-                                }
-
-                                if (sx == 2) {
-                                    p1.xMax = unzoom * viewRect.getWidth();
-                                }
-                                if (sy == 2) {
-                                    p1.yMax = unzoom * viewRect.getHeight();
-                                }
-
-                                p1.xMin /= SWF.unitDivisor;
-                                p1.xMax /= SWF.unitDivisor;
-                                p1.yMin /= SWF.unitDivisor;
-                                p1.yMax /= SWF.unitDivisor;
-
-                                Rectangle2D r = new Rectangle2D.Double(p1.xMin, p1.yMin, p1.getWidth(), p1.getHeight());
-
-                                g.setClip(r);
-                                drawDrawable(strokeTransformation, layer, transforms[s], g, colorTransform, layer.blendMode, clips, transformation, isClip, layer.clipDepth, absMat, layer.time + time, layer.ratio, renderContext, image, fullImage, (DrawableTag) character, layer.filters, unzoom, clrTrans, sameImage, viewRect, fullTransformation, false, DRAW_MODE_SHAPES);
-                                s++;
+                if (scalingRect != null) {
+                    ExportRectangle[] sourceRect = new ExportRectangle[9];
+                    ExportRectangle[] targetRect = new ExportRectangle[9];
+                    Matrix[] transforms = new Matrix[9];
+                    DrawableTag dr = (DrawableTag) character;
+                    ExportRectangle boundsRect = new ExportRectangle(dr.getRect());
+                    ExportRectangle targetBoundsRect = layerMatrix.transform(boundsRect);
+                    DefineScalingGridTag.getSlices(targetBoundsRect, boundsRect, new ExportRectangle(scalingRect), sourceRect, targetRect, transforms);
+                    Shape c = g.getClip();
+                    AffineTransform origTransform = g.getTransform();
+                    int s = 0;
+                    for (int sy = 0; sy < 3; sy++) {
+                        for (int sx = 0; sx < 3; sx++) {
+                            g.setTransform(new AffineTransform());
+                            ExportRectangle p1 = transformation.transform(targetRect[s]);
+                            if (sx == 0) {
+                                p1.xMin = 0;
                             }
-                        }
-                        g.setClip(c);
+                            if (sy == 0) {
+                                p1.yMin = 0;
+                            }
 
-                        g.setTransform(origTransform);
+                            if (sx == 2) {
+                                p1.xMax = unzoom * viewRect.getWidth();
+                            }
+                            if (sy == 2) {
+                                p1.yMax = unzoom * viewRect.getHeight();
+                            }
 
-                        //draw all nonshapes (normally scaled) next
-                        drawDrawable(strokeTransformation, layer, layerMatrix, g, colorTransform, layer.blendMode, clips, transformation, isClip, layer.clipDepth, absMat, layer.time + time, layer.ratio, renderContext, image, fullImage, (DrawableTag) character, layer.filters, unzoom, clrTrans, sameImage, viewRect, fullTransformation, scaleStrokes, DRAW_MODE_SPRITES);
-                    } else {
-                        boolean subScaleStrokes = scaleStrokes;
-                        if (character instanceof DefineSpriteTag) {
-                            subScaleStrokes = true;
+                            p1.xMin /= SWF.unitDivisor;
+                            p1.xMax /= SWF.unitDivisor;
+                            p1.yMin /= SWF.unitDivisor;
+                            p1.yMax /= SWF.unitDivisor;
+
+                            Rectangle2D r = new Rectangle2D.Double(p1.xMin, p1.yMin, p1.getWidth(), p1.getHeight());
+
+                            g.setClip(r);
+                            drawDrawable(strokeTransformation, layer, transforms[s], g, colorTransform, layer.blendMode, blendMode, clips, transformation, isClip, layer.clipDepth, absMat, layer.time + time, layer.ratio, renderContext, image, fullImage, (DrawableTag) character, layer.filters, unzoom, clrTrans, sameImage, viewRect, fullTransformation, false, DRAW_MODE_SHAPES, canUseSmoothing);
+                            s++;
                         }
-                        drawDrawable(strokeTransformation, layer, layerMatrix, g, colorTransform, layer.blendMode, clips, transformation, isClip, layer.clipDepth, absMat, layer.time + time, layer.ratio, renderContext, image, fullImage, (DrawableTag) character, layer.filters, unzoom, clrTrans, sameImage, viewRect, fullTransformation, subScaleStrokes, DRAW_MODE_ALL);
                     }
-                } else if (character instanceof BoundedTag) {
-                    showPlaceholder = true;
-                }
+                    g.setClip(c);
 
-                if (showPlaceholder) {
-                    AffineTransform trans = mat.preConcatenate(Matrix.getScaleInstance(1 / SWF.unitDivisor)).toTransform();
-                    g.setTransform(trans);
-                    BoundedTag b = (BoundedTag) character;
-                    g.setPaint(new Color(255, 255, 255, 128));
-                    g.setComposite(BlendComposite.Invert);
-                    g.setStroke(new BasicStroke((int) SWF.unitDivisor));
-                    RECT r = b.getRect();
-                    g.setFont(g.getFont().deriveFont((float) (12 * SWF.unitDivisor)));
-                    g.drawString(character.toString(), r.Xmin + (int) (3 * SWF.unitDivisor), r.Ymin + (int) (15 * SWF.unitDivisor));
-                    g.draw(new Rectangle(r.Xmin, r.Ymin, r.getWidth(), r.getHeight()));
-                    g.drawLine(r.Xmin, r.Ymin, r.Xmax, r.Ymax);
-                    g.drawLine(r.Xmax, r.Ymin, r.Xmin, r.Ymax);
-                    g.setComposite(AlphaComposite.Dst);
+                    g.setTransform(origTransform);
+
+                    //draw all nonshapes (normally scaled) next
+                    drawDrawable(strokeTransformation, layer, layerMatrix, g, colorTransform, layer.blendMode, blendMode, clips, transformation, isClip, layer.clipDepth, absMat, layer.time + time, layer.ratio, renderContext, image, fullImage, (DrawableTag) character, layer.filters, unzoom, clrTrans, sameImage, viewRect, fullTransformation, scaleStrokes, DRAW_MODE_SPRITES, canUseSmoothing);
+                } else {
+                    boolean subScaleStrokes = scaleStrokes;
+                    if (character instanceof DefineSpriteTag) {
+                        subScaleStrokes = true;
+                    }
+                    drawDrawable(strokeTransformation, layer, layerMatrix, g, colorTransform, layer.blendMode, blendMode, clips, transformation, isClip, layer.clipDepth, absMat, layer.time + time, layer.ratio, renderContext, image, fullImage, (DrawableTag) character, layer.filters, unzoom, clrTrans, sameImage, viewRect, fullTransformation, subScaleStrokes, DRAW_MODE_ALL, canUseSmoothing);
                 }
+            } else if (character instanceof BoundedTag) {
+                showPlaceholder = true;
+            }
+
+            if (showPlaceholder) {
+                AffineTransform trans = mat.preConcatenate(Matrix.getScaleInstance(1 / SWF.unitDivisor)).toTransform();
+                g.setTransform(trans);
+                BoundedTag b = (BoundedTag) character;
+                g.setPaint(new Color(255, 255, 255, 128));
+                g.setComposite(BlendComposite.Invert);
+                g.setStroke(new BasicStroke((int) SWF.unitDivisor));
+                RECT r = b.getRect();
+                g.setFont(g.getFont().deriveFont((float) (12 * SWF.unitDivisor)));
+                g.drawString(character.toString(), r.Xmin + (int) (3 * SWF.unitDivisor), r.Ymin + (int) (15 * SWF.unitDivisor));
+                g.draw(new Rectangle(r.Xmin, r.Ymin, r.getWidth(), r.getHeight()));
+                g.drawLine(r.Xmin, r.Ymin, r.Xmax, r.Ymax);
+                g.drawLine(r.Xmax, r.Ymin, r.Xmin, r.Ymax);
+                g.setComposite(AlphaComposite.Dst);
             }
         }
 
@@ -1142,7 +1211,7 @@ public class Timeline {
         int maxDepth = getMaxDepth();
         int clipCount = 0;
         Element clipGroup = null;
-        for (int i = 1; i <= maxDepth; i++) {
+        for (int i = 0; i <= maxDepth; i++) {
             boolean clipChanged = clipCount != clips.size();
             for (int c = 0; c < clips.size(); c++) {
                 if (clips.get(c).depth < i) {
@@ -1170,14 +1239,14 @@ public class Timeline {
                 continue;
             }
             DepthState layer = frameObj.layers.get(i);
-            if (!swf.getCharacters().containsKey(layer.characterId)) {
-                continue;
-            }
             if (!layer.isVisible) {
                 continue;
             }
 
-            CharacterTag character = swf.getCharacter(layer.characterId);
+            CharacterTag character = layer.getCharacter();
+            if (character == null) {
+                continue;
+            }
 
             ColorTransform clrTrans = colorTransform;
             if (layer.colorTransForm != null && layer.blendMode <= 1) { // Normal blend mode
@@ -1219,7 +1288,7 @@ public class Timeline {
                         exporter.endGroup();
                     }
                     Matrix mat = Matrix.getTranslateInstance(rect.xMin, rect.yMin).preConcatenate(new Matrix(layer.matrix));
-                    exporter.addUse(mat, boundRect, assetName, layer.instanceName, scalingGrid == null ? null : scalingGrid.splitter);
+                    exporter.addUse(mat, boundRect, assetName, layer.instanceName, scalingGrid == null ? null : scalingGrid.splitter, String.valueOf(drawable.getCharacterId()), drawable.getClassName());
                 }
             }
         }
@@ -1260,7 +1329,7 @@ public class Timeline {
         for (int d = maxDepth; d >= 0; d--) {
             DepthState ds = fr.layers.get(d);
             if (ds != null) {
-                CharacterTag c = swf.getCharacter(ds.characterId);
+                CharacterTag c = ds.getCharacter();
                 if (c instanceof Timelined) {
                     int frameCount = ((Timelined) c).getTimeline().frames.size();
                     if (frameCount == 0) {
@@ -1283,7 +1352,7 @@ public class Timeline {
         }
     }
 
-    public Shape getOutline(int frame, int time, RenderContext renderContext, Matrix transformation, boolean stroked) {
+    public Shape getOutline(boolean fast, int frame, int time, RenderContext renderContext, Matrix transformation, boolean stroked, ExportRectangle viewRect, double unzoom) {
         Frame fr = getFrame(frame);
         Area area = new Area();
         Stack<Clip> clips = new Stack<>();
@@ -1305,7 +1374,7 @@ public class Timeline {
             if (!layer.isVisible) {
                 continue;
             }
-            CharacterTag character = swf.getCharacter(layer.characterId);
+            CharacterTag character = layer.getCharacter();
             if (character instanceof DrawableTag) {
                 DrawableTag drawable = (DrawableTag) character;
                 Matrix m = transformation.concatenate(new Matrix(layer.matrix));
@@ -1320,8 +1389,11 @@ public class Timeline {
                     dframe = ButtonTag.FRAME_UP;
                     if (renderContext.cursorPosition != null) {
                         ButtonTag buttonTag = (ButtonTag) character;
-                        Shape buttonShape = buttonTag.getOutline(ButtonTag.FRAME_HITTEST, time, layer.ratio, renderContext, m, stroked);
-                        if (buttonShape.contains(renderContext.cursorPosition)) {
+                        Shape buttonShape = buttonTag.getOutline(fast, ButtonTag.FRAME_HITTEST, time, layer.ratio, renderContext, m, stroked, viewRect, unzoom);
+                        int dx = (int) Math.round(viewRect.xMin * unzoom);
+                        int dy = (int) Math.round(viewRect.yMin * unzoom);
+                        Point cursorPositionInView = new Point((int) Math.round(renderContext.cursorPosition.x * unzoom) - dx, (int) Math.round(renderContext.cursorPosition.y * unzoom) - dy);
+                        if (buttonShape.contains(cursorPositionInView)) {
                             if (renderContext.mouseButton > 0) {
                                 dframe = ButtonTag.FRAME_DOWN;
                             } else {
@@ -1331,7 +1403,7 @@ public class Timeline {
                     }
                 }
 
-                Shape cshape = ((DrawableTag) character).getOutline(dframe, time, layer.ratio, renderContext, m, stroked);
+                Shape cshape = ((DrawableTag) character).getOutline(fast, dframe, time, layer.ratio, renderContext, m, stroked, viewRect, unzoom);
                 Area addArea = new Area(cshape);
                 if (currentClip != null) {
                     Area a = new Area(new Rectangle(displayRect.Xmin, displayRect.Ymin, displayRect.getWidth(), displayRect.getHeight()));
@@ -1361,18 +1433,18 @@ public class Timeline {
 
     public boolean isSingleFrame(int frame) {
         Frame frameObj = getFrame(frame);
-        for (int i = 1; i <= maxDepth; i++) {
+        for (int i = 0; i <= maxDepth; i++) {
             if (!frameObj.layers.containsKey(i)) {
                 continue;
             }
             DepthState layer = frameObj.layers.get(i);
-            if (!swf.getCharacters().containsKey(layer.characterId)) {
-                continue;
-            }
             if (!layer.isVisible) {
                 continue;
             }
-            CharacterTag character = swf.getCharacter(layer.characterId);
+            CharacterTag character = layer.getCharacter();
+            if (character == null) {
+                continue;
+            }
             if (character instanceof DrawableTag) {
                 DrawableTag drawable = (DrawableTag) character;
                 if (!drawable.isSingleFrame()) {

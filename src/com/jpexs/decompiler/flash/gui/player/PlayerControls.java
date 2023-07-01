@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -58,6 +58,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JTextField;
+import javax.swing.JToggleButton;
 import javax.swing.SwingConstants;
 import javax.swing.event.AncestorEvent;
 import javax.swing.event.AncestorListener;
@@ -91,7 +92,7 @@ public class PlayerControls extends JPanel implements MediaDisplayListener {
     private static final Icon loopIcon = View.getIcon("loopon16");
 
     private static final Icon noLoopIcon = View.getIcon("loopoff16");
-
+    
     private final JLabel percentLabel = new JLabel("100%");
 
     private final JPanel zoomPanel;
@@ -109,6 +110,12 @@ public class PlayerControls extends JPanel implements MediaDisplayListener {
     private final JButton zoomFitButton;
 
     private final JButton snapshotButton;
+    
+    private final JToggleButton showButton;
+    
+    private final JToggleButton freezeButton;
+    
+    private final JToggleButton muteButton;
 
     public static final int ZOOM_DECADE_STEPS = 10;
 
@@ -134,7 +141,7 @@ public class PlayerControls extends JPanel implements MediaDisplayListener {
         underlinedFont = font.deriveFont(fontAttributes);
     }
 
-    public PlayerControls(final MainPanel mainPanel, MediaDisplay display) {
+    public PlayerControls(final MainPanel mainPanel, MediaDisplay display, JPanel middleButtonsPanel) {
 
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 
@@ -176,6 +183,35 @@ public class PlayerControls extends JPanel implements MediaDisplayListener {
 
         graphicButtonsPanel.add(zoomPanel);
         graphicButtonsPanel.add(snapshotButton);
+        
+        JPanel displayButtonsPanel = new JPanel(new FlowLayout());
+        showButton = new JToggleButton(View.getIcon("show16"));
+        showButton.addActionListener(this::showButtonActionPerformed);
+        showButton.setToolTipText(AppStrings.translate("button.show"));
+        showButton.setVisible(false);
+        showButton.setSelected(Configuration.autoPlayPreviews.get());
+       
+        freezeButton = new JToggleButton(View.getIcon("freeze16"));
+        freezeButton.addActionListener(this::freezeButtonActionPerformed);
+        freezeButton.setToolTipText(AppStrings.translate("button.freeze"));
+        freezeButton.setVisible(false);
+        freezeButton.setSelected(!Configuration.animateSubsprites.get());
+        
+        muteButton = new JToggleButton(View.getIcon("soundmute16"));
+        muteButton.addActionListener(this::muteButtonActionPerformed);
+        muteButton.setToolTipText(AppStrings.translate("button.mute"));
+        muteButton.setVisible(false);
+        muteButton.setSelected(!Configuration.playFrameSounds.get());
+        
+        
+        displayButtonsPanel.add(showButton);
+        displayButtonsPanel.add(freezeButton);
+        displayButtonsPanel.add(muteButton);
+        
+        graphicControls.add(displayButtonsPanel, BorderLayout.WEST);
+        if (middleButtonsPanel != null) {
+            graphicControls.add(middleButtonsPanel, BorderLayout.CENTER);
+        }
         graphicControls.add(graphicButtonsPanel, BorderLayout.EAST);
         graphicControls.setVisible(false);
 
@@ -335,7 +371,7 @@ public class PlayerControls extends JPanel implements MediaDisplayListener {
         }
 
         View.execInEventDispatchLater(() -> {
-            //updateZoom();
+            muteButton.setVisible(display.isMutable());
             int totalFrames = display.getTotalFrames();
             int currentFrame = display.getCurrentFrame();
             if (currentFrame > totalFrames) {
@@ -356,6 +392,11 @@ public class PlayerControls extends JPanel implements MediaDisplayListener {
 
             zoomPanel.setVisible(display.zoomAvailable());
             boolean screenAvailable = display.screenAvailable();
+            showButton.setVisible(!display.alwaysDisplay() && screenAvailable);
+            if (!display.alwaysDisplay()) {
+                showButton.setSelected(display.isDisplayed());
+            }
+            freezeButton.setVisible(!display.alwaysDisplay() && screenAvailable && totalFrames == 0);
             snapshotButton.setVisible(screenAvailable);
             graphicControls.setVisible(screenAvailable);
             totalFrameLabel.setVisible(screenAvailable);
@@ -544,6 +585,28 @@ public class PlayerControls extends JPanel implements MediaDisplayListener {
 
     private void snapShotButtonActionPerformed(ActionEvent evt) {
         putImageToClipBoard(display.printScreen());
+    }
+    
+    private void showButtonActionPerformed(ActionEvent evt) {        
+        display.setDisplayed(showButton.isSelected());
+        if (!showButton.isSelected()) {
+            if (display.getTotalFrames() > 0) {
+                display.stop();
+                display.rewind();
+            }
+        } else {
+            display.play();
+        }        
+    }
+    
+    private void freezeButtonActionPerformed(ActionEvent evt) {
+        display.setFrozen(freezeButton.isSelected());
+        Configuration.animateSubsprites.set(!freezeButton.isSelected());
+    }
+    
+    private void muteButtonActionPerformed(ActionEvent evt) {
+        display.setMuted(muteButton.isSelected());
+        Configuration.playFrameSounds.set(!muteButton.isSelected());
     }
 
     private double getRealZoom() {

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -53,8 +53,8 @@ public class ActionWaitForFrame2 extends Action implements ActionStore {
 
     List<Action> skipped;
 
-    public ActionWaitForFrame2(int skipCount) {
-        super(0x8D, 1);
+    public ActionWaitForFrame2(int skipCount, String charset) {
+        super(0x8D, 1, charset);
         this.skipCount = skipCount;
         skipped = new ArrayList<>();
     }
@@ -71,7 +71,7 @@ public class ActionWaitForFrame2 extends Action implements ActionStore {
     }
 
     public ActionWaitForFrame2(int actionLength, SWFInputStream sis) throws IOException {
-        super(0x8D, actionLength);
+        super(0x8D, actionLength, sis.getCharset());
         skipCount = sis.readUI8("skipCount");
         skipped = new ArrayList<>();
         /*for (int i = 0; i < skipCount; i++) {
@@ -104,8 +104,8 @@ public class ActionWaitForFrame2 extends Action implements ActionStore {
          }*/
     }
 
-    public ActionWaitForFrame2(FlasmLexer lexer) throws IOException, ActionParseException {
-        super(0x8D, -1);
+    public ActionWaitForFrame2(FlasmLexer lexer, String charset) throws IOException, ActionParseException {
+        super(0x8D, -1, charset);
         skipCount = (int) lexLong(lexer);
         skipped = new ArrayList<>();
     }
@@ -155,13 +155,13 @@ public class ActionWaitForFrame2 extends Action implements ActionStore {
         HashMap<String, GraphTargetItem> variablesBackup = new LinkedHashMap<>(variables);
         HashMap<String, GraphTargetItem> functionsBackup = new LinkedHashMap<>(functions);
         try {
-            body = ActionGraph.translateViaGraph(null, insideDoInitAction, true, regNames, variables, functions, skipped, SWF.DEFAULT_VERSION, staticOperation, path);
+            body = ActionGraph.translateViaGraph(null, insideDoInitAction, true, regNames, variables, functions, skipped, SWF.DEFAULT_VERSION, staticOperation, path, getCharset());
         } catch (SecondPassException spe) {
             variables.clear();
             variables.putAll(variablesBackup);
             functions.clear();
             functions.putAll(functionsBackup);
-            body = ActionGraph.translateViaGraph(spe.getData(), insideDoInitAction, true, regNames, variables, functions, skipped, SWF.DEFAULT_VERSION, staticOperation, path);
+            body = ActionGraph.translateViaGraph(spe.getData(), insideDoInitAction, true, regNames, variables, functions, skipped, SWF.DEFAULT_VERSION, staticOperation, path, getCharset());
         }
         output.add(new IfFrameLoadedActionItem(frame, body, this, lineStartAction));
     }

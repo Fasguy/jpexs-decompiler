@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,11 +12,15 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.exporters;
 
+import com.jpexs.decompiler.flash.AbortRetryIgnoreHandler;
 import com.jpexs.decompiler.flash.EventListener;
 import com.jpexs.decompiler.flash.ReadOnlyTagList;
+import com.jpexs.decompiler.flash.RetryTask;
+import com.jpexs.decompiler.flash.exporters.settings.SymbolClassExportSettings;
 import com.jpexs.decompiler.flash.tags.ExportAssetsTag;
 import com.jpexs.decompiler.flash.tags.SymbolClassTag;
 import com.jpexs.decompiler.flash.tags.Tag;
@@ -39,8 +43,12 @@ public class SymbolClassExporter {
 
     public static final String SYMBOL_CLASS_EXPORT_FILENAME = "symbols.csv";
 
-    public List<File> exportNames(final String outdir, ReadOnlyTagList tags, EventListener evl) throws IOException {
+    public List<File> exportNames(AbortRetryIgnoreHandler handler, final String outdir, ReadOnlyTagList tags, SymbolClassExportSettings settings, EventListener evl) throws IOException, InterruptedException {
         List<File> ret = new ArrayList<>();
+        if (Thread.currentThread().isInterrupted()) {
+            return ret;
+        }
+        
         int count = 0;
         for (Tag t : tags) {
             if (t instanceof ExportAssetsTag || t instanceof SymbolClassTag) {
@@ -56,21 +64,26 @@ public class SymbolClassExporter {
         Path.createDirectorySafe(foutdir);
 
         final File file = new File(outdir + File.separator + SYMBOL_CLASS_EXPORT_FILENAME);
-        try (Writer writer = new BufferedWriter(new Utf8OutputStreamWriter(new FileOutputStream(file)))) {
-            for (Tag t : tags) {
-                if (t instanceof ExportAssetsTag) {
-                    ExportAssetsTag eat = (ExportAssetsTag) t;
-                    for (int i = 0; i < eat.tags.size(); i++) {
-                        writer.append(eat.tags.get(i) + ";" + eat.names.get(i) + Helper.newLine);
+        new RetryTask(() -> {
+            try (Writer writer = new BufferedWriter(new Utf8OutputStreamWriter(new FileOutputStream(file)))) {
+                for (Tag t : tags) {
+                    if (t instanceof ExportAssetsTag) {
+                        ExportAssetsTag eat = (ExportAssetsTag) t;
+                        for (int i = 0; i < eat.tags.size(); i++) {
+                            writer.append(eat.tags.get(i) + ";" + eat.names.get(i) + Helper.newLine);
+                        }
+                    } else if (t instanceof SymbolClassTag) {
+                        SymbolClassTag sct = (SymbolClassTag) t;
+                        for (int i = 0; i < sct.tags.size(); i++) {
+                            writer.append(sct.tags.get(i) + ";" + sct.names.get(i) + Helper.newLine);
+                        }
                     }
-                } else if (t instanceof SymbolClassTag) {
-                    SymbolClassTag sct = (SymbolClassTag) t;
-                    for (int i = 0; i < sct.tags.size(); i++) {
-                        writer.append(sct.tags.get(i) + ";" + sct.names.get(i) + Helper.newLine);
+                    if (Thread.currentThread().isInterrupted()) {
+                        break;
                     }
                 }
             }
-        }
+        }, handler).run();
 
         ret.add(file);
         return ret;

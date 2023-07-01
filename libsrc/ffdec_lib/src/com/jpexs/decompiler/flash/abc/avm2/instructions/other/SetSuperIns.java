@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -28,6 +28,7 @@ import com.jpexs.decompiler.flash.abc.avm2.model.SetSuperAVM2Item;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.TranslateStack;
 import com.jpexs.decompiler.graph.model.CompoundableBinaryOp;
+import com.jpexs.helpers.Reference;
 import java.util.List;
 import java.util.Objects;
 
@@ -49,13 +50,19 @@ public class SetSuperIns extends InstructionDefinition implements SetTypeIns {
 
         FullMultinameAVM2Item multiname = resolveMultiname(localData, true, stack, localData.getConstants(), multinameIndex, ins);
         GraphTargetItem obj = stack.pop();
-        SetSuperAVM2Item result = new SetSuperAVM2Item(ins, localData.lineStartInstruction, value, obj, multiname);
+        
+        Reference<Boolean> isStatic = new Reference<>(false);
+        Reference<GraphTargetItem> type = new Reference<>(null);
+        Reference<GraphTargetItem> callType = new Reference<>(null);
+        GetPropertyIns.resolvePropertyType(localData, obj /*??*/, multiname, isStatic, type, callType);
+        
+        SetSuperAVM2Item result = new SetSuperAVM2Item(ins, localData.lineStartInstruction, value, obj, multiname, type.getVal(), callType.getVal(), isStatic.getVal());
 
         if (value.getNotCoercedNoDup() instanceof CompoundableBinaryOp) {
             if (!obj.hasSideEffect() && !multiname.hasSideEffect()) {
                 CompoundableBinaryOp binaryOp = (CompoundableBinaryOp) value.getNotCoercedNoDup();
-                if (binaryOp.getLeftSide() instanceof GetSuperAVM2Item) {
-                    GetSuperAVM2Item getSuper = (GetSuperAVM2Item) binaryOp.getLeftSide();
+                if (binaryOp.getLeftSide().getNotCoerced() instanceof GetSuperAVM2Item) {
+                    GetSuperAVM2Item getSuper = (GetSuperAVM2Item) binaryOp.getLeftSide().getNotCoerced();
                     if (Objects.equals(obj, getSuper.object.getThroughDuplicate()) && Objects.equals(multiname, getSuper.propertyName)) {
                         result.setCompoundValue(binaryOp.getRightSide());
                         result.setCompoundOperator(binaryOp.getOperator());
@@ -64,7 +71,7 @@ public class SetSuperIns extends InstructionDefinition implements SetTypeIns {
             }
         }
 
-        SetTypeIns.handleResult(value, stack, output, localData, result, -1);
+        SetTypeIns.handleResult(value, stack, output, localData, result, -1, type.getVal());
     }
 
     @Override

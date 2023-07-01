@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.helpers.hilight;
 
 import com.jpexs.decompiler.graph.DottedChain;
@@ -43,12 +44,23 @@ public class HighlightData implements Cloneable, Serializable {
     public long firstLineOffset = -1;
 
     public int regIndex = -1;
+    
+    public int namespaceIndex = -1;
+    
+    public boolean isStatic = false;
+    
+    public String propertyType;
+    
+    public String propertySubType;
 
     public boolean isEmpty() {
         return !declaration && declaredType == null && localName == null
                 && subtype == null && specialValue == null
                 && index == 0 && offset == 0 && regIndex == -1 && firstLineOffset == -1
-                && fileOffset == -1;
+                && fileOffset == -1
+                && namespaceIndex == -1
+                && propertyType == null
+                && propertySubType == null;
     }
 
     public void merge(HighlightData data) {
@@ -84,6 +96,18 @@ public class HighlightData implements Cloneable, Serializable {
         }
         if (data.fileOffset != -1) {
             fileOffset = data.fileOffset;
+        }
+        if (data.namespaceIndex != -1) {
+            namespaceIndex = data.namespaceIndex;
+        }
+        if (data.isStatic) {
+            isStatic = data.isStatic;
+        }
+        if (data.propertyType != null) {
+            propertyType = data.propertyType;
+        }
+        if (data.propertySubType != null) {
+            propertySubType = data.propertySubType;
         }
     }
 

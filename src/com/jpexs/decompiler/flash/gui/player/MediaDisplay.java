@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -69,4 +69,16 @@ public interface MediaDisplay extends Closeable {
     public void removeEventListener(MediaDisplayListener listener);
 
     public Color getBackgroundColor();
+    
+    public void setDisplayed(boolean value);
+    
+    public boolean isDisplayed();
+    
+    public void setFrozen(boolean value);   
+    
+    public boolean alwaysDisplay();
+    
+    public void setMuted(boolean value);
+    
+    public boolean isMutable();
 }

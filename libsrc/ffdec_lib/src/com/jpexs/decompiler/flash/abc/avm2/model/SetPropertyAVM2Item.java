@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,6 +19,7 @@ package com.jpexs.decompiler.flash.abc.avm2.model;
 import com.jpexs.decompiler.flash.SourceGeneratorLocalData;
 import com.jpexs.decompiler.flash.abc.avm2.instructions.AVM2Instruction;
 import com.jpexs.decompiler.flash.abc.avm2.instructions.AVM2Instructions;
+import com.jpexs.decompiler.flash.abc.avm2.instructions.SetTypeIns;
 import com.jpexs.decompiler.flash.abc.avm2.model.clauses.AssignmentAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.clauses.DeclarationAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.parser.script.AVM2SourceGenerator;
@@ -29,7 +30,6 @@ import com.jpexs.decompiler.graph.GraphSourceItem;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.GraphTargetVisitorInterface;
 import com.jpexs.decompiler.graph.SourceGenerator;
-import com.jpexs.decompiler.graph.TypeItem;
 import com.jpexs.decompiler.graph.model.LocalData;
 import java.util.List;
 
@@ -48,6 +48,12 @@ public class SetPropertyAVM2Item extends AVM2Item implements SetTypeAVM2Item, As
     public GraphTargetItem compoundValue;
 
     public String compoundOperator;
+    
+    public GraphTargetItem type;
+    
+    public GraphTargetItem callType;
+    
+    public boolean isStatic;
 
     @Override
     public DeclarationAVM2Item getDeclaration() {
@@ -68,19 +74,24 @@ public class SetPropertyAVM2Item extends AVM2Item implements SetTypeAVM2Item, As
     public void visit(GraphTargetVisitorInterface visitor) {
         visitor.visit(object);
         visitor.visit(propertyName);
-        visitor.visit(value);
+        if (value != null) {
+            visitor.visit(value);
+        }
     }
 
-    public SetPropertyAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, GraphTargetItem object, GraphTargetItem propertyName, GraphTargetItem value) {
+    public SetPropertyAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, GraphTargetItem object, GraphTargetItem propertyName, GraphTargetItem value, GraphTargetItem type, GraphTargetItem callType, boolean isStatic) {
         super(instruction, lineStartIns, PRECEDENCE_ASSIGMENT);
         this.object = object;
-        this.propertyName = propertyName;
+        this.propertyName = propertyName;        
         this.value = value;
+        this.type = type;
+        this.callType = callType;
+        this.isStatic = isStatic;
     }
 
     @Override
     public GraphTextWriter appendTo(GraphTextWriter writer, LocalData localData) throws InterruptedException {
-        formatProperty(writer, object, propertyName, localData);
+        formatProperty(writer, object, propertyName, localData, isStatic);
 
         if (compoundOperator != null) {
             writer.append(" ");
@@ -90,15 +101,15 @@ public class SetPropertyAVM2Item extends AVM2Item implements SetTypeAVM2Item, As
         }
 
         writer.append(" = ");
-        if (declaration != null && !declaration.type.equals(TypeItem.UNBOUNDED) && (value instanceof ConvertAVM2Item)) {
+        /*if (declaration != null && !declaration.type.equals(TypeItem.UNBOUNDED) && (value instanceof ConvertAVM2Item)) {
             return value.value.toString(writer, localData);
-        }
-        return value.toString(writer, localData);
+        }*/
+        return SetTypeIns.handleNumberToInt(value, type).toString(writer, localData);
     }
 
     @Override
     public GraphTargetItem getObject() {
-        return new GetPropertyAVM2Item(getInstruction(), getLineStartIns(), object, propertyName);
+        return new GetPropertyAVM2Item(getInstruction(), getLineStartIns(), object, propertyName, type, callType, isStatic);
     }
 
     @Override
@@ -120,7 +131,8 @@ public class SetPropertyAVM2Item extends AVM2Item implements SetTypeAVM2Item, As
 
     @Override
     public GraphTargetItem returnType() {
-        return TypeItem.UNBOUNDED;
+        return value.returnType();
+        //return TypeItem.UNBOUNDED;
     }
 
     @Override

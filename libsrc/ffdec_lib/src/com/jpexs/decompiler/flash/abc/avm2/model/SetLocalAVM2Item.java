@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,6 +19,7 @@ package com.jpexs.decompiler.flash.abc.avm2.model;
 import com.jpexs.decompiler.flash.SourceGeneratorLocalData;
 import com.jpexs.decompiler.flash.abc.avm2.instructions.AVM2Instruction;
 import com.jpexs.decompiler.flash.abc.avm2.instructions.AVM2Instructions;
+import com.jpexs.decompiler.flash.abc.avm2.instructions.SetTypeIns;
 import com.jpexs.decompiler.flash.abc.avm2.model.clauses.AssignmentAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.clauses.DeclarationAVM2Item;
 import com.jpexs.decompiler.flash.helpers.GraphTextWriter;
@@ -26,7 +27,6 @@ import com.jpexs.decompiler.graph.CompilationException;
 import com.jpexs.decompiler.graph.GraphSourceItem;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.SourceGenerator;
-import com.jpexs.decompiler.graph.TypeItem;
 import com.jpexs.decompiler.graph.model.LocalData;
 import java.util.List;
 import java.util.Objects;
@@ -44,6 +44,12 @@ public class SetLocalAVM2Item extends AVM2Item implements SetTypeAVM2Item, Assig
     public GraphTargetItem compoundValue;
 
     public String compoundOperator;
+    
+    public GraphTargetItem type;
+    
+    public boolean hideValue = false;
+    
+    public boolean causedByDup = false;
 
     @Override
     public DeclarationAVM2Item getDeclaration() {
@@ -55,9 +61,10 @@ public class SetLocalAVM2Item extends AVM2Item implements SetTypeAVM2Item, Assig
         this.declaration = declaration;
     }
 
-    public SetLocalAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, int regIndex, GraphTargetItem value) {
+    public SetLocalAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, int regIndex, GraphTargetItem value, GraphTargetItem type) {
         super(instruction, lineStartIns, PRECEDENCE_ASSIGMENT, value);
         this.regIndex = regIndex;
+        this.type = type;
     }
 
     @Override
@@ -71,16 +78,19 @@ public class SetLocalAVM2Item extends AVM2Item implements SetTypeAVM2Item, Assig
             writer.append("= ");
             return compoundValue.toString(writer, localData);
         }
-        writer.append(" = ");
-        if (declaration != null && !declaration.type.equals(TypeItem.UNBOUNDED) && (value instanceof ConvertAVM2Item)) {
-            return value.value.toString(writer, localData);
+        if (hideValue) {
+            return writer;
         }
-        return value.toString(writer, localData);
+        writer.append(" = ");
+        /*if (declaration != null && !declaration.type.equals(TypeItem.UNBOUNDED) && (value instanceof ConvertAVM2Item)) {
+            return value.value.toString(writer, localData);
+        }*/        
+        return SetTypeIns.handleNumberToInt(value, type).toString(writer, localData);
     }
 
     @Override
     public GraphTargetItem getObject() {
-        return new LocalRegAVM2Item(getInstruction(), getLineStartIns(), regIndex, null);
+        return new LocalRegAVM2Item(getInstruction(), getLineStartIns(), regIndex, null, value.returnType());
     }
 
     @Override
@@ -141,8 +151,8 @@ public class SetLocalAVM2Item extends AVM2Item implements SetTypeAVM2Item, Assig
     }
 
     @Override
-    public GraphTargetItem returnType() {
-        return TypeItem.UNBOUNDED;
+    public GraphTargetItem returnType() {        
+        return type;
     }
 
     @Override
@@ -197,4 +207,14 @@ public class SetLocalAVM2Item extends AVM2Item implements SetTypeAVM2Item, Assig
     public String getCompoundOperator() {
         return compoundOperator;
     }
+
+    @Override
+    public int getPrecedence() {
+        if (hideValue) {
+            return PRECEDENCE_PRIMARY;
+        }
+        return precedence;
+    }
+    
+    
 }

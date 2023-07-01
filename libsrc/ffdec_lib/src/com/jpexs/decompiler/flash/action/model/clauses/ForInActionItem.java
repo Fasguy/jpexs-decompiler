@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -22,7 +22,6 @@ import com.jpexs.decompiler.flash.action.Action;
 import com.jpexs.decompiler.flash.action.model.DirectValueActionItem;
 import com.jpexs.decompiler.flash.action.model.GetVariableActionItem;
 import com.jpexs.decompiler.flash.action.model.SetTypeActionItem;
-import com.jpexs.decompiler.flash.action.model.SetVariableActionItem;
 import com.jpexs.decompiler.flash.action.model.StoreRegisterActionItem;
 import com.jpexs.decompiler.flash.action.parser.script.ActionSourceGenerator;
 import com.jpexs.decompiler.flash.action.parser.script.VariableActionItem;
@@ -129,7 +128,13 @@ public class ForInActionItem extends LoopActionItem implements Block {
         }
 
         writer.append(" in ");
+        if (enumVariable.getPrecedence() > PRECEDENCE_PRIMARY) {
+            writer.append("(");
+        }
         enumVariable.toString(writer, localData);
+        if (enumVariable.getPrecedence() > PRECEDENCE_PRIMARY) {
+            writer.append(")");
+        }        
         writer.append(")").startBlock();
         for (GraphTargetItem ti : commands) {
             ti.toStringSemicoloned(writer, localData).newLine();
@@ -160,6 +165,7 @@ public class ForInActionItem extends LoopActionItem implements Block {
     public List<GraphSourceItem> toSource(SourceGeneratorLocalData localData, SourceGenerator generator) throws CompilationException {
         List<GraphSourceItem> ret = new ArrayList<>();
         ActionSourceGenerator asGenerator = (ActionSourceGenerator) generator;
+        String charset = asGenerator.getCharset();
         HashMap<String, Integer> registerVars = asGenerator.getRegisterVars(localData);
         ret.addAll(enumVariable.toSource(localData, generator));
         ret.add(new ActionEnumerate2());
@@ -167,10 +173,10 @@ public class ForInActionItem extends LoopActionItem implements Block {
         List<Action> loopExpr = new ArrayList<>();
         int exprReg = asGenerator.getTempRegister(localData);
 
-        loopExpr.add(new ActionStoreRegister(exprReg));
-        loopExpr.add(new ActionPush(Null.INSTANCE));
+        loopExpr.add(new ActionStoreRegister(exprReg, charset));
+        loopExpr.add(new ActionPush(Null.INSTANCE, charset));
         loopExpr.add(new ActionEquals2());
-        ActionIf forInEndIf = new ActionIf(0);
+        ActionIf forInEndIf = new ActionIf(0, charset);
         loopExpr.add(forInEndIf);
         List<Action> loopBody = new ArrayList<>();
 
@@ -185,7 +191,7 @@ public class ForInActionItem extends LoopActionItem implements Block {
         asGenerator.setForInLevel(localData, oldForIn + 1);
         loopBody.addAll(asGenerator.toActionList(asGenerator.generate(localData, commands)));
         asGenerator.setForInLevel(localData, oldForIn);
-        ActionJump forinJmpBack = new ActionJump(0);
+        ActionJump forinJmpBack = new ActionJump(0, charset);
         loopBody.add(forinJmpBack);
         int bodyLen = Action.actionsToBytes(loopBody, false, SWF.DEFAULT_VERSION).length;
         int exprLen = Action.actionsToBytes(loopExpr, false, SWF.DEFAULT_VERSION).length;

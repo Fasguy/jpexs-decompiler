@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,9 +12,11 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.tags.gfx;
 
+import com.jpexs.decompiler.flash.SWF;
 import com.jpexs.decompiler.flash.SWFInputStream;
 import com.jpexs.decompiler.flash.SWFOutputStream;
 import com.jpexs.decompiler.flash.tags.Tag;
@@ -71,11 +73,21 @@ public class DefineExternalGradient extends Tag {
         readData(sis, data, 0, false, false, false);
     }
 
+    public DefineExternalGradient(SWF swf) {
+        super(swf, ID, NAME, null);
+        fileName = "";
+    }        
+
     @Override
     public final void readData(SWFInputStream sis, ByteArrayRange data, int level, boolean parallel, boolean skipUnusualTags, boolean lazy) throws IOException {
         gradientId = sis.readUI16("gradientId");
         bitmapsFormat = sis.readUI16("bitmapsFormat");
         gradientSize = sis.readUI16("gradientSize");
         fileName = sis.readNetString("fileName");
+    }
+    
+    @Override
+    public String toString() {
+        return tagName + " (g" + gradientId + ")";
     }
 }

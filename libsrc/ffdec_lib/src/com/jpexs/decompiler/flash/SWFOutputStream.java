@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash;
 
 import com.jpexs.decompiler.flash.amf.amf3.Amf3OutputStream;
@@ -79,16 +80,12 @@ import com.jpexs.decompiler.flash.types.shaperecords.SHAPERECORD;
 import com.jpexs.decompiler.flash.types.shaperecords.StraightEdgeRecord;
 import com.jpexs.decompiler.flash.types.shaperecords.StyleChangeRecord;
 import com.jpexs.helpers.ByteArrayRange;
-import com.jpexs.helpers.utf8.Utf8Helper;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 
@@ -108,6 +105,8 @@ public class SWFOutputStream extends OutputStream {
     private int bitPos = 0;
 
     private int tempByte = 0;
+    
+    private String charset;
 
     public long getPos() {
         return pos;
@@ -119,9 +118,10 @@ public class SWFOutputStream extends OutputStream {
      * @param os OutputStream for writing data
      * @param version Version of SWF
      */
-    public SWFOutputStream(OutputStream os, int version) {
+    public SWFOutputStream(OutputStream os, int version, String charset) {
         this.version = version;
         this.os = os;
+        this.charset = charset;
     }
 
     /**
@@ -166,7 +166,7 @@ public class SWFOutputStream extends OutputStream {
      */
     public void writeUI8(int value) throws IOException {
         if (value > 0xff) {
-            throw new IllegalArgumentException("Value is too large for UI8: " + value);
+            throw new ValueTooLargeException("UI8", value);
         }
 
         write(value);
@@ -179,7 +179,7 @@ public class SWFOutputStream extends OutputStream {
      * @throws IOException
      */
     public void writeString(String value) throws IOException {
-        byte[] data = Utf8Helper.getBytes(value);
+        byte[] data = value.getBytes(charset);
         for (int i = 0; i < data.length; i++) {
             if (data[i] == 0) {
                 throw new IOException("String should not contain null character.");
@@ -197,23 +197,10 @@ public class SWFOutputStream extends OutputStream {
      * @throws IOException
      */
     public void writeNetString(String value) throws IOException {
-        byte[] data = value.getBytes();
-        writeUI8(data.length);
-        write(data);
-    }
-
-    /**
-     * Writes netstring (length + string) value to the stream
-     *
-     * @param value String value
-     * @param charset
-     * @throws IOException
-     */
-    public void writeNetString(String value, Charset charset) throws IOException {
         byte[] data = value.getBytes(charset);
         writeUI8(data.length);
         write(data);
-    }
+    }   
 
     /**
      * Writes UI32 (Unsigned 32bit integer) value to the stream
@@ -223,7 +210,7 @@ public class SWFOutputStream extends OutputStream {
      */
     public void writeUI32(long value) throws IOException {
         if (value > 0xffffffffL) {
-            throw new IllegalArgumentException("Value is too large for UI32: " + value);
+            throw new ValueTooLargeException("UI32", value);
         }
 
         write((int) (value & 0xff));
@@ -240,7 +227,7 @@ public class SWFOutputStream extends OutputStream {
      */
     public void writeUI16(int value) throws IOException {
         if (value > 0xffff) {
-            throw new IllegalArgumentException("Value is too large for UI16: " + value);
+            throw new ValueTooLargeException("UI16", value);
         }
 
         write((int) (value & 0xff));
@@ -255,7 +242,7 @@ public class SWFOutputStream extends OutputStream {
      */
     public void writeSI32(long value) throws IOException {
         if (value > 0x7fffffffL) {
-            throw new IllegalArgumentException("Value is too large for SI32: " + value);
+            throw new ValueTooLargeException("SI32", value);
         }
 
         writeUI32(value);
@@ -270,8 +257,7 @@ public class SWFOutputStream extends OutputStream {
     public void writeSI16(int value) throws IOException {
 
         if (value > 0x7fff) {
-            Logger.getLogger(SWFOutputStream.class.getName()).log(Level.WARNING, "Value is too large for SI16: " + value + ", 0 written", new Exception());
-            value = 0;
+            throw new ValueTooLargeException("SI16", value);
         }
 
         writeUI16(value);
@@ -285,7 +271,7 @@ public class SWFOutputStream extends OutputStream {
      */
     public void writeSI8(int value) throws IOException {
         if (value > 0x7ff) {
-            throw new IllegalArgumentException("Value is too large for SI8: " + value);
+            throw new ValueTooLargeException("SI8", value);
         }
 
         writeUI8(value);
@@ -299,10 +285,7 @@ public class SWFOutputStream extends OutputStream {
      */
     public void writeFIXED(double value) throws IOException {
         long valueLong = (long) (value * (1 << 16));
-        int beforePoint = (int) valueLong >> 16;
-        int afterPoint = (int) valueLong % (1 << 16);
-        writeUI16(afterPoint);
-        writeUI16(beforePoint);
+        writeSI32(valueLong);
     }
 
     /**
@@ -313,10 +296,7 @@ public class SWFOutputStream extends OutputStream {
      */
     public void writeFIXED8(float value) throws IOException {
         int valueInt = (int) (value * (1 << 8));
-        int beforePoint = (int) valueInt >> 8;
-        int afterPoint = (int) valueInt % (1 << 8);
-        writeUI8(afterPoint);
-        writeSI8(beforePoint);
+        writeSI16(valueInt);
     }
 
     private void writeLong(long value) throws IOException {
@@ -806,7 +786,7 @@ public class SWFOutputStream extends OutputStream {
     public void writeCLIPACTIONRECORD(CLIPACTIONRECORD value) throws IOException {
         writeCLIPEVENTFLAGS(value.eventFlags);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        try (SWFOutputStream sos = new SWFOutputStream(baos, version)) {
+        try (SWFOutputStream sos = new SWFOutputStream(baos, version, charset)) {
             if (value.eventFlags.clipEventKeyPress) {
                 sos.writeUI8(value.keyCode);
             }
@@ -1154,7 +1134,7 @@ public class SWFOutputStream extends OutputStream {
      */
     public void writeBUTTONCONDACTION(BUTTONCONDACTION value, boolean isLast) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        try (SWFOutputStream sos = new SWFOutputStream(baos, version)) {
+        try (SWFOutputStream sos = new SWFOutputStream(baos, version, charset)) {
             sos.writeUB(1, value.condIdleToOverDown ? 1 : 0);
             sos.writeUB(1, value.condOutDownToIdle ? 1 : 0);
             sos.writeUB(1, value.condOutDownToOverDown ? 1 : 0);
@@ -1348,10 +1328,10 @@ public class SWFOutputStream extends OutputStream {
                 writeUI8(lineStyleCount);
             }
             for (int i = 0; i < lineStyleCount; i++) {
-                writeLINESTYLE(value.lineStyles[i], shapeNum);
+                writeLINESTYLE((LINESTYLE) value.lineStyles[i], shapeNum);
             }
         } else {
-            lineStyleCount = value.lineStyles.length;
+            lineStyleCount = value.lineStyles2.length;
             if (lineStyleCount >= 0xff) {
                 writeUI8(0xff);
                 writeUI16(lineStyleCount);
@@ -1359,7 +1339,7 @@ public class SWFOutputStream extends OutputStream {
                 writeUI8(lineStyleCount);
             }
             for (int i = 0; i < lineStyleCount; i++) {
-                writeLINESTYLE2((LINESTYLE2) value.lineStyles[i], shapeNum);
+                writeLINESTYLE2((LINESTYLE2) value.lineStyles2[i], shapeNum);
             }
         }
     }
@@ -1388,7 +1368,7 @@ public class SWFOutputStream extends OutputStream {
         writeFILLSTYLEARRAY(value.fillStyles, shapeNum);
         writeLINESTYLEARRAY(value.lineStyles, shapeNum);
         value.numFillBits = getNeededBitsU(value.fillStyles.fillStyles.length);
-        value.numLineBits = getNeededBitsU(value.lineStyles.lineStyles.length);
+        value.numLineBits = getNeededBitsU(shapeNum <= 3 ? value.lineStyles.lineStyles.length : value.lineStyles.lineStyles2.length);
         writeUB(4, value.numFillBits);
         writeUB(4, value.numLineBits);
         writeSHAPERECORDS(value.shapeRecords, value.numFillBits, value.numLineBits, shapeNum);
@@ -1473,7 +1453,7 @@ public class SWFOutputStream extends OutputStream {
                     writeFILLSTYLEARRAY(scr.fillStyles, shapeNum);
                     writeLINESTYLEARRAY(scr.lineStyles, shapeNum);
                     fillBits = getNeededBitsU(scr.fillStyles.fillStyles.length);
-                    lineBits = getNeededBitsU(scr.lineStyles.lineStyles.length);
+                    lineBits = getNeededBitsU(shapeNum <= 3 ? scr.lineStyles.lineStyles.length : scr.lineStyles.lineStyles2.length);
 
                     if (Configuration._debugCopy.get()) {
                         fillBits = Math.max(fillBits, scr.numFillBits);

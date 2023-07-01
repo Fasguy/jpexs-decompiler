@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -34,6 +34,8 @@ import java.util.Objects;
  */
 public class NamespaceItem {
 
+    public static final int KIND_NAMESPACE_CUSTOM = -2;
+    
     public DottedChain name;
 
     public int kind;
@@ -52,6 +54,10 @@ public class NamespaceItem {
     public NamespaceItem(String name, int kind) {
         this.name = DottedChain.parseWithSuffix(name);
         this.kind = kind;
+    }
+    
+    public NamespaceItem(int nsIndex) {        
+        this.nsIndex = nsIndex;
     }
 
     @Override
@@ -85,8 +91,11 @@ public class NamespaceItem {
             return;
         }
         if (kind == Namespace.KIND_NAMESPACE) {
+            nsIndex = abcIndex.getSelectedAbc().constants.getNamespaceId(Namespace.KIND_NAMESPACE, name, 0, true);
+        }
+        if (kind == KIND_NAMESPACE_CUSTOM) {
             String custom = name.toRawString();
-            PropertyAVM2Item prop = new PropertyAVM2Item(null, custom, abcIndex, openedNamespaces, new ArrayList<>());
+            PropertyAVM2Item prop = new PropertyAVM2Item(null, false, custom, "", abcIndex, openedNamespaces, new ArrayList<>());
             Reference<ValueKind> value = new Reference<>(null);
             Reference<ABC> outAbc = new Reference<>(null);
             Reference<Boolean> isType = new Reference<>(false);
@@ -121,7 +130,7 @@ public class NamespaceItem {
                     }
                 }
 
-                throw new CompilationException("Namespace \"" + name + "\"+not defined", -1);
+                throw new CompilationException("Namespace \"" + name + "\" not defined", -1);
             }
             nsIndex = abcIndex.getSelectedAbc().constants.getNamespaceId(Namespace.KIND_NAMESPACE,
                     outAbc.getVal().constants.getNamespace(value.getVal().value_index).getName(outAbc.getVal().constants), 0, true);

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@ package com.jpexs.decompiler.flash.gui;
 import com.jpexs.decompiler.flash.SWF;
 import com.jpexs.decompiler.flash.configuration.Configuration;
 import com.jpexs.decompiler.flash.tags.TagInfo;
+import com.jpexs.decompiler.flash.tags.base.CharacterTag;
 import com.jpexs.decompiler.flash.treeitems.TreeItem;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -48,7 +49,7 @@ public class TagInfoPanel extends JPanel {
 
     private final JEditorPane editorPane = new JEditorPane();
 
-    private TagInfo tagInfo = new TagInfo();
+    private TagInfo tagInfo = new TagInfo(null);
 
     public TagInfoPanel(MainPanel mainPanel) {
         this.mainPanel = mainPanel;
@@ -74,16 +75,23 @@ public class TagInfoPanel extends JPanel {
 
                     String scheme = url.getScheme();
                     String strId = url.getHost();
-                    Integer id = Integer.parseInt(strId);
+                    Integer id = "expand".equals(scheme) ? null : Integer.parseInt(strId);
                     SWF swf = mainPanel.getCurrentSwf();
 
                     TreeItem item = null;
-                    if ("char".equals(scheme)) {
+                    if ("expand".equals(scheme)) {
+                        updateHtmlContent(true);
+                    } else if ("char".equals(scheme)) {
                         item = swf.getCharacter(id);
                     } else if ("frame".equals(scheme)) {
                         item = swf.getTimeline().getFrame(id);
                     }
-                    mainPanel.setTagTreeSelectedNode(item);
+                    if (item != null) {
+                        if (mainPanel.checkEdited()) {
+                            return;
+                        }
+                        mainPanel.setTagTreeSelectedNode(mainPanel.getCurrentTree(), item);
+                    }
                 }
             }
 
@@ -97,7 +105,7 @@ public class TagInfoPanel extends JPanel {
         buildHtmlContent();
     }
 
-    private void buildHtmlContent() {
+    private void updateHtmlContent(boolean expand) {
         String categoryName = "general";
         String result = "<html><body><table cellspacing='0' cellpadding='0'>";
         Boolean flipFlop = false;
@@ -119,6 +127,7 @@ public class TagInfoPanel extends JPanel {
         );
         result += "</tr>";
 
+        SWF swf = tagInfo.getSwf();
         for (TagInfo.TagInfoItem item : items) {
 
             flipFlop = !flipFlop;
@@ -160,14 +169,31 @@ public class TagInfoPanel extends JPanel {
 
                 Collections.sort(sortedIds);
 
-                String scheme = frameList ? "frame" : "char";         
+                String scheme = frameList ? "frame" : "char";
 
                 for (int id : sortedIds) {
                     int displayId = frameList ? id + 1 : id;
-                    strValue += String.format("<a href='%s://%d'>%d</a>, ", scheme, id, displayId);
+
+                    if (!frameList && expand) {
+                        String charName;
+                        CharacterTag character = swf == null ? null : swf.getCharacter(id);
+                        if (swf == null || character == null) {
+                            charName = "???";
+                        } else {
+                            charName = character.getTagName();
+                        }
+
+                        strValue += String.format("<a href='%s://%d'>%s (%d)</a><br>", scheme, id, charName, id);
+                    } else {
+                        strValue += String.format("<a href='%s://%d'>%d</a>, ", scheme, id, displayId);
+                    }
                 }
 
                 value = strValue.substring(0, strValue.length() - 2);
+
+                if (!frameList && !expand) {
+                    value = value + " <a href='expand://all'>+</a>";
+                }
             }
 
             result += "<td>" + value + "</td>";
@@ -178,6 +204,10 @@ public class TagInfoPanel extends JPanel {
         result += "</table></body></html>";
 
         editorPane.setText(result);
+    }
+
+    private void buildHtmlContent() {
+        updateHtmlContent(false);
 
         Font font = UIManager.getFont("Table.font");
         String bodyRule = "body { font-family: " + font.getFamily() + ";"
@@ -193,13 +223,22 @@ public class TagInfoPanel extends JPanel {
                     + "td { border: 1px solid #e4e4e4; }"
                     + "html { border: 1px solid #789AC4; }";
         } else {
+            Color bgColor = UIManager.getColor("Table.background");
+            int light = (bgColor.getRed() + bgColor.getGreen() + bgColor.getBlue()) / 3;
+            boolean nightMode = light <= 128;
+
+            Color linkColor = Color.blue;
+            if (nightMode) {
+                linkColor = new Color(0x88, 0x88, 0xff);
+            }
+
             bodyRule += "background-color: " + getUIColorToHex("Table.background") + ";"
                     + "color:" + getUIColorToHex("Table.foreground") + ";"
                     + "padding:1px;"
                     + "}"
                     + "td { border: 1px solid " + getUIColorToHex("Table.gridColor") + "; }"
                     + "html { border: 1px solid " + getUIColorToHex("Table.gridColor") + "; }"
-                    + "a {color: " + getUIColorToHex("List.selectionBackground") + "}";
+                    + "a {color: " + getColorToHex(linkColor) + "}";
         }
 
         ((HTMLDocument) editorPane.getDocument()).getStyleSheet().addRule(bodyRule);
@@ -209,8 +248,12 @@ public class TagInfoPanel extends JPanel {
         editorPane.setEditable(false);
     }
 
+    private static String getColorToHex(Color c) {
+        return String.format("#%02x%02x%02x", c.getRed(), c.getGreen(), c.getBlue());
+    }
+
     private static String getUIColorToHex(String name) {
         Color c = UIManager.getColor(name);
-        return String.format("#%02x%02x%02x", c.getRed(), c.getGreen(), c.getBlue());
+        return getColorToHex(c);
     }
 }

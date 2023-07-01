@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@ package com.jpexs.decompiler.flash.gui;
 
 import com.jpexs.decompiler.flash.configuration.Configuration;
 import com.jpexs.decompiler.flash.gui.player.FlashPlayerPanel;
-import com.jpexs.decompiler.flash.treeitems.SWFList;
+import com.jpexs.decompiler.flash.treeitems.OpenableList;
 import com.jpexs.helpers.Helper;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -129,7 +129,7 @@ public final class MainFrameRibbon extends AppRibbonFrame {
                     StringBuilder sbt = new StringBuilder();
 
                     boolean first = true;
-                    for (SWFList swf : panel.getSwfs()) {
+                    for (OpenableList swf : panel.getSwfs()) {
                         if (!first) {
                             sb.append(File.pathSeparator);
                             sbt.append(File.pathSeparator);
@@ -146,14 +146,18 @@ public final class MainFrameRibbon extends AppRibbonFrame {
                     Configuration.lastSessionFiles.set(sb.toString());
                     Configuration.lastSessionFileTitles.set(sbt.toString());
 
-                    String path = panel.tagTree.getSelectionPathString();
-                    if (path != null) {
-                        Configuration.lastSessionSelection.set(path);
+                    String pathResources = panel.tagTree.getSelectionPathString();
+                    if (pathResources != null) {
+                        Configuration.lastSessionSelection.set(pathResources);
+                    }
+                    String pathTagList = panel.tagListTree.getSelectionPathString();
+                    if (pathTagList != null) {
+                        Configuration.lastSessionTagListSelection.set(pathTagList);
                     }
 
                 }
 
-                boolean closeResult = panel.closeAll(true);
+                boolean closeResult = panel.closeAll(true, true);
                 if (closeResult) {
                     Main.exit();
                 }

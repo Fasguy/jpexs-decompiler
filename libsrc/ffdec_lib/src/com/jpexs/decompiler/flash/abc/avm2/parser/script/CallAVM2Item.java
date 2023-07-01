@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -97,12 +97,13 @@ public class CallAVM2Item extends AVM2Item {
                         otherNs.add(on.getCpoolIndex(g.abcIndex));
                     }
                 }
-                if (cname != null && AVM2SourceGenerator.searchPrototypeChain(otherNs, localData.privateNs, localData.protectedNs, true, g.abcIndex, pkgName, cname, n.getVariableName(), outName, outNs, outPropNs, outPropNsKind, outPropNsIndex, outPropType, outPropValue, outPropValueABC, isType)) {
-                    NameAVM2Item nobj = new NameAVM2Item(new TypeItem(localData.getFullClass()), n.line, "this", null, false, n.openedNamespaces, abcIndex);
+                //For using this when appropriate: (Non ASC2 approach)
+                /*if (cname != null && AVM2SourceGenerator.searchPrototypeChain(null, otherNs, localData.privateNs, localData.protectedNs, true, g.abcIndex, pkgName, cname, n.getVariableName(), outName, outNs, outPropNs, outPropNsKind, outPropNsIndex, outPropType, outPropValue, outPropValueABC, isType)) {
+                    NameAVM2Item nobj = new NameAVM2Item(new TypeItem(localData.getFullClass()), n.line, false, "this", "", null, false, n.openedNamespaces, abcIndex);
                     nobj.setRegNumber(0);
                     obj = nobj;
-                }
-                PropertyAVM2Item p = new PropertyAVM2Item(obj, n.getVariableName(), g.abcIndex, n.openedNamespaces, new ArrayList<>());
+                }*/
+                PropertyAVM2Item p = new PropertyAVM2Item(obj, n.isAttribute(), n.getVariableName(), n.getNamespaceSuffix(), g.abcIndex, n.openedNamespaces, new ArrayList<>());
                 p.setAssignedValue(n.getAssignedValue());
                 callable = p;
             }
@@ -118,12 +119,9 @@ public class CallAVM2Item extends AVM2Item {
         if (callable instanceof PropertyAVM2Item) {
             PropertyAVM2Item prop = (PropertyAVM2Item) callable;
             obj = prop.object;
-            if (obj == null) {
-
-                /*List<ABC> allAbcs = new ArrayList<>();
-                 allAbcs.add(g.abc);
-                 allAbcs.addAll(g.allABCs);
-                 */ String cname = localData.currentClass;
+            //For using this when appropriate: (Non ASC2 approach)
+            /*if (obj == null) {
+                String cname = localData.currentClass;
                 DottedChain pkgName = localData.pkg;
                 Reference<String> outName = new Reference<>("");
                 Reference<DottedChain> outNs = new Reference<>(DottedChain.EMPTY);
@@ -141,13 +139,12 @@ public class CallAVM2Item extends AVM2Item {
                         otherNs.add(n.getCpoolIndex(g.abcIndex));
                     }
                 }
-
-                if (cname != null && AVM2SourceGenerator.searchPrototypeChain(otherNs, localData.privateNs, localData.protectedNs, true, g.abcIndex, pkgName, cname, prop.propertyName, outName, outNs, outPropNs, outPropNsKind, outPropNsIndex, outPropType, outPropValue, outPropValueAbc, isType) && (localData.getFullClass().equals(outNs.getVal().addWithSuffix(outName.getVal()).toRawString()))) {
-                    NameAVM2Item nobj = new NameAVM2Item(new TypeItem(localData.getFullClass()), 0, "this", null, false, new ArrayList<>(), abcIndex);
+                if (!localData.subMethod && cname != null && AVM2SourceGenerator.searchPrototypeChain(null, otherNs, localData.privateNs, localData.protectedNs, true, g.abcIndex, pkgName, cname, prop.propertyName, outName, outNs, outPropNs, outPropNsKind, outPropNsIndex, outPropType, outPropValue, outPropValueAbc, isType) && (localData.getFullClass().equals(outNs.getVal().addWithSuffix(outName.getVal()).toRawString()))) {
+                    NameAVM2Item nobj = new NameAVM2Item(new TypeItem(localData.getFullClass()), 0, false, "this", "", null, false, new ArrayList<>(), abcIndex);
                     nobj.setRegNumber(0);
                     obj = nobj;
                 }
-            }
+            }*/
             propIndex = prop.resolveProperty(localData);
         }
 
@@ -173,7 +170,7 @@ public class CallAVM2Item extends AVM2Item {
             return ((NamespacedAVM2Item) callable).toSource(localData, generator, needsReturn, true, arguments, false, false);
         }
 
-        return toSourceMerge(localData, generator, callable, ins(AVM2Instructions.GetGlobalScope), arguments, ins(AVM2Instructions.Call, arguments.size()));
+        return toSourceMerge(localData, generator, callable, ins(AVM2Instructions.GetGlobalScope) /*ASC2 uses getlocal0 here*/, arguments, ins(AVM2Instructions.Call, arguments.size()), needsReturn ? null : ins(AVM2Instructions.Pop));
     }
 
     @Override

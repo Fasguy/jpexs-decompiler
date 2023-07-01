@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -156,13 +156,14 @@ public class SetVariableActionItem extends ActionItem implements SetTypeActionIt
     @Override
     public List<GraphSourceItem> toSource(SourceGeneratorLocalData localData, SourceGenerator generator) throws CompilationException {
         ActionSourceGenerator asGenerator = (ActionSourceGenerator) generator;
+        String charset = asGenerator.getCharset();  
 
         if (forceUseSet) {
-            return toSourceMerge(localData, generator, name, value, new ActionSetVariable(), new ActionPush(Undefined.INSTANCE));
+            return toSourceMerge(localData, generator, name, value, new ActionSetVariable(), new ActionPush(Undefined.INSTANCE, charset));
         }
         int tmpReg = asGenerator.getTempRegister(localData);
         try {
-            return toSourceMerge(localData, generator, name, value, new ActionStoreRegister(tmpReg), new ActionSetVariable(), new ActionPush(new RegisterNumber(tmpReg)));
+            return toSourceMerge(localData, generator, name, value, new ActionStoreRegister(tmpReg, charset), new ActionSetVariable(), new ActionPush(new RegisterNumber(tmpReg), charset));
         } finally {
             asGenerator.releaseTempRegister(localData, tmpReg);
         }

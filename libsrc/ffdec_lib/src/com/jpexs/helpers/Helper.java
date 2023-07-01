@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -648,19 +648,22 @@ public class Helper {
     public static <E> E deepCopy(E o) {
         try {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            try (ObjectOutputStream oos = new ObjectOutputStream(baos)) {
+            try ( ObjectOutputStream oos = new ObjectOutputStream(baos)) {
                 oos.writeObject(o);
                 oos.flush();
             }
             E copy;
-            try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(baos.toByteArray()))) {
+            try ( ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(baos.toByteArray()))) {
                 copy = (E) ois.readObject();
             }
             return copy;
         } catch (IOException | ClassNotFoundException ex) {
             Logger.getLogger(Helper.class.getName()).log(Level.SEVERE, "Copy error", ex);
             return null;
+        } catch (StackOverflowError se) {
+            throw new StackOverflowError("Stack overflow in deepcopy");
         }
+        
     }
 
     public static List<Object> toList(Object... rest) {
@@ -694,7 +697,7 @@ public class Helper {
     public static byte[] readFile(String... file) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         for (String f : file) {
-            try (FileInputStream fis = new FileInputStream(f)) {
+            try ( FileInputStream fis = new FileInputStream(f)) {
                 byte[] buf = new byte[4096];
                 int cnt;
                 while ((cnt = fis.read(buf)) > 0) {
@@ -798,7 +801,7 @@ public class Helper {
     }
 
     public static void appendFile(String file, byte[]... data) {
-        try (FileOutputStream fos = new FileOutputStream(file, true)) {
+        try ( FileOutputStream fos = new FileOutputStream(file, true)) {
             for (byte[] d : data) {
                 fos.write(d);
             }
@@ -808,7 +811,7 @@ public class Helper {
     }
 
     public static void writeFile(String file, byte[]... data) {
-        try (FileOutputStream fos = new FileOutputStream(file)) {
+        try ( FileOutputStream fos = new FileOutputStream(file)) {
             for (byte[] d : data) {
                 fos.write(d);
             }
@@ -818,7 +821,7 @@ public class Helper {
     }
 
     public static void writeFile(String file, InputStream stream) {
-        try (FileOutputStream fos = new FileOutputStream(file)) {
+        try ( FileOutputStream fos = new FileOutputStream(file)) {
             copyStream(stream, fos);
         } catch (IOException ex) {
             // ignore
@@ -938,7 +941,7 @@ public class Helper {
             }
             try {
                 f.setAccessible(true);
-                
+
                 Object v = f.get(obj);
                 if (v != null) {
                     try {
@@ -1167,7 +1170,7 @@ public class Helper {
     public static void saveStream(InputStream is, File output) throws IOException {
         byte[] buf = new byte[4096];
         int cnt;
-        try (OutputStream fos = new BufferedOutputStream(new FileOutputStream(output))) {
+        try ( OutputStream fos = new BufferedOutputStream(new FileOutputStream(output))) {
             while ((cnt = is.read(buf)) > 0) {
                 fos.write(buf, 0, cnt);
                 fos.flush();
@@ -1580,5 +1583,17 @@ public class Helper {
         byte[] data = downloadUrl(url);
         String text = new String(data, Utf8Helper.charset);
         return text;
+    }
+
+    public static int getJavaVersion() {
+        String version = System.getProperty("java.version");
+        if (version.startsWith("1.")) {
+            version = version.substring(2, 3);
+        }
+        int dot = version.indexOf(".");
+        if (dot != -1) {
+            version = version.substring(0, dot);
+        }        
+        return Integer.parseInt(version);
     }
 }

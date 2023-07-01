@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,9 +19,9 @@ package com.jpexs.decompiler.graph;
 import com.jpexs.decompiler.flash.BaseLocalData;
 import com.jpexs.decompiler.flash.FinalProcessLocalData;
 import com.jpexs.decompiler.flash.action.Action;
-import com.jpexs.decompiler.flash.action.model.FunctionActionItem;
 import com.jpexs.decompiler.flash.action.swf5.ActionDefineFunction;
 import com.jpexs.decompiler.flash.action.swf7.ActionDefineFunction2;
+import com.jpexs.decompiler.flash.configuration.Configuration;
 import com.jpexs.decompiler.flash.helpers.GraphTextWriter;
 import com.jpexs.decompiler.graph.model.AndItem;
 import com.jpexs.decompiler.graph.model.BranchStackResistant;
@@ -62,8 +62,10 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.Stack;
+import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -89,6 +91,7 @@ public class Graph {
     private boolean debugPrintLoopList = false;
     private boolean debugGetLoops = false;
     private boolean debugPrintGraph = false;
+    protected boolean debugDoNotProcess = false;
 
     private static final Logger logger = Logger.getLogger(Graph.class.getName());
 
@@ -116,6 +119,7 @@ public class Graph {
         List<GraphPart> visited = new ArrayList<>();
         for (GraphPart head : heads) {
             time = head.setTime(time, ordered, visited);
+            head.setNumblocks(1);
         }
     }
 
@@ -344,7 +348,7 @@ public class Graph {
         return null;
     }
 
-    public GraphPart getMostCommonPart(BaseLocalData localData, List<GraphPart> parts, List<Loop> loops, List<ThrowState> throwStates) throws InterruptedException {
+    public GraphPart getMostCommonPart(BaseLocalData localData, List<GraphPart> parts, List<Loop> loops, List<ThrowState> throwStates, List<GraphPart> stopPart) throws InterruptedException {
         if (parts.isEmpty()) {
             return null;
         }
@@ -360,7 +364,7 @@ public class Graph {
             }
         }
 
-        List<Set<GraphPart>> reachable = new ArrayList<>();
+        Map<GraphPart, Set<GraphPart>> reachable = new HashMap<>();
         Set<GraphPart> allReachable = new LinkedHashSet<>();
         for (GraphPart p : parts) {
             LinkedHashSet<GraphPart> r1 = new LinkedHashSet<>();
@@ -368,12 +372,11 @@ public class Graph {
             Set<GraphPart> r2 = new LinkedHashSet<>();
             r2.add(p);
             r2.addAll(r1);
-            reachable.add(r2);
+            reachable.put(p, r2);
             allReachable.add(p);
             allReachable.addAll(r1);
         }
-        int maxCommonLevel = -1;
-        GraphPart maxCommonPart = null;
+        Set<PartCommon> commonSet = new TreeSet<>();
         for (GraphPart r : allReachable) {
             if (loopContinues.contains(r)) {
                 continue;
@@ -385,7 +388,7 @@ public class Graph {
                     commonLevel++;
                     continue;
                 }
-                if (!p.leadsTo(localData, this, code, r, loops, throwStates, false)) {
+                if (!reachable.get(p).contains(r)) {
                     common = false;
                 } else {
                     commonLevel++;
@@ -430,18 +433,126 @@ public class Graph {
                 }
 
                 if (common) {
+                    if (debugPrintLoopList) {
+                        System.err.println("all time common: " + r);
+                    }
                     return r;
                 }
             }
-            if (commonLevel > maxCommonLevel) {
+            /*if (commonLevel > maxCommonLevel) {                
                 maxCommonPart = r;
                 maxCommonLevel = commonLevel;
+                commonSet.add(e)
+            }*/
+            commonSet.add(new PartCommon(r, commonLevel));
+        }
+
+        /*Set<GraphPart> partsLeadingToStopPart = new LinkedHashSet<>();
+        if (stopPart != null) {
+            for (GraphPart p : parts) {
+                for (GraphPart sp : stopPart) {
+                    if (sp == p || p.leadsTo(localData, this, code, sp, new ArrayList<Loop>(), throwStates, false)) {
+                        partsLeadingToStopPart.add(p);
+                    }
+                }
             }
         }
-        if (maxCommonLevel <= 1) {
-            return null;
+ 
+        if (debugPrintLoopList) {
+            System.err.println("commonset:");
+            for (PartCommon pc : commonSet) {
+                System.err.println("- " + pc);
+            }
+
+            System.err.println("parts:");
+            for (GraphPart p : parts) {
+                System.err.println("- " + p);
+            }
+
+            if (stopPart != null) {
+                System.err.println("stopparts:");
+                for (GraphPart p : stopPart) {
+                    System.err.println("- " + p);
+                }
+            }
+
+            System.err.println("partsLeadingToStopPart:");
+            for (GraphPart p : partsLeadingToStopPart) {
+                System.err.println("- " + p);
+            }           
+        }*/
+        loopc:
+        for (PartCommon pc : commonSet) {
+            /*for (GraphPart p : partsLeadingToStopPart) {
+                if (p != pc.part && !p.leadsTo(localData, this, code, pc.part, loops, throwStates, false)) {
+                    if (debugPrintLoopList) {
+                        System.err.println("ignoring " + pc.part + ", " + p + " does not lead to it");
+                    }
+                    continue loopc;
+                }
+            }*/
+            if (pc.level <= 1) {
+                return null;
+            }
+            if (debugPrintLoopList) {
+                System.err.println("selected " + pc.part);
+            }
+            return pc.part;
         }
-        return maxCommonPart;
+
+        return null;
+    }
+
+    private class PartCommon implements Comparable<PartCommon> {
+
+        public GraphPart part;
+        public int level;
+
+        public PartCommon(GraphPart part, int level) {
+            this.part = part;
+            this.level = level;
+        }
+
+        @Override
+        public int compareTo(PartCommon o) {
+            int ret = o.level - level;
+            if (ret == 0) {
+                ret = part.start - o.part.start;
+            }
+            return ret;
+        }
+
+        @Override
+        public String toString() {
+            return "" + part.toString() + " (level=" + level;
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 5;
+            hash = 71 * hash + Objects.hashCode(this.part);
+            hash = 71 * hash + this.level;
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null) {
+                return false;
+            }
+            if (getClass() != obj.getClass()) {
+                return false;
+            }
+            final PartCommon other = (PartCommon) obj;
+            if (this.level != other.level) {
+                return false;
+            }
+            return Objects.equals(this.part, other.part);
+        }
+
     }
 
     public GraphPart getNextNoJump(GraphPart part, BaseLocalData localData) {
@@ -522,6 +633,11 @@ public class Graph {
         getLoops(localData, heads.get(0), loops, throwStates, null);
 
         afterGetLoops(localData, path, allParts);
+
+        //TODO: Make getPrecontinues faster
+        getBackEdges(localData, loops, throwStates);
+
+        new GraphPrecontinueDetector().detectPrecontinues(heads, allParts, loops, throwStates);
         if (debugPrintLoopList) {
             System.err.println("<loops>");
             for (Loop el : loops) {
@@ -529,12 +645,6 @@ public class Graph {
             }
             System.err.println("</loops>");
         }
-
-        //TODO: Make getPrecontinues faster
-        getBackEdges(localData, loops, throwStates);
-
-        new GraphPrecontinueDetector().detectPrecontinues(heads, allParts, loops, throwStates);
-
         /*System.err.println("<loopspre>");
          for (Loop el : loops) {
          System.err.println(el);
@@ -546,8 +656,19 @@ public class Graph {
 
         if (localData.secondPassData == null) {
             SecondPassData secondPassData = prepareSecondPass(ret);
-            if (secondPassData != null) {
-                throw new SecondPassException(secondPassData);
+            if (secondPassData == null) {
+                if (!localData.allSwitchParts.isEmpty()) {
+                    secondPassData = new SecondPassData();
+                    secondPassData.allSwitchParts = localData.allSwitchParts;
+                    throw new SecondPassException(secondPassData);
+                }
+            } else {
+                if (secondPassData.getClass() == SecondPassData.class && localData.allSwitchParts.isEmpty()) {
+                    //nothing
+                } else {
+                    secondPassData.allSwitchParts = localData.allSwitchParts;
+                    throw new SecondPassException(secondPassData);
+                }
             }
         }
 
@@ -698,9 +819,10 @@ public class Graph {
                         }
                     }
                 }
-                if (hasContinues && breakCaseIndex > -1 && i + 1 < list.size() && (list.get(list.size() - 1) instanceof ContinueItem)) {
+                if (hasContinues && breakCaseIndex > -1 && i + 1 < list.size()) {
                     List<GraphTargetItem> toAdd = new ArrayList<>();
-                    for (int j = i + 1; j < list.size() - 1; j++) {
+                    boolean continueOnEnd = list.get(list.size() - 1) instanceof ContinueItem;
+                    for (int j = i + 1; j < list.size() - (continueOnEnd ? 1 : 0); j++) {
                         toAdd.add(list.remove(i + 1));
                     }
                     List<GraphTargetItem> targetCommands = swi.caseCommands.get(breakCaseIndex);
@@ -708,7 +830,9 @@ public class Graph {
                         targetCommands.remove(targetCommands.size() - 1);
                     }
                     targetCommands.addAll(toAdd);
-                    targetCommands.add(new BreakItem(null, null, swi.loop.id));
+                    if (toAdd.isEmpty() || (!((toAdd.get(toAdd.size() - 1) instanceof ExitItem) || (toAdd.get(toAdd.size() - 1) instanceof BreakItem)))) {
+                        targetCommands.add(new BreakItem(null, null, swi.loop.id));
+                    }
                 }
             }
         }
@@ -794,6 +918,9 @@ public class Graph {
     }
 
     private void finalProcessAll(List<GraphTargetItem> list, int level, FinalProcessLocalData localData, String path) throws InterruptedException {
+        if (debugDoNotProcess) {
+            return;
+        }
         finalProcess(list, level, localData, path);
         for (GraphTargetItem item : list) {
             if (item instanceof Block) {
@@ -1072,6 +1199,9 @@ public class Graph {
     }
 
     protected void processIfs(List<GraphTargetItem> list) {
+        if (debugDoNotProcess) {
+            return;
+        }
         for (int i = 0; i < list.size(); i++) {
             GraphTargetItem item = list.get(i);
             if ((item instanceof LoopItem) && (item instanceof Block)) {
@@ -1114,19 +1244,56 @@ public class Graph {
 
                 }
 
-                if ((!onTrue.isEmpty()) && (!onFalse.isEmpty())) {
-                    GraphTargetItem last = onTrue.get(onTrue.size() - 1);
-                    if ((last instanceof ExitItem) || (last instanceof ContinueItem) || (last instanceof BreakItem)) {
-                        list.addAll(i + 1, onFalse);
-                        onFalse.clear();
-                    }
+                /*
+                if (xx) {
+                    A;
+                    continue
+                } else {
+                    B;
+                    break/exit/continue;
                 }
-
+                
+                =>
+                
+                if (xx) {
+                    A;
+                } else {
+                    B;
+                    break/exit/continue;
+                }
+                continue;
+                
+                 */
                 if ((!onTrue.isEmpty()) && (!onFalse.isEmpty())) {
                     if ((onFalse.get(onFalse.size() - 1) instanceof ExitItem) || (onFalse.get(onFalse.size() - 1) instanceof BreakItem)) {
                         if (onTrue.get(onTrue.size() - 1) instanceof ContinueItem) {
                             list.add(i + 1, onTrue.remove(onTrue.size() - 1));
                         }
+                    }
+                }
+
+                /*
+                if (xx) {
+                    A;
+                    break/exit/continue;
+                } else {
+                    B;                    
+                }
+                
+                =>
+                
+                if (xx) {
+                    A;
+                    break/exit/continue;
+                }
+                B;
+                
+                 */
+                if ((!onTrue.isEmpty()) && (!onFalse.isEmpty())) {
+                    GraphTargetItem last = onTrue.get(onTrue.size() - 1);
+                    if ((last instanceof ExitItem) || (last instanceof ContinueItem) || (last instanceof BreakItem)) {
+                        list.addAll(i + 1, onFalse);
+                        onFalse.clear();
                     }
                 }
 
@@ -1318,7 +1485,7 @@ public class Graph {
             }
             end = p.end;
             int start = p.start;
-            ret.addAll(code.translatePart(part, localData, stack, start, end, staticOperation, path));
+            ret.addAll(code.translatePart(this, part, localData, stack, start, end, staticOperation, path));
         }
         return ret;
     }
@@ -1416,107 +1583,108 @@ public class Graph {
 
     private void getLoopsWalk(BaseLocalData localData, GraphPart part, List<Loop> loops, List<ThrowState> throwStates, List<GraphPart> stopPart, boolean first, List<GraphPart> visited, int level) throws InterruptedException {
 
-        if (part == null) {
-            return;
-        }
-
-        part = checkPart(null, localData, null, part, null);
-        if (part == null) {
-            return;
-        }
-        if (!visited.contains(part)) {
-            visited.add(part);
-        }
-        checkGetLoopsPart(part);
-
-        if (debugGetLoops) {
-            System.err.println("getloops: " + part);
-        }
-        //List<GraphPart> loopContinues = getLoopsContinues(loops);
-        Loop lastP1 = null;
-        for (Loop el : loops) {
-            if ((el.phase == 1) && el.loopBreak == null) { //break not found yet
-                if (el.loopContinue != part) {
-                    lastP1 = el;
-
-                } else {
-                    lastP1 = null;
-                }
-
+        loopwalk:
+        while (true) {
+            if (part == null) {
+                return;
             }
-        }
 
-        boolean canBeCandidate = true;
-        if (lastP1 != null) {
-            for (ThrowState ts : throwStates) {
-                if (!ts.catchParts.contains(lastP1.loopContinue) && ts.catchParts.contains(part)) {
-                    canBeCandidate = false;
-                    break;
+            part = checkPart(null, localData, null, part, null);
+            if (part == null) {
+                return;
+            }
+            if (!visited.contains(part)) {
+                visited.add(part);
+            }
+            checkGetLoopsPart(part);
+
+            if (debugGetLoops) {
+                System.err.println("getloops: " + part);
+            }
+            //List<GraphPart> loopContinues = getLoopsContinues(loops);
+            Loop lastP1 = null;
+            for (Loop el : loops) {
+                if ((el.phase == 1) && el.loopBreak == null) { //break not found yet
+                    if (el.loopContinue != part) {
+                        lastP1 = el;
+
+                    } else {
+                        lastP1 = null;
+                    }
+
                 }
             }
-        }
-        try {
-            if (lastP1 != null && canBeCandidate && canBeBreakCandidate(localData, part, throwStates)) {
-                if (lastP1.breakCandidates.contains(part)) {
-                    lastP1.breakCandidates.add(part);
-                    lastP1.breakCandidatesLevels.add(level);
-                    return;
-                } else {
-                    List<Loop> loops2 = new ArrayList<>(loops);
-                    loops2.remove(lastP1);
-                    if (!part.leadsTo(localData, this, code, lastP1.loopContinue, loops2, throwStates, true)) {
-                        if (lastP1.breakCandidatesLocked == 0) {
-                            if (debugGetLoops) {
-                                System.err.println("added breakCandidate " + part + " to " + lastP1);
-                            }
 
-                            lastP1.breakCandidates.add(part);
-                            lastP1.breakCandidatesLevels.add(level);
-                            return;
-                        }
+            boolean canBeCandidate = true;
+            if (lastP1 != null) {
+                for (ThrowState ts : throwStates) {
+                    if (!ts.catchParts.contains(lastP1.loopContinue) && ts.catchParts.contains(part)) {
+                        canBeCandidate = false;
+                        break;
                     }
                 }
             }
-        } finally {
-            for (ThrowState ts : throwStates) {
-                if (ts.throwingParts.contains(part)) {
-                    ts.state = 1;
+            try {
+                if (lastP1 != null && canBeCandidate && canBeBreakCandidate(localData, part, throwStates)) {
+                    if (lastP1.breakCandidates.contains(part)) {
+                        lastP1.breakCandidates.add(part);
+                        lastP1.breakCandidatesLevels.add(level);
+                        return;
+                    } else {
+                        List<Loop> loops2 = new ArrayList<>(loops);
+                        loops2.remove(lastP1);
+                        if (!part.leadsTo(localData, this, code, lastP1.loopContinue, loops2, throwStates, true)) {
+                            if (lastP1.breakCandidatesLocked == 0) {
+                                if (debugGetLoops) {
+                                    System.err.println("added breakCandidate " + part + " to " + lastP1);
+                                }
+
+                                lastP1.breakCandidates.add(part);
+                                lastP1.breakCandidatesLevels.add(level);
+                                return;
+                            }
+                        }
+                    }
+                }
+            } finally {
+                for (ThrowState ts : throwStates) {
+                    if (ts.throwingParts.contains(part)) {
+                        ts.state = 1;
+                    }
                 }
             }
-        }
 
-        for (Loop el : loops) {
-            if (el.loopContinue == part) {
+            for (Loop el : loops) {
+                if (el.loopContinue == part) {
+                    return;
+                }
+            }
+
+            if (stopPart != null && stopPart.contains(part)) {
                 return;
             }
-        }
+            part.level = level;
 
-        if (stopPart != null && stopPart.contains(part)) {
-            return;
-        }
-        part.level = level;
+            boolean isLoop = part.leadsTo(localData, this, code, part, loops, throwStates, true);
+            Loop currentLoop = null;
+            if (isLoop) {
+                currentLoop = new Loop(loops.size(), part, null);
+                currentLoop.phase = 1;
+                loops.add(currentLoop);
+            }
 
-        boolean isLoop = part.leadsTo(localData, this, code, part, loops, throwStates, true);
-        Loop currentLoop = null;
-        if (isLoop) {
-            currentLoop = new Loop(loops.size(), part, null);
-            currentLoop.phase = 1;
-            loops.add(currentLoop);
-            //loopContinues.add(part);
-        }
-
-        for (ThrowState ts : throwStates) {
-            if (ts.throwingParts.contains(part)) {
-                GraphPart t = ts.targetPart;
-                if (!visited.contains(t)) {
-                    getLoopsWalk(localData, t, loops, throwStates, stopPart, false, visited, level);
+            for (ThrowState ts : throwStates) {
+                if (ts.throwingParts.contains(part)) {
+                    GraphPart t = ts.targetPart;
+                    if (!visited.contains(t)) {
+                        getLoopsWalk(localData, t, loops, throwStates, stopPart, false, visited, level);
+                    }
                 }
             }
-        }
 
-        if (part.nextParts.size() == 2 && !partIsSwitch(part)) {
+            if (part.nextParts.size() == 2 && !partIsSwitch(part)) {
 
-            List<GraphPart> nps;/* = new ArrayList<>(part.nextParts);
+                List<GraphPart> nps;/* = new ArrayList<>(part.nextParts);
              for(int i=0;i<nps.size();i++){
              nps.set(i,getNextNoJump(nps.get(i),localData));
              }
@@ -1524,272 +1692,293 @@ public class Graph {
              nps = part.nextParts;
              }*/
 
-            nps = part.nextParts;
-            GraphPart next = getCommonPart(localData, part, nps, loops, throwStates);
-            List<GraphPart> stopPart2 = stopPart == null ? new ArrayList<>() : new ArrayList<>(stopPart);
-            if (next != null) {
-                stopPart2.add(next);
-            }
-            if (next != nps.get(0)) {
-                getLoopsWalk(localData, nps.get(0), loops, throwStates, stopPart2, false, visited, level + 1);
-            }
-            if (next != nps.get(1)) {
-                getLoopsWalk(localData, nps.get(1), loops, throwStates, stopPart2, false, visited, level + 1);
-            }
-            if (next != null) {
-                getLoopsWalk(localData, next, loops, throwStates, stopPart, false, visited, level);
-            }
-        } else if (part.nextParts.size() > 2 || partIsSwitch(part)) {
-            GraphPart next = getMostCommonPart(localData, part.nextParts, loops, throwStates);
-
-            for (GraphPart p : part.nextParts) {
+                nps = part.nextParts;
+                GraphPart next = getCommonPart(localData, part, nps, loops, throwStates);
                 List<GraphPart> stopPart2 = stopPart == null ? new ArrayList<>() : new ArrayList<>(stopPart);
                 if (next != null) {
                     stopPart2.add(next);
                 }
-                for (GraphPart p2 : part.nextParts) {
-                    if (p2 == p) {
-                        continue;
+                if (next != nps.get(0)) {
+                    getLoopsWalk(localData, nps.get(0), loops, throwStates, stopPart2, false, visited, level + 1);
+                }
+                if (next != nps.get(1)) {
+                    getLoopsWalk(localData, nps.get(1), loops, throwStates, stopPart2, false, visited, level + 1);
+                }
+                if (next != null) {
+                    getLoopsWalk(localData, next, loops, throwStates, stopPart, false, visited, level);
+                }
+            } else if (part.nextParts.size() > 2 || partIsSwitch(part)) {
+                GraphPart next = getMostCommonPart(localData, part.nextParts, loops, throwStates, stopPart);
+
+                for (GraphPart p : part.nextParts) {
+                    List<GraphPart> stopPart2 = stopPart == null ? new ArrayList<>() : new ArrayList<>(stopPart);
+                    if (next != null) {
+                        stopPart2.add(next);
                     }
-                    if (!stopPart2.contains(p2)) {
-                        stopPart2.add(p2);
-                    }
-                }
-                if (next != p) {
-                    getLoopsWalk(localData, p, loops, throwStates, stopPart2, false, visited, level + 1);
-                }
-            }
-            if (next != null) {
-                getLoopsWalk(localData, next, loops, throwStates, stopPart, false, visited, level);
-            }
-        } else if (part.nextParts.size() == 1) {
-            getLoopsWalk(localData, part.nextParts.get(0), loops, throwStates, stopPart, false, visited, level);
-        }
-
-        /*List<Loop> loops2 = new ArrayList<>(loops);
-        for (Loop l : loops2) {
-            l.breakCandidatesLocked++;
-        }*/
- /*for (Loop l : loops2) {
-            l.breakCandidatesLocked--;
-        }*/
-        if (isLoop && currentLoop != null) {
-            GraphPart found;
-
-            for (int i = 0; i < currentLoop.breakCandidates.size(); i++) {
-                GraphPart ch = checkPart(null, localData, null, currentLoop.breakCandidates.get(i), null);
-                if (ch == null) {
-                    currentLoop.breakCandidates.remove(i);
-                    currentLoop.breakCandidatesLevels.remove(i);
-                    i--;
-                }
-            }
-            if (debugGetLoops) {
-                System.err.println("loop " + currentLoop + " break candidates:");
-                for (GraphPart cand : currentLoop.breakCandidates) {
-                    System.err.println("- " + cand);
-                }
-            }
-
-            List<Integer> contThrowStates = new ArrayList<>();
-
-            for (ThrowState ts : throwStates) {
-                if (ts.throwingParts.contains(currentLoop.loopContinue)) {
-                    contThrowStates.add(ts.exceptionId);
-                }
-            }
-
-            Map<GraphPart, Integer> removed = new HashMap<>();
-
-            loopcand:
-            for (int c = 0; c < currentLoop.breakCandidates.size(); c++) {
-                GraphPart cand = currentLoop.breakCandidates.get(c);
-                List<Integer> candThrowStates = new ArrayList<>();
-                for (ThrowState ts : throwStates) {
-                    if (ts.throwingParts.contains(cand) && ts.startPart != cand) {
-                        if (contThrowStates.equals(candThrowStates)) {
-                            //adding new ts
-                            //this means breakcandidate is in nested try
-                            if (debugGetLoops) {
-                                System.err.println("candidate " + cand + " is in inner try, getting outside parts");
-                            }
-                            List<GraphPart> outsideTry = new ArrayList<>();
-                            findPartsOutsideTry(ts, cand, outsideTry, new HashSet<>());
-
-                            for (int j = outsideTry.size() - 1; j >= 0; j--) {
-                                if (!canBeBreakCandidate(localData, outsideTry.get(j), throwStates)) {
-                                    outsideTry.remove(j);
-                                }
-                            }
-                            if (debugGetLoops) {
-                                for (GraphPart op : outsideTry) {
-                                    System.err.println("- outsidepart " + op);
-                                }
-                            }
-                            int bcLevel = currentLoop.breakCandidatesLevels.get(c);
-                            currentLoop.breakCandidates.remove(c);
-
-                            currentLoop.breakCandidates.addAll(c, outsideTry);
-                            currentLoop.breakCandidatesLevels.remove(c);
-
-                            removed.put(cand, bcLevel);
-                            for (int j = 0; j < outsideTry.size(); j++) {
-                                currentLoop.breakCandidatesLevels.add(c, bcLevel);
-                            }
-
-                            c--;
-                            continue loopcand;
-                        }
-                        candThrowStates.add(ts.exceptionId);
-                    }
-                }
-            }
-
-            do {
-                found = null;
-
-                loopcand:
-                for (int c1 = 0; c1 < currentLoop.breakCandidates.size(); c1++) {
-                    GraphPart cand = currentLoop.breakCandidates.get(c1);
-                    for (int c2 = 0; c2 < currentLoop.breakCandidates.size(); c2++) {
-                        GraphPart cand2 = currentLoop.breakCandidates.get(c2);
-                        if (cand == cand2) {
+                    for (GraphPart p2 : part.nextParts) {
+                        if (p2 == p) {
                             continue;
                         }
-                        if (cand.leadsTo(localData, this, code, cand2, loops, throwStates, true)) {
+                        if (!stopPart2.contains(p2)) {
+                            stopPart2.add(p2);
+                        }
+                    }
+                    if (next != p) {
+                        getLoopsWalk(localData, p, loops, throwStates, stopPart2, false, visited, level + 1);
+                    }
+                }
+                if (next != null) {
+                    getLoopsWalk(localData, next, loops, throwStates, stopPart, false, visited, level);
+                }
+            } else if (part.nextParts.size() == 1) {
+                
+                if (!isLoop || currentLoop == null) {
+                    part = part.nextParts.get(0);
+                    first = false;
+                    continue loopwalk; //to avoid recursion
+                } else {                
+                    getLoopsWalk(localData, part.nextParts.get(0), loops, throwStates, stopPart, false, visited, level);
+                }
+            }
+            
+            if (isLoop && currentLoop != null) {
+                GraphPart found;
 
-                            int curLevl = currentLoop.breakCandidatesLevels.get(c1);
-                            int curLev2 = currentLoop.breakCandidatesLevels.get(c2);
-                            /*
+                for (int i = 0; i < currentLoop.breakCandidates.size(); i++) {
+                    GraphPart ch = checkPart(null, localData, null, currentLoop.breakCandidates.get(i), null);
+                    if (ch == null) {
+                        currentLoop.breakCandidates.remove(i);
+                        currentLoop.breakCandidatesLevels.remove(i);
+                        i--;
+                    }
+                }
+                if (debugGetLoops) {
+                    System.err.println("loop " + currentLoop + " break candidates:");
+                    for (GraphPart cand : currentLoop.breakCandidates) {
+                        System.err.println("- " + cand);
+                    }
+                }
+
+                List<Integer> contThrowStates = new ArrayList<>();
+
+                for (ThrowState ts : throwStates) {
+                    if (ts.throwingParts.contains(currentLoop.loopContinue)) {
+                        contThrowStates.add(ts.exceptionId);
+                    }
+                }
+
+                Map<GraphPart, Integer> removed = new HashMap<>();
+
+                loopcand:
+                for (int c = 0; c < currentLoop.breakCandidates.size(); c++) {
+                    GraphPart cand = currentLoop.breakCandidates.get(c);
+                    List<Integer> candThrowStates = new ArrayList<>();
+                    for (ThrowState ts : throwStates) {
+                        if (ts.throwingParts.contains(cand) && ts.startPart != cand) {
+                            if (contThrowStates.equals(candThrowStates)) {
+                                //adding new ts
+                                //this means breakcandidate is in nested try
+                                if (debugGetLoops) {
+                                    System.err.println("candidate " + cand + " is in inner try, getting outside parts");
+                                }
+                                List<GraphPart> outsideTry = new ArrayList<>();
+                                findPartsOutsideTry(ts, cand, outsideTry, new HashSet<>());
+
+                                for (int j = outsideTry.size() - 1; j >= 0; j--) {
+                                    if (!canBeBreakCandidate(localData, outsideTry.get(j), throwStates)) {
+                                        outsideTry.remove(j);
+                                    }
+                                }
+                                if (debugGetLoops) {
+                                    for (GraphPart op : outsideTry) {
+                                        System.err.println("- outsidepart " + op);
+                                    }
+                                }
+                                int bcLevel = currentLoop.breakCandidatesLevels.get(c);
+                                currentLoop.breakCandidates.remove(c);
+
+                                currentLoop.breakCandidates.addAll(c, outsideTry);
+                                currentLoop.breakCandidatesLevels.remove(c);
+
+                                removed.put(cand, bcLevel);
+                                for (int j = 0; j < outsideTry.size(); j++) {
+                                    currentLoop.breakCandidatesLevels.add(c, bcLevel);
+                                }
+
+                                c--;
+                                continue loopcand;
+                            }
+                            candThrowStates.add(ts.exceptionId);
+                        }
+                    }
+                }
+
+                do {
+                    found = null;
+
+                    loopcand:
+                    for (int c1 = 0; c1 < currentLoop.breakCandidates.size(); c1++) {
+                        GraphPart cand = currentLoop.breakCandidates.get(c1);
+                        for (int c2 = 0; c2 < currentLoop.breakCandidates.size(); c2++) {
+                            GraphPart cand2 = currentLoop.breakCandidates.get(c2);
+                            if (cand == cand2) {
+                                continue;
+                            }
+                            if (cand.leadsTo(localData, this, code, cand2, loops, throwStates, true)) {
+
+                                int curLevl = currentLoop.breakCandidatesLevels.get(c1);
+                                int curLev2 = currentLoop.breakCandidatesLevels.get(c2);
+                                /*
                             found = cand;
                             int lev2 = currentLoop.breakCandidatesLevels.get(c2);
                             currentLoop.breakCandidates.set(c1, cand2);
                             currentLoop.breakCandidatesLevels.set(c1, lev2);*/
-                            int lev1 = Integer.MAX_VALUE;
-                            int lev2 = Integer.MAX_VALUE;
-                            for (int i = 0; i < currentLoop.breakCandidates.size(); i++) {
-                                if (currentLoop.breakCandidates.get(i) == cand) {
-                                    if (currentLoop.breakCandidatesLevels.get(i) < lev1) {
-                                        lev1 = currentLoop.breakCandidatesLevels.get(i);
+                                int lev1 = Integer.MAX_VALUE;
+                                int lev2 = Integer.MAX_VALUE;
+                                for (int i = 0; i < currentLoop.breakCandidates.size(); i++) {
+                                    if (currentLoop.breakCandidates.get(i) == cand) {
+                                        if (currentLoop.breakCandidatesLevels.get(i) < lev1) {
+                                            lev1 = currentLoop.breakCandidatesLevels.get(i);
+                                        }
+                                    }
+                                    if (currentLoop.breakCandidates.get(i) == cand2) {
+                                        if (currentLoop.breakCandidatesLevels.get(i) < lev2) {
+                                            lev2 = currentLoop.breakCandidatesLevels.get(i);
+                                        }
                                     }
                                 }
-                                if (currentLoop.breakCandidates.get(i) == cand2) {
-                                    if (currentLoop.breakCandidatesLevels.get(i) < lev2) {
-                                        lev2 = currentLoop.breakCandidatesLevels.get(i);
-                                    }
+                                //
+                                GraphPart other;
+                                int curLev;
+                                if (lev1 <= lev2) {
+                                    found = cand2;
+                                    other = cand;
+                                    curLev = curLevl;
+                                } else {
+                                    found = cand;
+                                    other = cand2;
+                                    curLev = curLev2;
                                 }
+
+                                currentLoop.breakCandidates.add(other);
+                                currentLoop.breakCandidatesLevels.add(curLev);
+
+                                break loopcand;
                             }
-                            //
-                            GraphPart other;
-                            int curLev;
-                            if (lev1 <= lev2) {
-                                found = cand2;
-                                other = cand;
-                                curLev = curLevl;
-                            } else {
-                                found = cand;
-                                other = cand2;
-                                curLev = curLev2;
+                        }
+                    }
+                    if (found != null) {
+                        int maxlevel = 0;
+                        while (currentLoop.breakCandidates.contains(found)) {
+                            int ind = currentLoop.breakCandidates.indexOf(found);
+                            currentLoop.breakCandidates.remove(ind);
+                            int lev = currentLoop.breakCandidatesLevels.remove(ind);
+                            if (lev > maxlevel) {
+                                maxlevel = lev;
                             }
-
-                            currentLoop.breakCandidates.add(other);
-                            currentLoop.breakCandidatesLevels.add(curLev);
-
-                            break loopcand;
                         }
+                        if (removed.containsKey(found)) {
+                            if (removed.get(found) > maxlevel) {
+                                maxlevel = removed.get(found);
+                            }
+                        }
+                        removed.put(found, maxlevel);
+                    }
+                } while ((found != null) && (currentLoop.breakCandidates.size() > 1));
+
+                Map<GraphPart, Integer> count = new HashMap<>();
+                GraphPart winner = null;
+                int winnerCount = 0;
+                int winnerNumBlock = Integer.MAX_VALUE;
+
+                Set<GraphPart> bannedCandidates = new HashSet<>();
+                if (localData.secondPassData != null) {
+                    bannedCandidates = localData.secondPassData.allSwitchParts;
+                }
+
+                if (debugPrintLoopList) {
+                    System.err.println("bannedCandidates:");
+                    for (GraphPart p : bannedCandidates) {
+                        System.err.println("- " + p);
                     }
                 }
-                if (found != null) {
-                    int maxlevel = 0;
-                    while (currentLoop.breakCandidates.contains(found)) {
-                        int ind = currentLoop.breakCandidates.indexOf(found);
-                        currentLoop.breakCandidates.remove(ind);
-                        int lev = currentLoop.breakCandidatesLevels.remove(ind);
-                        if (lev > maxlevel) {
-                            maxlevel = lev;
-                        }
-                    }
-                    if (removed.containsKey(found)) {
-                        if (removed.get(found) > maxlevel) {
-                            maxlevel = removed.get(found);
-                        }
-                    }
-                    removed.put(found, maxlevel);
-                }
-            } while ((found != null) && (currentLoop.breakCandidates.size() > 1));
 
-            Map<GraphPart, Integer> count = new HashMap<>();
-            GraphPart winner = null;
-            int winnerCount = 0;
-            for (GraphPart cand : currentLoop.breakCandidates) {
-
-                if (!count.containsKey(cand)) {
-                    count.put(cand, 0);
-                }
-                count.put(cand, count.get(cand) + 1);
-                boolean otherBreakCandidate = false;
-                for (Loop el : loops) {
-                    if (el == currentLoop) {
+                for (GraphPart cand : currentLoop.breakCandidates) {
+                    if (bannedCandidates.contains(cand)) {
+                        if (debugPrintLoopList) {
+                            System.err.println("cand " + cand + " is banned");
+                        }
                         continue;
                     }
-                    if (el.breakCandidates.contains(cand)) {
-                        otherBreakCandidate = true;
-                        break;
+                    if (!count.containsKey(cand)) {
+                        count.put(cand, 0);
                     }
-                }
-                if (otherBreakCandidate) {
-                } else if (count.get(cand) > winnerCount) {
-                    winnerCount = count.get(cand);
-                    winner = cand;
-                } else if (count.get(cand) == winnerCount && winner != null) {
-                    if (cand.path.length() < winner.path.length()) {
-                        winner = cand;
-                    }
-                }
-            }
-            for (int i = 0; i < currentLoop.breakCandidates.size(); i++) {
-                GraphPart cand = currentLoop.breakCandidates.get(i);
-                if (cand != winner) {
-                    int lev = currentLoop.breakCandidatesLevels.get(i);
-                    if (removed.containsKey(cand)) {
-                        if (removed.get(cand) > lev) {
-                            lev = removed.get(cand);
+                    count.put(cand, count.get(cand) + 1);
+                    boolean otherBreakCandidate = false;
+                    for (Loop el : loops) {
+                        if (el == currentLoop) {
+                            continue;
+                        }
+                        if (el.breakCandidates.contains(cand)) {
+                            otherBreakCandidate = true;
+                            break;
                         }
                     }
-                    removed.put(cand, lev);
+                    if (otherBreakCandidate) {
+                    } else if (count.get(cand) > winnerCount) {
+                        winnerCount = count.get(cand);
+                        winner = cand;
+                    } else if (count.get(cand) == winnerCount && winner != null) {
+                        if (cand.path.length() < winner.path.length()) {
+                            winner = cand;
+                        }
+                    }
                 }
+                for (int i = 0; i < currentLoop.breakCandidates.size(); i++) {
+                    GraphPart cand = currentLoop.breakCandidates.get(i);
+                    if (cand != winner) {
+                        int lev = currentLoop.breakCandidatesLevels.get(i);
+                        if (removed.containsKey(cand)) {
+                            if (removed.get(cand) > lev) {
+                                lev = removed.get(cand);
+                            }
+                        }
+                        removed.put(cand, lev);
+                    }
+                }
+                currentLoop.loopBreak = winner;
+                currentLoop.phase = 2;
+                boolean start = false;
+                for (int l = 0; l < loops.size(); l++) {
+                    Loop el = loops.get(l);
+                    if (start) {
+                        el.phase = 1;
+                    }
+                    if (el == currentLoop) {
+                        start = true;
+                    }
+                }
+                List<GraphPart> removedVisited = new ArrayList<>();
+                for (GraphPart r : removed.keySet()) {
+                    if (removedVisited.contains(r)) {
+                        continue;
+                    }
+                    getLoopsWalk(localData, r, loops, throwStates, stopPart, false, visited, removed.get(r));
+                    removedVisited.add(r);
+                }
+                start = false;
+                for (int l = 0; l < loops.size(); l++) {
+                    Loop el = loops.get(l);
+                    if (el == currentLoop) {
+                        start = true;
+                    }
+                    if (start) {
+                        el.phase = 2;
+                    }
+                }
+                getLoopsWalk(localData, currentLoop.loopBreak, loops, throwStates, stopPart, false, visited, level);
             }
-            currentLoop.loopBreak = winner;
-            currentLoop.phase = 2;
-            boolean start = false;
-            for (int l = 0; l < loops.size(); l++) {
-                Loop el = loops.get(l);
-                if (start) {
-                    el.phase = 1;
-                }
-                if (el == currentLoop) {
-                    start = true;
-                }
-            }
-            List<GraphPart> removedVisited = new ArrayList<>();
-            for (GraphPart r : removed.keySet()) {
-                if (removedVisited.contains(r)) {
-                    continue;
-                }
-                getLoopsWalk(localData, r, loops, throwStates, stopPart, false, visited, removed.get(r));
-                removedVisited.add(r);
-            }
-            start = false;
-            for (int l = 0; l < loops.size(); l++) {
-                Loop el = loops.get(l);
-                if (el == currentLoop) {
-                    start = true;
-                }
-                if (start) {
-                    el.phase = 2;
-                }
-            }
-            getLoopsWalk(localData, currentLoop.loopBreak, loops, throwStates, stopPart, false, visited, level);
+            break;
         }
     }
 
@@ -1853,29 +2042,31 @@ public class Graph {
     }
 
     protected List<GraphTargetItem> printGraph(List<GotoItem> foundGotos, Map<GraphPart, List<GraphTargetItem>> partCodes, Map<GraphPart, Integer> partCodePos, Set<GraphPart> visited, BaseLocalData localData, TranslateStack stack, Set<GraphPart> allParts, GraphPart parent, GraphPart part, List<GraphPart> stopPart, List<StopPartKind> stopPartKind, List<Loop> loops, List<ThrowState> throwStates, List<GraphTargetItem> ret, int staticOperation, String path, int recursionLevel) throws InterruptedException {
-        if (Thread.currentThread().isInterrupted()) {
-            throw new InterruptedException();
-        }
-        if (stopPart == null) {
-            stopPart = new ArrayList<>();
-        }
-        if (stopPartKind == null) {
-            stopPartKind = new ArrayList<>();
-        }
-        if (recursionLevel > allParts.size() + 1) {
-            throw new TranslateException("printGraph max recursion level reached.");
-        }
+        loopPrintGraph:
+        while (true) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException();
+            }
+            if (stopPart == null) {
+                stopPart = new ArrayList<>();
+            }
+            if (stopPartKind == null) {
+                stopPartKind = new ArrayList<>();
+            }
+            if (recursionLevel > allParts.size() + 1) {
+                throw new TranslateException("printGraph max recursion level reached.");
+            }
 
-        if (ret == null) {
-            ret = new GraphPartMarkedArrayList<>();
-        }
+            if (ret == null) {
+                ret = new GraphPartMarkedArrayList<>();
+            }
 
-        //try {
-        if (debugPrintGraph) {
-            System.err.println("PART " + part + " nextsize:" + getNextParts(localData, part).size());
-        }
+            //try {
+            if (debugPrintGraph) {
+                System.err.println("PART " + part + " nextsize:" + getNextParts(localData, part).size());
+            }
 
-        /*while (((part != null) && (part.getHeight() == 1)) && (code.size() > part.start) && (code.get(part.start).isJump())) {  //Parts with only jump in it gets ignored
+            /*while (((part != null) && (part.getHeight() == 1)) && (code.size() > part.start) && (code.get(part.start).isJump())) {  //Parts with only jump in it gets ignored
 
          if (part == stopPart) {
          return ret;
@@ -1887,855 +2078,868 @@ public class Graph {
          break;
          }
          }*/
-        if (part == null) {
-            return ret;
-        }
-        part = checkPartWithOutput(ret, stack, localData, parent, part, allParts);
-        if (part == null) {
-            return ret;
-        }
-
-        if (part.ignored) {
-            return ret;
-        }
-
-        //List<GraphPart> loopContinues = getLoopsContinues(loops);
-        boolean isLoop = false;
-        Loop currentLoop = null;
-
-        boolean vCanHandleLoop = canHandleLoop(localData, part, loops, throwStates);
-        Loop ignoredLoop = null;
-        for (Loop el : loops) {
-            if ((el.loopContinue == part) && (el.phase == 0)) {
-                if (vCanHandleLoop) {
-                    currentLoop = el;
-                    currentLoop.phase = 1;
-                    isLoop = true;
-                } else {
-                    ignoredLoop = el;
-                }
-
-                break;
-            }
-        }
-
-        if (isLoop) {
-            makeAllCommands(ret, stack);
-        }
-        if (debugPrintGraph) {
-            System.err.println("loopsize:" + loops.size());
-        }
-        for (int l = loops.size() - 1; l >= 0; l--) {
-            Loop el = loops.get(l);
-            if (el == ignoredLoop) {
-                if (debugPrintGraph) {
-                    System.err.println("ignoring to be loop " + el);
-                }
-                continue;
-            }
-            if (el == currentLoop) {
-                if (debugPrintGraph) {
-                    System.err.println("ignoring current loop " + el);
-                }
-                continue;
-            }
-            if (el.phase != 1) {
-                if (debugPrintGraph) {
-                    System.err.println("ignoring loop " + el);
-                }
-                continue;
-            }
-            if (el.loopBreak == part) {
-                if (currentLoop != null) {
-                    currentLoop.phase = 0;
-                }
-                if (debugPrintGraph) {
-                    System.err.println("Adding break");
-                }
-                ret.add(new BreakItem(null, localData.lineStartInstruction, el.id));
+            if (part == null) {
                 return ret;
             }
-            if (el.loopPreContinue == part) {
-                if (currentLoop != null) {
-                    currentLoop.phase = 0;
-                }
-                if (debugPrintGraph) {
-                    System.err.println("Adding precontinue");
-                }
-                ret.add(new ContinueItem(null, localData.lineStartInstruction, el.id));
+            part = checkPartWithOutput(ret, stack, localData, parent, part, allParts);
+            if (part == null) {
                 return ret;
             }
-            if (el.loopContinue == part) {
-                if (currentLoop != null) {
-                    currentLoop.phase = 0;
-                }
-                if (debugPrintGraph) {
-                    System.err.println("Adding continue");
-                }
-                ret.add(new ContinueItem(null, localData.lineStartInstruction, el.id));
+
+            if (part.ignored) {
                 return ret;
             }
-        }
 
-        if (debugPrintGraph) {
-            System.err.println("stopParts: " + pathToString(stopPart));
-        }
+            //List<GraphPart> loopContinues = getLoopsContinues(loops);
+            boolean isLoop = false;
+            Loop currentLoop = null;
 
-        if (stopPart.contains(part)) {
+            boolean vCanHandleLoop = canHandleLoop(localData, part, loops, throwStates);
+            Loop ignoredLoop = null;
+            for (Loop el : loops) {
+                if ((el.loopContinue == part) && (el.phase == 0)) {
+                    if (vCanHandleLoop) {
+                        currentLoop = el;
+                        currentLoop.phase = 1;
+                        isLoop = true;
+                    } else {
+                        ignoredLoop = el;
+                    }
 
-            boolean hasBlockClosesAfter = false;
-            //this weird stuff handles some goto problems:            
-            loopi:
-            for (int i = 0; i < stopPartKind.size(); i++) {
-                if (stopPart.get(i) == part) {
-                    for (int j = i + 1; j < stopPartKind.size(); j++) {
-                        if (stopPart.get(j) != part) {
-                            if (stopPartKind.get(j) == StopPartKind.BLOCK_CLOSE) {
-                                hasBlockClosesAfter = true;
-                                break loopi;
+                    break;
+                }
+            }
+
+            if (isLoop) {
+                makeAllCommands(ret, stack);
+            }
+            if (debugPrintGraph) {
+                System.err.println("loopsize:" + loops.size());
+            }
+            for (int l = loops.size() - 1; l >= 0; l--) {
+                Loop el = loops.get(l);
+                if (el == ignoredLoop) {
+                    if (debugPrintGraph) {
+                        System.err.println("ignoring to be loop " + el);
+                    }
+                    continue;
+                }
+                if (el == currentLoop) {
+                    if (debugPrintGraph) {
+                        System.err.println("ignoring current loop " + el);
+                    }
+                    continue;
+                }
+                if (el.phase != 1) {
+                    if (debugPrintGraph) {
+                        System.err.println("ignoring loop " + el);
+                    }
+                    continue;
+                }
+                if (el.loopBreak == part) {
+                    if (currentLoop != null) {
+                        currentLoop.phase = 0;
+                    }
+                    if (debugPrintGraph) {
+                        System.err.println("Adding break");
+                    }
+                    ret.add(new BreakItem(null, localData.lineStartInstruction, el.id));
+                    return ret;
+                }
+                if (el.loopPreContinue == part) {
+                    if (currentLoop != null) {
+                        currentLoop.phase = 0;
+                    }
+                    if (debugPrintGraph) {
+                        System.err.println("Adding precontinue");
+                    }
+                    ret.add(new ContinueItem(null, localData.lineStartInstruction, el.id));
+                    return ret;
+                }
+                if (el.loopContinue == part) {
+                    if (currentLoop != null) {
+                        currentLoop.phase = 0;
+                    }
+                    if (debugPrintGraph) {
+                        System.err.println("Adding continue");
+                    }
+                    ret.add(new ContinueItem(null, localData.lineStartInstruction, el.id));
+                    return ret;
+                }
+            }
+
+            if (debugPrintGraph) {
+                System.err.println("stopParts: " + pathToString(stopPart));
+            }
+
+            if (stopPart.contains(part)) {
+
+                boolean hasBlockClosesAfter = false;
+                //this weird stuff handles some goto problems:            
+                loopi:
+                for (int i = 0; i < stopPartKind.size(); i++) {
+                    if (stopPart.get(i) == part) {
+                        for (int j = i + 1; j < stopPartKind.size(); j++) {
+                            if (stopPart.get(j) != part) {
+                                if (stopPartKind.get(j) == StopPartKind.BLOCK_CLOSE) {
+                                    hasBlockClosesAfter = true;
+                                    break loopi;
+                                }
                             }
                         }
                     }
                 }
+
+                if (!hasBlockClosesAfter) {
+                    if (currentLoop != null) {
+                        currentLoop.phase = 0;
+                    }
+                    if (debugPrintGraph) {
+                        System.err.println("Stopped on part " + part);
+                    }
+                    return ret;
+                }
             }
 
-            if (!hasBlockClosesAfter) {
-                if (currentLoop != null) {
-                    currentLoop.phase = 0;
-                }
-                if (debugPrintGraph) {
-                    System.err.println("Stopped on part " + part);
-                }
+            if (code.size() <= part.start) {
+                ret.add(new ScriptEndItem());
                 return ret;
             }
-        }
 
-        if (code.size() <= part.start) {
-            ret.add(new ScriptEndItem());
-            return ret;
-        }
+            boolean vCanHandleVisited = canHandleVisited(localData, part);
 
-        boolean vCanHandleVisited = canHandleVisited(localData, part);
-
-        if (vCanHandleVisited) {
-            if (visited.contains(part)) {
-                String labelName = "addr" + part.start;
-                List<GraphTargetItem> firstCode = partCodes.get(part);
-                int firstCodePos = partCodePos.get(part);
-                if (firstCodePos > firstCode.size()) {
-                    firstCodePos = firstCode.size();
-                }
-                if (firstCode instanceof GraphPartMarkedArrayList) {
-                    GraphPartMarkedArrayList<GraphTargetItem> markedFirstCode = (GraphPartMarkedArrayList<GraphTargetItem>) firstCode;
-                    firstCodePos = markedFirstCode.indexOfPart(part);
-                    if (firstCodePos == -1) {
+            if (vCanHandleVisited) {
+                if (visited.contains(part)) {
+                    String labelName = "addr" + part.start;
+                    List<GraphTargetItem> firstCode = partCodes.get(part);
+                    int firstCodePos = partCodePos.get(part);
+                    if (firstCodePos > firstCode.size()) {
                         firstCodePos = firstCode.size();
                     }
-                    ((GraphPartMarkedArrayList<GraphTargetItem>) firstCode).startPart(part);
-                }
-
-                if (firstCode.size() > firstCodePos && (firstCode.get(firstCodePos) instanceof LabelItem)) {
-                    labelName = ((LabelItem) firstCode.get(firstCodePos)).labelName;
-                } else {
-                    firstCode.add(firstCodePos, new LabelItem(null, localData.lineStartInstruction, labelName));
-                }
-                ret.add(new GotoItem(null, localData.lineStartInstruction, labelName));
-                return ret;
-            } else {
-                visited.add(part);
-                partCodes.put(part, ret);
-                partCodePos.put(part, ret.size());
-            }
-        }
-        List<GraphTargetItem> currentRet = ret;
-        UniversalLoopItem loopItem = null;
-        TranslateStack sPreLoop = stack;
-        if (isLoop) {
-            //makeAllCommands(currentRet, stack);
-            stack = (TranslateStack) stack.clone();
-
-            //hack for as1/2 for..in to get enumeration through
-            GraphTargetItem topBsr = !stack.isEmpty() && (stack.peek() instanceof BranchStackResistant) ? stack.peek() : null;
-            stack.clear();
-            if (topBsr != null) {
-                stack.push(topBsr);
-            }
-            loopItem = new UniversalLoopItem(null, localData.lineStartInstruction, currentLoop, new ArrayList<>());
-            //loopItem.commands=printGraph(visited, localData, stack, allParts, parent, part, stopPart, loops);
-            currentRet.add(loopItem);
-            currentRet = loopItem.commands;
-            //return ret;
-        }
-
-        boolean parseNext = true;
-
-        //****************************DECOMPILING PART*************
-        if (stack.isEmpty() && (currentRet instanceof GraphPartMarkedArrayList)) {
-            ((GraphPartMarkedArrayList) currentRet).clearCurrentParts();
-        }
-
-        GraphPartMarkedArrayList<GraphTargetItem> output = new GraphPartMarkedArrayList<>();
-        output.startPart(part);
-        if (currentRet instanceof GraphPartMarkedArrayList) {
-            ((GraphPartMarkedArrayList) currentRet).startPart(part);
-        }
-        if (checkPartOutput(currentRet, foundGotos, partCodes, partCodePos, visited, code, localData, allParts, stack, parent, part, stopPart, stopPartKind, loops, throwStates, currentLoop, staticOperation, path, recursionLevel)) {
-            parseNext = false;
-        } else {
-            boolean exHappened = false;
-            int ipStart = part.start;
-            do {
-                exHappened = false;
-                try {
-                    output.addAll(code.translatePart(part, localData, stack, ipStart, part.end, staticOperation, path));
-                } catch (GraphPartChangeException ex) { //Special case for ifFrameLoaded when it's over multiple parts
-                    output.addAll(ex.getOutput());
-                    for (GraphPart p : allParts) {
-                        if (p.containsIP(ex.getIp())) {
-                            if (ex.getIp() == p.start) {
-                                currentRet.addAll(output);
-                                //to check for stopparts,etc. we need to call printGraph again
-                                part = p;
-                                return printGraph(foundGotos, partCodes, partCodePos, visited, localData, stack, allParts, parent, part, stopPart, stopPartKind, loops, throwStates, ret, staticOperation, path, recursionLevel);
-                            }
-                            exHappened = true;
-                            ipStart = ex.getIp();
-                            part = p;
-                            break;
+                    if (firstCode instanceof GraphPartMarkedArrayList) {
+                        GraphPartMarkedArrayList<GraphTargetItem> markedFirstCode = (GraphPartMarkedArrayList<GraphTargetItem>) firstCode;
+                        firstCodePos = markedFirstCode.indexOfPart(part);
+                        if (firstCodePos == -1) {
+                            firstCodePos = firstCode.size();
                         }
-                    }
-                }
-            } while (exHappened);
-            if ((part.end >= code.size() - 1) && getNextParts(localData, part).isEmpty()) {
-                output.add(new ScriptEndItem());
-            }
-        }
-
-        if (parseNext) {
-            List<GraphTargetItem> retCheck = check(currentRet, foundGotos, partCodes, partCodePos, visited, code, localData, allParts, stack, parent, part, stopPart, stopPartKind, loops, throwStates, output, currentLoop, staticOperation, path);
-            if (retCheck != null) {
-                if (!retCheck.isEmpty()) {
-                    currentRet.addAll(retCheck);
-                }
-                parseNext = false;
-                //return ret;
-            } else {
-                currentRet.addAll(output);
-            }
-        }
-//********************************END PART DECOMPILING
-        if (parseNext) {
-
-            if (getNextParts(localData, part).size() > 2 || partIsSwitch(part)) {
-                GraphTargetItem originalSwitchedItem = stack.pop();
-                makeAllCommands(currentRet, stack);
-                GraphTargetItem switchedItem = originalSwitchedItem;
-                if ((switchedItem instanceof PopItem) && !currentRet.isEmpty() && (currentRet.get(currentRet.size() - 1) instanceof IfItem)) {
-                    switchedItem = currentRet.get(currentRet.size() - 1);
-                }
-
-                List<GraphTargetItem> caseValues = new ArrayList<>();
-                List<List<GraphTargetItem>> caseCommands = new ArrayList<>();
-                List<Integer> valueMappings = new ArrayList<>();
-                boolean first = false;
-                int pos;
-
-                Map<Integer, GraphTargetItem> caseExpressions = new HashMap<>();
-                Map<Integer, GraphTargetItem> caseExpressionLeftSides = new HashMap<>();
-                Map<Integer, GraphTargetItem> caseExpressionRightSides = new HashMap<>();
-
-                GraphTargetItem it = switchedItem;
-                int defaultBranch = 0;
-                boolean hasExpr = false;
-                List<GraphTargetItem> commaCommands = new ArrayList<>();
-                Map<Integer, List<GraphTargetItem>> caseCommaCommands = new HashMap<>();
-
-                while ((it instanceof TernarOpItem) || (it instanceof IfItem)) {
-
-                    if (it instanceof IfItem) {
-                        IfItem ii = (IfItem) it;
-                        if (ii.expression instanceof EqualsTypeItem) {
-                            if (!ii.onFalse.isEmpty() && !ii.onTrue.isEmpty()
-                                    && ii.onTrue.get(ii.onTrue.size() - 1) instanceof PushItem
-                                    && ii.onTrue.get(ii.onTrue.size() - 1).value instanceof IntegerValueTypeItem) {
-                                int cpos = ((IntegerValueTypeItem) ii.onTrue.get(ii.onTrue.size() - 1).value).intValue();
-                                caseCommaCommands.put(cpos, commaCommands);
-                                caseExpressionLeftSides.put(cpos, ((EqualsTypeItem) ii.expression).getLeftSide());
-                                caseExpressionRightSides.put(cpos, ((EqualsTypeItem) ii.expression).getRightSide());
-                                commaCommands = new ArrayList<>();
-                                for (int f = 0; f < ii.onFalse.size() - 1; f++) {
-                                    commaCommands.add(ii.onFalse.get(f));
-                                }
-                                it = ii.onFalse.get(ii.onFalse.size() - 1);
-                                if (it instanceof PushItem) {
-                                    it = it.value;
-                                }
-                            } else {
-                                break;
-                            }
-                        } else if (ii.expression instanceof FalseItem && !ii.onFalse.isEmpty()) {
-                            it = ii.onFalse.get(ii.onFalse.size() - 1);
-                        } else if (ii.expression instanceof TrueItem && !ii.onTrue.isEmpty()) {
-                            it = ii.onTrue.get(ii.onTrue.size() - 1);
-                        } else {
-                            break;
-                        }
-                    } else if (it instanceof TernarOpItem) {
-                        TernarOpItem to = (TernarOpItem) it;
-                        if (to.expression instanceof EqualsTypeItem) {
-                            if (to.onTrue instanceof IntegerValueTypeItem) {
-                                int cpos = ((IntegerValueTypeItem) to.onTrue).intValue();
-                                caseExpressionLeftSides.put(cpos, ((EqualsTypeItem) to.expression).getLeftSide());
-                                caseExpressionRightSides.put(cpos, ((EqualsTypeItem) to.expression).getRightSide());
-                                caseCommaCommands.put(cpos, commaCommands);
-                                commaCommands = new ArrayList<>();
-                                it = to.onFalse;
-                                if (it instanceof CommaExpressionItem) {
-                                    commaCommands = new ArrayList<>();
-                                    CommaExpressionItem ce = (CommaExpressionItem) it;
-                                    for (int f = 0; f < ce.commands.size() - 1; f++) {
-                                        commaCommands.add(ce.commands.get(f));
-                                    }
-                                    it = ce.commands.get(ce.commands.size() - 1);
-                                }
-                            } else {
-                                break;
-                            }
-                        } else if (to.expression instanceof FalseItem) {
-                            it = to.onFalse;
-                        } else if (to.expression instanceof TrueItem) {
-                            it = to.onTrue;
-                        } else {
-                            break;
-                        }
-                    }
-                }
-
-                if (switchedItem != originalSwitchedItem && !caseExpressionRightSides.isEmpty()) {
-                    currentRet.remove(currentRet.size() - 1);
-                } else {
-                    switchedItem = originalSwitchedItem;
-                }
-
-                //int ignoredBranch = -1;
-                if ((it instanceof IntegerValueTypeItem) && !(switchedItem instanceof IntegerValueTypeItem)) {
-                    defaultBranch = ((IntegerValueTypeItem) it).intValue();
-                }
-
-                Map<Integer, GraphTargetItem> caseExpressionOtherSides = caseExpressions;
-                if (!caseExpressionRightSides.isEmpty()) {
-                    GraphTargetItem firstItem;
-                    firstItem = (GraphTargetItem) caseExpressionRightSides.values().toArray()[0];
-                    boolean sameRight = true;
-                    for (GraphTargetItem cit : caseExpressionRightSides.values()) {
-                        if (!cit.equals(firstItem)) {
-                            sameRight = false;
-                            break;
-                        }
+                        ((GraphPartMarkedArrayList<GraphTargetItem>) firstCode).startPart(part);
                     }
 
-                    if (sameRight) {
-                        caseExpressions = caseExpressionLeftSides;
-                        caseExpressionOtherSides = caseExpressionRightSides;
-                        switchedItem = firstItem;
-                        hasExpr = true;
+                    if (firstCode.size() > firstCodePos && (firstCode.get(firstCodePos) instanceof LabelItem)) {
+                        labelName = ((LabelItem) firstCode.get(firstCodePos)).labelName;
                     } else {
-                        firstItem = (GraphTargetItem) caseExpressionLeftSides.values().toArray()[0];
+                        firstCode.add(firstCodePos, new LabelItem(null, localData.lineStartInstruction, labelName));
+                    }
+                    ret.add(new GotoItem(null, localData.lineStartInstruction, labelName));
+                    return ret;
+                } else {
+                    visited.add(part);
+                    partCodes.put(part, ret);
+                    partCodePos.put(part, ret.size());
+                }
+            }
+            List<GraphTargetItem> currentRet = ret;
+            UniversalLoopItem loopItem = null;
+            TranslateStack sPreLoop = stack;
+            if (isLoop) {
+                //makeAllCommands(currentRet, stack);
+                stack = (TranslateStack) stack.clone();
 
-                        boolean sameLeft = true;
-                        for (GraphTargetItem cit : caseExpressionLeftSides.values()) {
-                            if (!cit.equals(firstItem)) {
-                                sameLeft = false;
+                //hack for as1/2 for..in to get enumeration through
+                GraphTargetItem topBsr = !stack.isEmpty() && (stack.peek() instanceof BranchStackResistant) ? stack.peek() : null;
+                stack.clear();
+                if (topBsr != null) {
+                    stack.push(topBsr);
+                }
+                loopItem = new UniversalLoopItem(null, localData.lineStartInstruction, currentLoop, new ArrayList<>());
+                //loopItem.commands=printGraph(visited, localData, stack, allParts, parent, part, stopPart, loops);
+                currentRet.add(loopItem);
+                currentRet = loopItem.commands;
+                //return ret;
+            }
+
+            boolean parseNext = true;
+
+            //****************************DECOMPILING PART*************
+            if (stack.isEmpty() && (currentRet instanceof GraphPartMarkedArrayList)) {
+                ((GraphPartMarkedArrayList) currentRet).clearCurrentParts();
+            }
+
+            GraphPartMarkedArrayList<GraphTargetItem> output = new GraphPartMarkedArrayList<>();
+            output.startPart(part);
+            if (currentRet instanceof GraphPartMarkedArrayList) {
+                ((GraphPartMarkedArrayList) currentRet).startPart(part);
+            }
+            if (checkPartOutput(currentRet, foundGotos, partCodes, partCodePos, visited, code, localData, allParts, stack, parent, part, stopPart, stopPartKind, loops, throwStates, currentLoop, staticOperation, path, recursionLevel)) {
+                parseNext = false;
+            } else {
+                boolean exHappened = false;
+                int ipStart = part.start;
+                do {
+                    exHappened = false;
+                    try {
+                        output.addAll(code.translatePart(this, part, localData, stack, ipStart, part.end, staticOperation, path));
+                    } catch (GraphPartChangeException ex) { //Special case for ifFrameLoaded when it's over multiple parts
+                        output.addAll(ex.getOutput());
+                        for (GraphPart p : allParts) {
+                            if (p.containsIP(ex.getIp())) {
+                                if (ex.getIp() == p.start) {
+                                    currentRet.addAll(output);
+                                    //to check for stopparts,etc. we need to call printGraph again
+                                    part = p;
+                                    //return printGraph(foundGotos, partCodes, partCodePos, visited, localData, stack, allParts, parent, part, stopPart, stopPartKind, loops, throwStates, ret, staticOperation, path, recursionLevel);
+                                    continue loopPrintGraph;
+                                }
+                                exHappened = true;
+                                ipStart = ex.getIp();
+                                part = p;
                                 break;
                             }
                         }
-                        if (sameLeft) {
-                            caseExpressions = caseExpressionRightSides;
-                            caseExpressionOtherSides = caseExpressionLeftSides;
+                    }
+                } while (exHappened);
+                if ((part.end >= code.size() - 1) && getNextParts(localData, part).isEmpty()) {
+                    output.add(new ScriptEndItem());
+                }
+            }
+
+            if (parseNext) {
+                List<GraphTargetItem> retCheck = check(currentRet, foundGotos, partCodes, partCodePos, visited, code, localData, allParts, stack, parent, part, stopPart, stopPartKind, loops, throwStates, output, currentLoop, staticOperation, path);
+                if (retCheck != null) {
+                    if (!retCheck.isEmpty()) {
+                        currentRet.addAll(retCheck);
+                    }
+                    parseNext = false;
+                    //return ret;
+                } else {
+                    currentRet.addAll(output);
+                }
+            }
+//********************************END PART DECOMPILING
+            if (parseNext) {
+
+                if (getNextParts(localData, part).size() > 2 || partIsSwitch(part)) {
+                    GraphTargetItem originalSwitchedItem = stack.pop();
+                    makeAllCommands(currentRet, stack);
+                    GraphTargetItem switchedItem = originalSwitchedItem;
+                    if ((switchedItem instanceof PopItem) && !currentRet.isEmpty() && (currentRet.get(currentRet.size() - 1) instanceof IfItem)) {
+                        switchedItem = currentRet.get(currentRet.size() - 1);
+                    }
+
+                    List<GraphTargetItem> caseValues = new ArrayList<>();
+                    List<List<GraphTargetItem>> caseCommands = new ArrayList<>();
+                    List<Integer> valueMappings = new ArrayList<>();
+                    boolean first = false;
+                    int pos;
+
+                    Map<Integer, GraphTargetItem> caseExpressions = new HashMap<>();
+                    Map<Integer, GraphTargetItem> caseExpressionLeftSides = new HashMap<>();
+                    Map<Integer, GraphTargetItem> caseExpressionRightSides = new HashMap<>();
+
+                    GraphTargetItem it = switchedItem;
+                    int defaultBranch = 0;
+                    boolean hasExpr = false;
+                    List<GraphTargetItem> commaCommands = new ArrayList<>();
+                    Map<Integer, List<GraphTargetItem>> caseCommaCommands = new HashMap<>();
+
+                    while ((it instanceof TernarOpItem) || (it instanceof IfItem)) {
+
+                        if (it instanceof IfItem) {
+                            IfItem ii = (IfItem) it;
+                            if (ii.expression instanceof EqualsTypeItem) {
+                                if (!ii.onFalse.isEmpty() && !ii.onTrue.isEmpty()
+                                        && ii.onTrue.get(ii.onTrue.size() - 1) instanceof PushItem
+                                        && ii.onTrue.get(ii.onTrue.size() - 1).value instanceof IntegerValueTypeItem) {
+                                    int cpos = ((IntegerValueTypeItem) ii.onTrue.get(ii.onTrue.size() - 1).value).intValue();
+                                    caseCommaCommands.put(cpos, commaCommands);
+                                    caseExpressionLeftSides.put(cpos, ((EqualsTypeItem) ii.expression).getLeftSide());
+                                    caseExpressionRightSides.put(cpos, ((EqualsTypeItem) ii.expression).getRightSide());
+                                    commaCommands = new ArrayList<>();
+                                    for (int f = 0; f < ii.onFalse.size() - 1; f++) {
+                                        commaCommands.add(ii.onFalse.get(f));
+                                    }
+                                    it = ii.onFalse.get(ii.onFalse.size() - 1);
+                                    if (it instanceof PushItem) {
+                                        it = it.value;
+                                    }
+                                } else {
+                                    break;
+                                }
+                            } else if (ii.expression instanceof FalseItem && !ii.onFalse.isEmpty()) {
+                                it = ii.onFalse.get(ii.onFalse.size() - 1);
+                            } else if (ii.expression instanceof TrueItem && !ii.onTrue.isEmpty()) {
+                                it = ii.onTrue.get(ii.onTrue.size() - 1);
+                            } else {
+                                break;
+                            }
+                        } else if (it instanceof TernarOpItem) {
+                            TernarOpItem to = (TernarOpItem) it;
+                            if (to.expression instanceof EqualsTypeItem) {
+                                if (to.onTrue instanceof IntegerValueTypeItem) {
+                                    int cpos = ((IntegerValueTypeItem) to.onTrue).intValue();
+                                    caseExpressionLeftSides.put(cpos, ((EqualsTypeItem) to.expression).getLeftSide());
+                                    caseExpressionRightSides.put(cpos, ((EqualsTypeItem) to.expression).getRightSide());
+                                    caseCommaCommands.put(cpos, commaCommands);
+                                    commaCommands = new ArrayList<>();
+                                    it = to.onFalse;
+                                    if (it instanceof CommaExpressionItem) {
+                                        commaCommands = new ArrayList<>();
+                                        CommaExpressionItem ce = (CommaExpressionItem) it;
+                                        for (int f = 0; f < ce.commands.size() - 1; f++) {
+                                            commaCommands.add(ce.commands.get(f));
+                                        }
+                                        it = ce.commands.get(ce.commands.size() - 1);
+                                    }
+                                } else {
+                                    break;
+                                }
+                            } else if (to.expression instanceof FalseItem) {
+                                it = to.onFalse;
+                            } else if (to.expression instanceof TrueItem) {
+                                it = to.onTrue;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+
+                    if (switchedItem != originalSwitchedItem && !caseExpressionRightSides.isEmpty()) {
+                        currentRet.remove(currentRet.size() - 1);
+                    } else {
+                        switchedItem = originalSwitchedItem;
+                    }
+
+                    //int ignoredBranch = -1;
+                    if ((it instanceof IntegerValueTypeItem) && !(switchedItem instanceof IntegerValueTypeItem)) {
+                        defaultBranch = ((IntegerValueTypeItem) it).intValue();
+                    }
+
+                    Map<Integer, GraphTargetItem> caseExpressionOtherSides = caseExpressions;
+                    if (!caseExpressionRightSides.isEmpty()) {
+                        GraphTargetItem firstItem;
+                        firstItem = (GraphTargetItem) caseExpressionRightSides.values().toArray()[0];
+                        boolean sameRight = true;
+                        for (GraphTargetItem cit : caseExpressionRightSides.values()) {
+                            if (!cit.equals(firstItem)) {
+                                sameRight = false;
+                                break;
+                            }
+                        }
+
+                        if (sameRight) {
+                            caseExpressions = caseExpressionLeftSides;
+                            caseExpressionOtherSides = caseExpressionRightSides;
                             switchedItem = firstItem;
                             hasExpr = true;
+                        } else {
+                            firstItem = (GraphTargetItem) caseExpressionLeftSides.values().toArray()[0];
+
+                            boolean sameLeft = true;
+                            for (GraphTargetItem cit : caseExpressionLeftSides.values()) {
+                                if (!cit.equals(firstItem)) {
+                                    sameLeft = false;
+                                    break;
+                                }
+                            }
+                            if (sameLeft) {
+                                caseExpressions = caseExpressionRightSides;
+                                caseExpressionOtherSides = caseExpressionLeftSides;
+                                switchedItem = firstItem;
+                                hasExpr = true;
+                            }
                         }
                     }
-                }
 
-                first = true;
-                pos = 0;
-                //This is tied to AS3 switch implementation which has nextparts switched from index 1. TODO: Make more universal
+                    first = true;
+                    pos = 0;
+                    //This is tied to AS3 switch implementation which has nextparts switched from index 1. TODO: Make more universal
 
-                GraphPart defaultPart = hasExpr ? getNextParts(localData, part).get(1 + defaultBranch) : getNextParts(localData, part).get(0);
-                List<GraphPart> caseBodyParts = new ArrayList<>();
-                for (int i = 1; i < getNextParts(localData, part).size(); i++) {
-                    if (!hasExpr) {
-                        if (getNextParts(localData, part).get(i) == defaultPart) {
+                    GraphPart defaultPart = hasExpr ? getNextParts(localData, part).get(1 + defaultBranch) : getNextParts(localData, part).get(0);
+                    List<GraphPart> caseBodyParts = new ArrayList<>();
+                    for (int i = 1; i < getNextParts(localData, part).size(); i++) {
+                        if (!hasExpr) {
+                            if (getNextParts(localData, part).get(i) == defaultPart) {
+                                pos++;
+                                continue;
+                            }
+                            caseValues.add(new IntegerValueItem(null, localData.lineStartInstruction, pos));
+                        } else if (caseExpressions.containsKey(pos)) {
+                            GraphTargetItem expr = caseExpressions.get(pos);
+                            if (caseCommaCommands.get(pos).size() > 0) {
+                                List<GraphTargetItem> exprCommaCommands = new ArrayList<>(caseCommaCommands.get(pos));
+                                exprCommaCommands.add(expr);
+                                expr = new CommaExpressionItem(null, expr.lineStartItem, exprCommaCommands);
+                            }
+                            caseValues.add(expr);
+                        } else {
                             pos++;
                             continue;
                         }
-                        caseValues.add(new IntegerValueItem(null, localData.lineStartInstruction, pos));
-                    } else if (caseExpressions.containsKey(pos)) {
-                        GraphTargetItem expr = caseExpressions.get(pos);
-                        if (caseCommaCommands.get(pos).size() > 0) {
-                            List<GraphTargetItem> exprCommaCommands = new ArrayList<>(caseCommaCommands.get(pos));
-                            exprCommaCommands.add(expr);
-                            expr = new CommaExpressionItem(null, expr.lineStartItem, exprCommaCommands);
-                        }
-                        caseValues.add(expr);
-                    } else {
+                        caseBodyParts.add(getNextParts(localData, part).get(i));
                         pos++;
-                        continue;
                     }
-                    caseBodyParts.add(getNextParts(localData, part).get(i));
+                    Reference<GraphPart> nextRef = new Reference<>(null);
+                    Reference<GraphTargetItem> tiRef = new Reference<>(null);
+                    SwitchItem sw = handleSwitch(switchedItem, originalSwitchedItem.getSrc(), foundGotos, partCodes, partCodePos, visited, allParts, stack, stopPart, stopPartKind, loops, throwStates, localData, staticOperation, path,
+                            caseValues, defaultPart, caseBodyParts, nextRef, tiRef);
+                    GraphPart next = nextRef.getVal();
+                    checkSwitch(localData, sw, caseExpressionOtherSides.values(), currentRet);
+                    currentRet.add(sw);
+                    if (next != null) {
+                        if (tiRef.getVal() != null) {
+                            ret.add(tiRef.getVal());
+                        } else {
+                            printGraph(foundGotos, partCodes, partCodePos, visited, localData, stack, allParts, part, next, stopPart, stopPartKind, loops, throwStates, currentRet, staticOperation, path, recursionLevel + 1);
+                        }
+                    }
                     pos++;
-                }
-                Reference<GraphPart> nextRef = new Reference<>(null);
-                Reference<GraphTargetItem> tiRef = new Reference<>(null);
-                SwitchItem sw = handleSwitch(switchedItem, originalSwitchedItem.getSrc(), foundGotos, partCodes, partCodePos, visited, allParts, stack, stopPart, stopPartKind, loops, throwStates, localData, staticOperation, path,
-                        caseValues, defaultPart, caseBodyParts, nextRef, tiRef);
-                GraphPart next = nextRef.getVal();
-                checkSwitch(localData, sw, caseExpressionOtherSides.values(), currentRet);
-                currentRet.add(sw);
-                if (next != null) {
-                    if (tiRef.getVal() != null) {
-                        ret.add(tiRef.getVal());
-                    } else {
-                        printGraph(foundGotos, partCodes, partCodePos, visited, localData, stack, allParts, part, next, stopPart, stopPartKind, loops, throwStates, currentRet, staticOperation, path, recursionLevel + 1);
-                    }
-                }
-                pos++;
-            } //else
-            GraphPart nextOnePart = null;
-            if (getNextParts(localData, part).size() == 2 && !partIsSwitch(part)) {
-                GraphTargetItem expr = stack.pop();
-                /*if (expr instanceof LogicalOpItem) {
+                } //else
+                GraphPart nextOnePart = null;
+                if (getNextParts(localData, part).size() == 2 && !partIsSwitch(part)) {
+                    GraphTargetItem expr = stack.pop();
+                    /*if (expr instanceof LogicalOpItem) {
                  expr = ((LogicalOpItem) expr).invert();
                  } else {
                  expr = new NotItem(null, expr);
                  }*/
-                if (nextOnePart == null) {
+                    if (nextOnePart == null) {
 
-                    List<GraphPart> nps;
-                    nps = getNextParts(localData, part);
-                    boolean isEmpty = nps.get(0) == nps.get(1);
+                        List<GraphPart> nps;
+                        nps = getNextParts(localData, part);
+                        boolean isEmpty = nps.get(0) == nps.get(1);
 
-                    GraphPart next = getCommonPart(localData, part, nps, loops, throwStates);
-                    //System.err.println("on part " + part + ", next: " + next);
-                    TranslateStack trueStack = (TranslateStack) stack.clone();
-                    TranslateStack falseStack = (TranslateStack) stack.clone();
+                        GraphPart next = getCommonPart(localData, part, nps, loops, throwStates);
+                        //System.err.println("on part " + part + ", next: " + next);
+                        TranslateStack trueStack = (TranslateStack) stack.clone();
+                        TranslateStack falseStack = (TranslateStack) stack.clone();
 
-                    //hack for as1/2 for..in to get enumeration through
-                    GraphTargetItem topBsr = !stack.isEmpty() && (stack.peek() instanceof BranchStackResistant) ? stack.peek() : null;
-                    trueStack.clear();
-                    falseStack.clear();
-                    if (topBsr != null) {
-                        trueStack.add(topBsr);
-                        falseStack.add(topBsr);
-                    }
-                    if (isEmpty) {
-                        next = nps.get(0);
-                    }
-                    boolean hasOntrue = nps.get(1) != next;
-                    boolean hasOnFalse = nps.get(0) != next;
-
-                    List<GraphPart> stopPart2 = new ArrayList<>(stopPart);
-                    List<StopPartKind> stopPartKind2 = new ArrayList<>(stopPartKind);
-
-                    if ((!isEmpty) && (next != null)) {
-                        if (!stopPart2.contains(next)) { //?? might be a break or something
-                            stopPart2.add(next);
-                            stopPartKind2.add(StopPartKind.BLOCK_CLOSE);
+                        //hack for as1/2 for..in to get enumeration through
+                        GraphTargetItem topBsr = !stack.isEmpty() && (stack.peek() instanceof BranchStackResistant) ? stack.peek() : null;
+                        trueStack.clear();
+                        falseStack.clear();
+                        if (topBsr != null) {
+                            trueStack.add(topBsr);
+                            falseStack.add(topBsr);
                         }
-                    }
-
-                    List<GraphTargetItem> onTrue = new ArrayList<>();
-                    if (!isEmpty && hasOntrue) {
-                        onTrue = printGraph(foundGotos, partCodes, partCodePos, visited, prepareBranchLocalData(localData), trueStack, allParts, part, nps.get(1), stopPart2, stopPartKind2, loops, throwStates, null, staticOperation, path, recursionLevel + 1);
-                    }
-                    List<GraphTargetItem> onFalse = new ArrayList<>();
-
-                    if (!isEmpty && hasOnFalse) {
-                        onFalse = printGraph(foundGotos, partCodes, partCodePos, visited, prepareBranchLocalData(localData), falseStack, allParts, part, nps.get(0), stopPart2, stopPartKind2, loops, throwStates, null, staticOperation, path, recursionLevel + 1);
-                    }
-                    //List<GraphTargetItem> out2 = new ArrayList<>();
-                    //makeAllCommands(out2, stack);
-                    makeAllCommands(onTrue, trueStack);
-                    makeAllCommands(onFalse, falseStack);
-                    GraphTargetItem addAfterIf = null;
-                    if (!onTrue.isEmpty() && !onFalse.isEmpty()
-                            && (onTrue.get(onTrue.size() - 1) instanceof ContinueItem)
-                            && (onFalse.get(onFalse.size() - 1) instanceof ContinueItem)) {
-                        ContinueItem contTrue = (ContinueItem) onTrue.get(onTrue.size() - 1);
-                        ContinueItem contFalse = (ContinueItem) onFalse.get(onFalse.size() - 1);
-                        if (contTrue.loopId == contFalse.loopId) {
-                            onTrue.remove(onTrue.size() - 1);
-                            onFalse.remove(onFalse.size() - 1);
-                            addAfterIf = contTrue;
+                        if (isEmpty) {
+                            next = nps.get(0);
                         }
-                    }
+                        boolean hasOntrue = nps.get(1) != next;
+                        boolean hasOnFalse = nps.get(0) != next;
 
-                    List<GraphTargetItem> filteredOnTrue = onTrue;
-                    List<GraphTargetItem> filteredOnFalse = onFalse;
+                        List<GraphPart> stopPart2 = new ArrayList<>(stopPart);
+                        List<StopPartKind> stopPartKind2 = new ArrayList<>(stopPartKind);
 
-                    if (!isEmpty(filteredOnTrue) && !isEmpty(filteredOnFalse)
-                            && (filteredOnTrue.get(filteredOnTrue.size() - 1) instanceof PushItem)
-                            && (filteredOnFalse.get(filteredOnFalse.size() - 1) instanceof PushItem)
-                            && canBeCommaised(filteredOnTrue) && canBeCommaised(filteredOnFalse)) {
-                        GraphTargetItem ternarOnTrue;
-                        if (filteredOnTrue.size() > 1) {
-                            filteredOnTrue.set(filteredOnTrue.size() - 1, filteredOnTrue.get(filteredOnTrue.size() - 1).value); // replace Pushitem with its value
-                            ternarOnTrue = new CommaExpressionItem(null, null, filteredOnTrue);
-                        } else {
-                            ternarOnTrue = filteredOnTrue.get(0).value;
+                        if ((!isEmpty) && (next != null)) {
+                            if (!stopPart2.contains(next)) { //?? might be a break or something
+                                stopPart2.add(next);
+                                stopPartKind2.add(StopPartKind.BLOCK_CLOSE);
+                            }
                         }
-                        GraphTargetItem ternarOnFalse;
-                        if (filteredOnFalse.size() > 1) {
-                            filteredOnFalse.set(filteredOnFalse.size() - 1, filteredOnFalse.get(filteredOnFalse.size() - 1).value); // replace Pushitem with its value                            
-                            ternarOnFalse = new CommaExpressionItem(null, null, filteredOnFalse);
-                        } else {
-                            ternarOnFalse = filteredOnFalse.get(0).value;
+
+                        List<GraphTargetItem> onTrue = new ArrayList<>();
+                        if (!isEmpty && hasOntrue) {
+                            onTrue = printGraph(foundGotos, partCodes, partCodePos, visited, prepareBranchLocalData(localData), trueStack, allParts, part, nps.get(1), stopPart2, stopPartKind2, loops, throwStates, null, staticOperation, path, recursionLevel + 1);
                         }
-                        stack.push(new TernarOpItem(null, localData.lineStartInstruction, expr.invert(null), ternarOnTrue, ternarOnFalse));
-                    } else {
-                        boolean isIf = true;
-                        //If the ontrue is empty, switch ontrue and onfalse
-                        if (filteredOnTrue.isEmpty() && !filteredOnFalse.isEmpty()) {
-                            expr = expr.invert(null);
-                            List<GraphTargetItem> tmp = onTrue;
-                            onTrue = onFalse;
-                            onFalse = tmp;
-                            //tmp = filteredOnTrue;
-                            filteredOnTrue = filteredOnFalse;
-                            //filteredOnFalse = tmp;
+                        List<GraphTargetItem> onFalse = new ArrayList<>();
+
+                        if (!isEmpty && hasOnFalse) {
+                            onFalse = printGraph(foundGotos, partCodes, partCodePos, visited, prepareBranchLocalData(localData), falseStack, allParts, part, nps.get(0), stopPart2, stopPartKind2, loops, throwStates, null, staticOperation, path, recursionLevel + 1);
                         }
-                        if (!stack.isEmpty() && ((filteredOnTrue.size() == 1 && (filteredOnTrue.get(0) instanceof PopItem)) || ((filteredOnTrue.size() >= 2) && (filteredOnTrue.get(0) instanceof PopItem) && (filteredOnTrue.get(filteredOnTrue.size() - 1) instanceof PushItem)))) {
+                        //List<GraphTargetItem> out2 = new ArrayList<>();
+                        //makeAllCommands(out2, stack);
+                        makeAllCommands(onTrue, trueStack);
+                        makeAllCommands(onFalse, falseStack);
+                        GraphTargetItem addAfterIf = null;
+                        if (!onTrue.isEmpty() && !onFalse.isEmpty()
+                                && (onTrue.get(onTrue.size() - 1) instanceof ContinueItem)
+                                && (onFalse.get(onFalse.size() - 1) instanceof ContinueItem)) {
+                            ContinueItem contTrue = (ContinueItem) onTrue.get(onTrue.size() - 1);
+                            ContinueItem contFalse = (ContinueItem) onFalse.get(onFalse.size() - 1);
+                            if (contTrue.loopId == contFalse.loopId) {
+                                onTrue.remove(onTrue.size() - 1);
+                                onFalse.remove(onFalse.size() - 1);
+                                addAfterIf = contTrue;
+                            }
+                        }
+
+                        List<GraphTargetItem> filteredOnTrue = onTrue;
+                        List<GraphTargetItem> filteredOnFalse = onFalse;
+
+                        if (!isEmpty(filteredOnTrue) && !isEmpty(filteredOnFalse)
+                                && (filteredOnTrue.get(filteredOnTrue.size() - 1) instanceof PushItem)
+                                && (filteredOnFalse.get(filteredOnFalse.size() - 1) instanceof PushItem)
+                                && canBeCommaised(filteredOnTrue) && canBeCommaised(filteredOnFalse)) {
+                            GraphTargetItem ternarOnTrue;
                             if (filteredOnTrue.size() > 1) {
-                                GraphTargetItem rightSide = ((PushItem) filteredOnTrue.get(filteredOnTrue.size() - 1)).value;
-                                GraphTargetItem prevExpr = stack.pop();
-                                GraphTargetItem leftSide = expr.getNotCoercedNoDup();
+                                filteredOnTrue.set(filteredOnTrue.size() - 1, filteredOnTrue.get(filteredOnTrue.size() - 1).value); // replace Pushitem with its value
+                                ternarOnTrue = new CommaExpressionItem(null, null, filteredOnTrue);
+                            } else {
+                                ternarOnTrue = filteredOnTrue.get(0).value;
+                            }
+                            GraphTargetItem ternarOnFalse;
+                            if (filteredOnFalse.size() > 1) {
+                                filteredOnFalse.set(filteredOnFalse.size() - 1, filteredOnFalse.get(filteredOnFalse.size() - 1).value); // replace Pushitem with its value                            
+                                ternarOnFalse = new CommaExpressionItem(null, null, filteredOnFalse);
+                            } else {
+                                ternarOnFalse = filteredOnFalse.get(0).value;
+                            }
+                            stack.push(new TernarOpItem(null, localData.lineStartInstruction, expr.invert(null), ternarOnTrue, ternarOnFalse));
+                        } else {
+                            boolean isIf = true;
+                            //If the ontrue is empty, switch ontrue and onfalse
+                            if (filteredOnTrue.isEmpty() && !filteredOnFalse.isEmpty()) {
+                                expr = expr.invert(null);
+                                List<GraphTargetItem> tmp = onTrue;
+                                onTrue = onFalse;
+                                onFalse = tmp;
+                                //tmp = filteredOnTrue;
+                                filteredOnTrue = filteredOnFalse;
+                                //filteredOnFalse = tmp;
+                            }
+                            if (!stack.isEmpty() && ((filteredOnTrue.size() == 1 && (filteredOnTrue.get(0) instanceof PopItem)) || ((filteredOnTrue.size() >= 2) && (filteredOnTrue.get(0) instanceof PopItem) && (filteredOnTrue.get(filteredOnTrue.size() - 1) instanceof PushItem)))) {
+                                if (filteredOnTrue.size() > 1) {
+                                    GraphTargetItem rightSide = ((PushItem) filteredOnTrue.get(filteredOnTrue.size() - 1)).value;
+                                    GraphTargetItem prevExpr = stack.pop();
+                                    GraphTargetItem leftSide = expr.getNotCoercedNoDup();
 
-                                boolean hideEmptyTrueFalse = true;
+                                    boolean hideEmptyTrueFalse = true;
 
-                                if (leftSide instanceof DuplicateItem) {
-                                    isIf = false;
-                                    if (hideEmptyTrueFalse && prevExpr.getNotCoercedNoDup() instanceof FalseItem) {
-                                        stack.push(rightSide);
-                                    } else if (hideEmptyTrueFalse && rightSide.getNotCoercedNoDup() instanceof FalseItem) {
-                                        stack.push(prevExpr);
-                                    } else {
-                                        stack.push(new OrItem(null, localData.lineStartInstruction, prevExpr, rightSide));
-                                    }
-                                } else if (leftSide.invert(null).getNotCoercedNoDup() instanceof DuplicateItem) {
-                                    isIf = false;
-                                    if (hideEmptyTrueFalse && prevExpr.getNotCoercedNoDup() instanceof TrueItem) {
-                                        stack.push(rightSide);
-                                    } else if (hideEmptyTrueFalse && rightSide.getNotCoercedNoDup() instanceof TrueItem) {
-                                        stack.push(prevExpr);
-                                    } else {
-                                        stack.push(new AndItem(null, localData.lineStartInstruction, prevExpr, rightSide));
-                                    }
-                                } else if (prevExpr instanceof FalseItem) {
-                                    isIf = false;
-                                    leftSide = leftSide.invert(null);
+                                    if (leftSide instanceof DuplicateItem) {
+                                        isIf = false;
+                                        if (hideEmptyTrueFalse && prevExpr.getNotCoercedNoDup() instanceof FalseItem) {
+                                            stack.push(rightSide);
+                                        } else if (hideEmptyTrueFalse && rightSide.getNotCoercedNoDup() instanceof FalseItem) {
+                                            stack.push(prevExpr);
+                                        } else {
+                                            stack.push(new OrItem(null, localData.lineStartInstruction, prevExpr, rightSide));
+                                        }
+                                    } else if (leftSide.invert(null).getNotCoercedNoDup() instanceof DuplicateItem) {
+                                        isIf = false;
+                                        if (hideEmptyTrueFalse && prevExpr.getNotCoercedNoDup() instanceof TrueItem) {
+                                            stack.push(rightSide);
+                                        } else if (hideEmptyTrueFalse && rightSide.getNotCoercedNoDup() instanceof TrueItem) {
+                                            stack.push(prevExpr);
+                                        } else {
+                                            stack.push(new AndItem(null, localData.lineStartInstruction, prevExpr, rightSide));
+                                        }
+                                    } else if (prevExpr instanceof FalseItem) {
+                                        isIf = false;
+                                        leftSide = leftSide.invert(null);
 
-                                    if (hideEmptyTrueFalse && leftSide.getNotCoercedNoDup() instanceof TrueItem) {
-                                        stack.push(rightSide);
-                                    } else if (hideEmptyTrueFalse && rightSide.getNotCoercedNoDup() instanceof TrueItem) {
-                                        stack.push(leftSide);
+                                        if (hideEmptyTrueFalse && leftSide.getNotCoercedNoDup() instanceof TrueItem) {
+                                            stack.push(rightSide);
+                                        } else if (hideEmptyTrueFalse && rightSide.getNotCoercedNoDup() instanceof TrueItem) {
+                                            stack.push(leftSide);
+                                        } else {
+                                            stack.push(new AndItem(null, localData.lineStartInstruction, leftSide, rightSide));
+                                        }
+                                    } else if (prevExpr instanceof TrueItem) {
+                                        isIf = false;
+                                        if (hideEmptyTrueFalse && leftSide.getNotCoercedNoDup() instanceof FalseItem) {
+                                            stack.push(rightSide);
+                                        } else if (hideEmptyTrueFalse && rightSide.getNotCoercedNoDup() instanceof FalseItem) {
+                                            stack.push(leftSide);
+                                        } else {
+                                            stack.push(new OrItem(null, localData.lineStartInstruction, leftSide, rightSide));
+                                        }
                                     } else {
-                                        stack.push(new AndItem(null, localData.lineStartInstruction, leftSide, rightSide));
-                                    }
-                                } else if (prevExpr instanceof TrueItem) {
-                                    isIf = false;
-                                    if (hideEmptyTrueFalse && leftSide.getNotCoercedNoDup() instanceof FalseItem) {
-                                        stack.push(rightSide);
-                                    } else if (hideEmptyTrueFalse && rightSide.getNotCoercedNoDup() instanceof FalseItem) {
-                                        stack.push(leftSide);
-                                    } else {
-                                        stack.push(new OrItem(null, localData.lineStartInstruction, leftSide, rightSide));
+                                        stack.push(prevExpr); //push it back
+                                        //Still unstructured
                                     }
                                 } else {
-                                    stack.push(prevExpr); //push it back
-                                    //Still unstructured
+                                    isIf = false;
                                 }
+                            }
+
+                            if (isIf) {
+                                makeAllCommands(currentRet, stack);
+                                IfItem b = new IfItem(null, localData.lineStartInstruction, expr.invert(null), onTrue, onFalse);
+                                b.decisionPart = part;
+                                b.onTruePart = nps.get(0);
+                                b.onFalsePart = nps.get(1);
+                                currentRet.add(b);
+                                if (processSubBlk(b, null)) {
+                                    stack.push(new PopItem(null, localData.lineStartInstruction));
+                                }
+                            }
+                        }
+                        if (addAfterIf != null) {
+                            currentRet.add(addAfterIf);
+                        }
+                        //currentRet.addAll(out2);
+                        if (next != null) {
+                            printGraph(foundGotos, partCodes, partCodePos, visited, localData, stack, allParts, part, next, stopPart, stopPartKind, loops, throwStates, currentRet, staticOperation, path, recursionLevel + 1);
+                            //currentRet.addAll();
+                        }
+                    }
+                }  //else
+                if (getNextParts(localData, part).size() == 1) {
+                    nextOnePart = getNextParts(localData, part).get(0);
+                }
+
+                if (getNextParts(localData, part).isEmpty()) {
+                    makeAllCommands(currentRet, stack);
+                }
+
+                if (nextOnePart != null) {
+                    printGraph(foundGotos, partCodes, partCodePos, visited, localData, stack, allParts, part, getNextParts(localData, part).get(0), stopPart, stopPartKind, loops, throwStates, currentRet, staticOperation, path, recursionLevel + 1);
+                }
+
+            }
+            if (isLoop && loopItem != null && currentLoop != null) {
+
+                LoopItem li = loopItem;
+                boolean loopTypeFound = false;
+
+                boolean hasContinue = false;
+                processIfs(loopItem.commands);
+                processSwitches(loopItem.commands, currentLoop.id);
+
+                checkContinueAtTheEnd(loopItem.commands, currentLoop);
+                List<ContinueItem> continues = loopItem.getContinues();
+                for (ContinueItem c : continues) {
+                    if (c.loopId == currentLoop.id) {
+                        hasContinue = true;
+                        break;
+                    }
+                }
+                if (!hasContinue) {
+                    if (currentLoop.loopPreContinue != null) {
+                        List<GraphPart> stopContPart = new ArrayList<>();
+                        stopContPart.add(currentLoop.loopContinue);
+                        List<StopPartKind> stopContPartKind = new ArrayList<>();
+                        stopContPartKind.add(StopPartKind.OTHER);
+                        GraphPart precoBackup = currentLoop.loopPreContinue;
+                        currentLoop.loopPreContinue = null;
+                        printGraph(foundGotos, partCodes, partCodePos, visited, localData, stack, allParts, null, precoBackup, stopContPart, stopContPartKind, loops, throwStates, loopItem.commands, staticOperation, path, recursionLevel + 1);
+                        checkContinueAtTheEnd(loopItem.commands, currentLoop);
+                    }
+                }
+
+                //Loop with condition at the beginning (While)
+                if (!loopTypeFound && (!loopItem.commands.isEmpty())) {
+                    if (loopItem.commands.get(0) instanceof IfItem) {
+                        IfItem ifi = (IfItem) loopItem.commands.get(0);
+
+                        List<GraphTargetItem> bodyBranch = null;
+                        boolean inverted = false;
+                        boolean breakpos2 = false;
+                        BreakItem addBreakItem = null;
+                        if ((ifi.onTrue.size() == 1) && (ifi.onTrue.get(0) instanceof BreakItem)) {
+                            BreakItem bi = (BreakItem) ifi.onTrue.get(0);
+                            if (bi.loopId == currentLoop.id) {
+                                bodyBranch = ifi.onFalse;
+                                inverted = true;
+                            }
+                        } else if ((ifi.onFalse.size() == 1) && (ifi.onFalse.get(0) instanceof BreakItem)) {
+                            BreakItem bi = (BreakItem) ifi.onFalse.get(0);
+                            if (bi.loopId == currentLoop.id) {
+                                bodyBranch = ifi.onTrue;
+                            }
+                        } else if (loopItem.commands.size() == 2 && (loopItem.commands.get(1) instanceof BreakItem)) {
+                            BreakItem bi = (BreakItem) loopItem.commands.get(1);
+                            if (ifi.onTrue.isEmpty()) {
+                                inverted = true;
+                            }
+                            bodyBranch = inverted ? ifi.onFalse : ifi.onTrue;
+                            breakpos2 = true;
+                            if (bi.loopId != currentLoop.id) { //it's break of another parent loop
+                                addBreakItem = bi; //we must add it after the loop
+                            }
+                        }
+                        if (bodyBranch != null) {
+                            int index = ret.indexOf(loopItem);
+                            ret.remove(index);
+                            List<GraphTargetItem> exprList = new ArrayList<>();
+                            GraphTargetItem expr = ifi.expression;
+                            if (inverted) {
+                                if (expr instanceof LogicalOpItem) {
+                                    expr = ((LogicalOpItem) expr).invert(null);
+                                } else {
+                                    expr = new NotItem(null, expr.getLineStartItem(), expr);
+                                }
+                            }
+                            exprList.add(expr);
+                            List<GraphTargetItem> commands = new ArrayList<>();
+                            commands.addAll(bodyBranch);
+                            loopItem.commands.remove(0);
+                            if (breakpos2) {
+                                loopItem.commands.remove(0); //remove that break too
+                            }
+                            commands.addAll(loopItem.commands);
+                            checkContinueAtTheEnd(commands, currentLoop);
+                            List<GraphTargetItem> finalComm = new ArrayList<>();
+
+                            //findGotoTargets - comment this out:
+                            if (currentLoop.loopPreContinue != null) {
+                                GraphPart backup = currentLoop.loopPreContinue;
+                                currentLoop.loopPreContinue = null;
+                                List<GraphPart> stopPart2 = new ArrayList<>(stopPart);
+                                stopPart2.add(currentLoop.loopContinue);
+                                List<StopPartKind> stopPartKind2 = new ArrayList<>(stopPartKind);
+                                stopPartKind2.add(StopPartKind.OTHER);
+                                List<GraphTargetItem> precoCommands = printGraph(foundGotos, partCodes, partCodePos, visited, localData, new TranslateStack(path), allParts, null, backup, stopPart2, stopPartKind2, loops, throwStates, null, staticOperation, path, recursionLevel + 1);
+                                currentLoop.loopPreContinue = backup;
+                                checkContinueAtTheEnd(precoCommands, currentLoop);
+
+                                List<List<GraphTargetItem>> continueCommands = new ArrayList<>();
+                                getContinuesCommands(commands, continueCommands, currentLoop.id);
+
+                                if (continueCommands.isEmpty()) {
+                                    commands.addAll(precoCommands);
+                                    precoCommands = new ArrayList<>();
+                                } //Single continue and there is break/continue/return/throw at end of the commands
+                                else if (!commands.isEmpty() && continueCommands.size() == 1) {
+                                    GraphTargetItem lastItem = commands.get(commands.size() - 1);
+                                    if ((lastItem instanceof BreakItem) || (lastItem instanceof ContinueItem) || (lastItem instanceof ExitItem)) {
+                                        continueCommands.get(0).addAll(continueCommands.get(0).size() - 1, precoCommands);
+                                        precoCommands = new ArrayList<>();
+                                    }
+                                }
+
+                                boolean isAllNotBlock = true;
+                                for (GraphTargetItem ti : precoCommands) {
+                                    if (ti instanceof Block) {
+                                        isAllNotBlock = false;
+                                        break;
+                                    }
+                                }
+                                if (isAllNotBlock) {
+                                    finalComm.addAll(precoCommands);
+                                } else {
+                                    commands.addAll(precoCommands);
+                                }
+                            }
+                            if (currentLoop.precontinueCommands != null) {
+                                finalComm.addAll(currentLoop.precontinueCommands);
+                            }
+                            if (!finalComm.isEmpty()) {
+                                ret.add(index, li = new ForItem(expr.getSrc(), expr.getLineStartItem(), currentLoop, new ArrayList<>(), exprList.get(exprList.size() - 1), finalComm, commands));
                             } else {
-                                isIf = false;
+                                ret.add(index, li = new WhileItem(expr.getSrc(), expr.getLineStartItem(), currentLoop, exprList, commands));
                             }
-                        }
+                            if (addBreakItem != null) {
+                                ret.add(index + 1, addBreakItem);
+                            }
 
-                        if (isIf) {
-                            makeAllCommands(currentRet, stack);
-                            IfItem b = new IfItem(null, localData.lineStartInstruction, expr.invert(null), onTrue, onFalse);
-                            b.decisionPart = part;
-                            b.onTruePart = nps.get(0);
-                            b.onFalsePart = nps.get(1);
-                            currentRet.add(b);
-                            if (processSubBlk(b, null)) {
-                                stack.push(new PopItem(null, localData.lineStartInstruction));
-                            }
+                            loopTypeFound = true;
                         }
                     }
-                    if (addAfterIf != null) {
-                        currentRet.add(addAfterIf);
-                    }
-                    //currentRet.addAll(out2);
-                    if (next != null) {
-                        printGraph(foundGotos, partCodes, partCodePos, visited, localData, stack, allParts, part, next, stopPart, stopPartKind, loops, throwStates, currentRet, staticOperation, path, recursionLevel + 1);
-                        //currentRet.addAll();
+                }
+
+                //Loop with condition at the end (Do..While)
+                if (!loopTypeFound && (!loopItem.commands.isEmpty())) {
+                    if (loopItem.commands.get(loopItem.commands.size() - 1) instanceof IfItem) {
+                        IfItem ifi = (IfItem) loopItem.commands.get(loopItem.commands.size() - 1);
+                        List<GraphTargetItem> bodyBranch = null;
+                        boolean inverted = false;
+                        if ((ifi.onTrue.size() == 1) && (ifi.onTrue.get(0) instanceof BreakItem)) {
+                            BreakItem bi = (BreakItem) ifi.onTrue.get(0);
+                            if (bi.loopId == currentLoop.id) {
+                                bodyBranch = ifi.onFalse;
+                                inverted = true;
+                            }
+                        } else if ((ifi.onFalse.size() == 1) && (ifi.onFalse.get(0) instanceof BreakItem)) {
+                            BreakItem bi = (BreakItem) ifi.onFalse.get(0);
+                            if (bi.loopId == currentLoop.id) {
+                                bodyBranch = ifi.onTrue;
+                            }
+                        }
+                        if (bodyBranch != null) {
+                            //Condition at the beginning
+                            int index = ret.indexOf(loopItem);
+                            ret.remove(index);
+                            List<GraphTargetItem> exprList = new ArrayList<>();
+                            GraphTargetItem expr = ifi.expression;
+                            if (inverted) {
+                                expr = expr.invert(null);
+                            }
+
+                            checkContinueAtTheEnd(bodyBranch, currentLoop);
+
+                            List<GraphTargetItem> commands = new ArrayList<>();
+
+                            if (!bodyBranch.isEmpty()) {
+                                ret.add(index, loopItem);
+                            } else {
+                                loopItem.commands.remove(loopItem.commands.size() - 1);
+                                commands.addAll(loopItem.commands);
+                                commands.addAll(bodyBranch);
+                                exprList.add(expr);
+                                checkContinueAtTheEnd(commands, currentLoop);
+                                ret.add(index, li = new DoWhileItem(null, exprList.get(0).getLineStartItem(), currentLoop, commands, exprList));
+                            }
+
+                            loopTypeFound = true;
+                        }
                     }
                 }
-            }  //else
-            if (getNextParts(localData, part).size() == 1) {
-                nextOnePart = getNextParts(localData, part).get(0);
-            }
 
-            if (getNextParts(localData, part).isEmpty()) {
-                makeAllCommands(currentRet, stack);
-            }
+                if (!loopTypeFound) {
+                    if (currentLoop.loopPreContinue != null) {
+                        loopTypeFound = true;
+                        GraphPart backup = currentLoop.loopPreContinue;
+                        currentLoop.loopPreContinue = null;
+                        List<GraphPart> stopPart2 = new ArrayList<>(stopPart);
+                        stopPart2.add(currentLoop.loopContinue);
+                        List<StopPartKind> stopPartKind2 = new ArrayList<>(stopPartKind);
+                        stopPartKind2.add(StopPartKind.OTHER);
+                        List<GraphTargetItem> finalComm = printGraph(foundGotos, partCodes, partCodePos, visited, localData, new TranslateStack(path), allParts, null, backup, stopPart2, stopPartKind2, loops, throwStates, null, staticOperation, path, recursionLevel + 1);
+                        currentLoop.loopPreContinue = backup;
+                        checkContinueAtTheEnd(finalComm, currentLoop);
 
-            if (nextOnePart != null) {
-                printGraph(foundGotos, partCodes, partCodePos, visited, localData, stack, allParts, part, getNextParts(localData, part).get(0), stopPart, stopPartKind, loops, throwStates, currentRet, staticOperation, path, recursionLevel + 1);
-            }
-
-        }
-        if (isLoop && loopItem != null && currentLoop != null) {
-
-            LoopItem li = loopItem;
-            boolean loopTypeFound = false;
-
-            boolean hasContinue = false;
-            processIfs(loopItem.commands);
-            processSwitches(loopItem.commands, currentLoop.id);
-
-            checkContinueAtTheEnd(loopItem.commands, currentLoop);
-            List<ContinueItem> continues = loopItem.getContinues();
-            for (ContinueItem c : continues) {
-                if (c.loopId == currentLoop.id) {
-                    hasContinue = true;
-                    break;
+                        if (!finalComm.isEmpty()) {
+                            if (finalComm.get(finalComm.size() - 1) instanceof IfItem) {
+                                IfItem ifi = (IfItem) finalComm.get(finalComm.size() - 1);
+                                boolean ok = false;
+                                boolean invert = false;
+                                if (((ifi.onTrue.size() == 1) && (ifi.onTrue.get(0) instanceof BreakItem) && (((BreakItem) ifi.onTrue.get(0)).loopId == currentLoop.id))
+                                        && ((ifi.onFalse.size() == 1) && (ifi.onFalse.get(0) instanceof ContinueItem) && (((ContinueItem) ifi.onFalse.get(0)).loopId == currentLoop.id))) {
+                                    ok = true;
+                                    invert = true;
+                                }
+                                if (((ifi.onTrue.size() == 1) && (ifi.onTrue.get(0) instanceof ContinueItem) && (((ContinueItem) ifi.onTrue.get(0)).loopId == currentLoop.id))
+                                        && ((ifi.onFalse.size() == 1) && (ifi.onFalse.get(0) instanceof BreakItem) && (((BreakItem) ifi.onFalse.get(0)).loopId == currentLoop.id))) {
+                                    ok = true;
+                                }
+                                if (ok) {
+                                    finalComm.remove(finalComm.size() - 1);
+                                    int index = ret.indexOf(loopItem);
+                                    ret.remove(index);
+                                    List<GraphTargetItem> exprList = new ArrayList<>(finalComm);
+                                    GraphTargetItem expr = ifi.expression;
+                                    if (invert) {
+                                        expr = expr.invert(null);
+                                    }
+                                    exprList.add(expr);
+                                    ret.add(index, li = new DoWhileItem(null, expr.getLineStartItem(), currentLoop, loopItem.commands, exprList));
+                                }
+                            }
+                        }
+                    }
                 }
-            }
-            if (!hasContinue) {
-                if (currentLoop.loopPreContinue != null) {
-                    List<GraphPart> stopContPart = new ArrayList<>();
-                    stopContPart.add(currentLoop.loopContinue);
-                    List<StopPartKind> stopContPartKind = new ArrayList<>();
-                    stopContPartKind.add(StopPartKind.OTHER);
-                    GraphPart precoBackup = currentLoop.loopPreContinue;
-                    currentLoop.loopPreContinue = null;
-                    printGraph(foundGotos, partCodes, partCodePos, visited, localData, stack, allParts, null, precoBackup, stopContPart, stopContPartKind, loops, throwStates, loopItem.commands, staticOperation, path, recursionLevel + 1);
+
+                if (!loopTypeFound) {
                     checkContinueAtTheEnd(loopItem.commands, currentLoop);
                 }
-            }
+                currentLoop.phase = 2;
 
-            //Loop with condition at the beginning (While)
-            if (!loopTypeFound && (!loopItem.commands.isEmpty())) {
-                if (loopItem.commands.get(0) instanceof IfItem) {
-                    IfItem ifi = (IfItem) loopItem.commands.get(0);
-
-                    List<GraphTargetItem> bodyBranch = null;
-                    boolean inverted = false;
-                    boolean breakpos2 = false;
-                    BreakItem addBreakItem = null;
-                    if ((ifi.onTrue.size() == 1) && (ifi.onTrue.get(0) instanceof BreakItem)) {
-                        BreakItem bi = (BreakItem) ifi.onTrue.get(0);
-                        if (bi.loopId == currentLoop.id) {
-                            bodyBranch = ifi.onFalse;
-                            inverted = true;
-                        }
-                    } else if ((ifi.onFalse.size() == 1) && (ifi.onFalse.get(0) instanceof BreakItem)) {
-                        BreakItem bi = (BreakItem) ifi.onFalse.get(0);
-                        if (bi.loopId == currentLoop.id) {
-                            bodyBranch = ifi.onTrue;
-                        }
-                    } else if (loopItem.commands.size() == 2 && (loopItem.commands.get(1) instanceof BreakItem)) {
-                        BreakItem bi = (BreakItem) loopItem.commands.get(1);
-                        if (ifi.onTrue.isEmpty()) {
-                            inverted = true;
-                        }
-                        bodyBranch = inverted ? ifi.onFalse : ifi.onTrue;
-                        breakpos2 = true;
-                        if (bi.loopId != currentLoop.id) { //it's break of another parent loop
-                            addBreakItem = bi; //we must add it after the loop
-                        }
-                    }
-                    if (bodyBranch != null) {
-                        int index = ret.indexOf(loopItem);
-                        ret.remove(index);
-                        List<GraphTargetItem> exprList = new ArrayList<>();
-                        GraphTargetItem expr = ifi.expression;
-                        if (inverted) {
-                            if (expr instanceof LogicalOpItem) {
-                                expr = ((LogicalOpItem) expr).invert(null);
-                            } else {
-                                expr = new NotItem(null, expr.getLineStartItem(), expr);
-                            }
-                        }
-                        exprList.add(expr);
-                        List<GraphTargetItem> commands = new ArrayList<>();
-                        commands.addAll(bodyBranch);
-                        loopItem.commands.remove(0);
-                        if (breakpos2) {
-                            loopItem.commands.remove(0); //remove that break too
-                        }
-                        commands.addAll(loopItem.commands);
-                        checkContinueAtTheEnd(commands, currentLoop);
-                        List<GraphTargetItem> finalComm = new ArrayList<>();
-
-                        //findGotoTargets - comment this out:
-                        if (currentLoop.loopPreContinue != null) {
-                            GraphPart backup = currentLoop.loopPreContinue;
-                            currentLoop.loopPreContinue = null;
-                            List<GraphPart> stopPart2 = new ArrayList<>(stopPart);
-                            stopPart2.add(currentLoop.loopContinue);
-                            List<StopPartKind> stopPartKind2 = new ArrayList<>(stopPartKind);
-                            stopPartKind2.add(StopPartKind.OTHER);
-                            List<GraphTargetItem> precoCommands = printGraph(foundGotos, partCodes, partCodePos, visited, localData, new TranslateStack(path), allParts, null, backup, stopPart2, stopPartKind2, loops, throwStates, null, staticOperation, path, recursionLevel + 1);
-                            currentLoop.loopPreContinue = backup;
-                            checkContinueAtTheEnd(precoCommands, currentLoop);
-
-                            List<List<GraphTargetItem>> continueCommands = new ArrayList<>();
-                            getContinuesCommands(commands, continueCommands, currentLoop.id);
-
-                            if (continueCommands.isEmpty()) {
-                                commands.addAll(precoCommands);
-                                precoCommands = new ArrayList<>();
-                            } //Single continue and there is break/continue/return/throw at end of the commands
-                            else if (!commands.isEmpty() && continueCommands.size() == 1) {
-                                GraphTargetItem lastItem = commands.get(commands.size() - 1);
-                                if ((lastItem instanceof BreakItem) || (lastItem instanceof ContinueItem) || (lastItem instanceof ExitItem)) {
-                                    continueCommands.get(0).addAll(continueCommands.get(0).size() - 1, precoCommands);
-                                    precoCommands = new ArrayList<>();
-                                }
-                            }
-
-                            finalComm.addAll(precoCommands);
-                        }
-                        if (currentLoop.precontinueCommands != null) {
-                            finalComm.addAll(currentLoop.precontinueCommands);
-                        }
-                        if (!finalComm.isEmpty()) {
-                            ret.add(index, li = new ForItem(expr.getSrc(), expr.getLineStartItem(), currentLoop, new ArrayList<>(), exprList.get(exprList.size() - 1), finalComm, commands));
-                        } else {
-                            ret.add(index, li = new WhileItem(expr.getSrc(), expr.getLineStartItem(), currentLoop, exprList, commands));
-                        }
-                        if (addBreakItem != null) {
-                            ret.add(index + 1, addBreakItem);
-                        }
-
-                        loopTypeFound = true;
+                GraphTargetItem replaced = checkLoop(ret, li, localData, loops, throwStates, sPreLoop);
+                if (replaced != li) {
+                    int index = ret.indexOf(li);
+                    ret.remove(index);
+                    if (replaced != null) {
+                        ret.add(index, replaced);
                     }
                 }
-            }
 
-            //Loop with condition at the end (Do..While)
-            if (!loopTypeFound && (!loopItem.commands.isEmpty())) {
-                if (loopItem.commands.get(loopItem.commands.size() - 1) instanceof IfItem) {
-                    IfItem ifi = (IfItem) loopItem.commands.get(loopItem.commands.size() - 1);
-                    List<GraphTargetItem> bodyBranch = null;
-                    boolean inverted = false;
-                    if ((ifi.onTrue.size() == 1) && (ifi.onTrue.get(0) instanceof BreakItem)) {
-                        BreakItem bi = (BreakItem) ifi.onTrue.get(0);
-                        if (bi.loopId == currentLoop.id) {
-                            bodyBranch = ifi.onFalse;
-                            inverted = true;
-                        }
-                    } else if ((ifi.onFalse.size() == 1) && (ifi.onFalse.get(0) instanceof BreakItem)) {
-                        BreakItem bi = (BreakItem) ifi.onFalse.get(0);
-                        if (bi.loopId == currentLoop.id) {
-                            bodyBranch = ifi.onTrue;
-                        }
-                    }
-                    if (bodyBranch != null) {
-                        //Condition at the beginning
-                        int index = ret.indexOf(loopItem);
-                        ret.remove(index);
-                        List<GraphTargetItem> exprList = new ArrayList<>();
-                        GraphTargetItem expr = ifi.expression;
-                        if (inverted) {
-                            expr = expr.invert(null);
-                        }
-
-                        checkContinueAtTheEnd(bodyBranch, currentLoop);
-
-                        List<GraphTargetItem> commands = new ArrayList<>();
-
-                        if (!bodyBranch.isEmpty()) {
-                            ret.add(index, loopItem);
-                        } else {
-                            loopItem.commands.remove(loopItem.commands.size() - 1);
-                            commands.addAll(loopItem.commands);
-                            commands.addAll(bodyBranch);
-                            exprList.add(expr);
-                            checkContinueAtTheEnd(commands, currentLoop);
-                            ret.add(index, li = new DoWhileItem(null, exprList.get(0).getLineStartItem(), currentLoop, commands, exprList));
-                        }
-
-                        loopTypeFound = true;
-                    }
+                if (currentLoop.loopBreak != null) {
+                    printGraph(foundGotos, partCodes, partCodePos, visited, localData, sPreLoop, allParts, part, currentLoop.loopBreak, stopPart, stopPartKind, loops, throwStates, ret, staticOperation, path, recursionLevel + 1);
                 }
             }
-
-            if (!loopTypeFound) {
-                if (currentLoop.loopPreContinue != null) {
-                    loopTypeFound = true;
-                    GraphPart backup = currentLoop.loopPreContinue;
-                    currentLoop.loopPreContinue = null;
-                    List<GraphPart> stopPart2 = new ArrayList<>(stopPart);
-                    stopPart2.add(currentLoop.loopContinue);
-                    List<StopPartKind> stopPartKind2 = new ArrayList<>(stopPartKind);
-                    stopPartKind2.add(StopPartKind.OTHER);
-                    List<GraphTargetItem> finalComm = printGraph(foundGotos, partCodes, partCodePos, visited, localData, new TranslateStack(path), allParts, null, backup, stopPart2, stopPartKind2, loops, throwStates, null, staticOperation, path, recursionLevel + 1);
-                    currentLoop.loopPreContinue = backup;
-                    checkContinueAtTheEnd(finalComm, currentLoop);
-
-                    if (!finalComm.isEmpty()) {
-                        if (finalComm.get(finalComm.size() - 1) instanceof IfItem) {
-                            IfItem ifi = (IfItem) finalComm.get(finalComm.size() - 1);
-                            boolean ok = false;
-                            boolean invert = false;
-                            if (((ifi.onTrue.size() == 1) && (ifi.onTrue.get(0) instanceof BreakItem) && (((BreakItem) ifi.onTrue.get(0)).loopId == currentLoop.id))
-                                    && ((ifi.onFalse.size() == 1) && (ifi.onFalse.get(0) instanceof ContinueItem) && (((ContinueItem) ifi.onFalse.get(0)).loopId == currentLoop.id))) {
-                                ok = true;
-                                invert = true;
-                            }
-                            if (((ifi.onTrue.size() == 1) && (ifi.onTrue.get(0) instanceof ContinueItem) && (((ContinueItem) ifi.onTrue.get(0)).loopId == currentLoop.id))
-                                    && ((ifi.onFalse.size() == 1) && (ifi.onFalse.get(0) instanceof BreakItem) && (((BreakItem) ifi.onFalse.get(0)).loopId == currentLoop.id))) {
-                                ok = true;
-                            }
-                            if (ok) {
-                                finalComm.remove(finalComm.size() - 1);
-                                int index = ret.indexOf(loopItem);
-                                ret.remove(index);
-                                List<GraphTargetItem> exprList = new ArrayList<>(finalComm);
-                                GraphTargetItem expr = ifi.expression;
-                                if (invert) {
-                                    expr = expr.invert(null);
-                                }
-                                exprList.add(expr);
-                                ret.add(index, li = new DoWhileItem(null, expr.getLineStartItem(), currentLoop, loopItem.commands, exprList));
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (!loopTypeFound) {
-                checkContinueAtTheEnd(loopItem.commands, currentLoop);
-            }
-            currentLoop.phase = 2;
-
-            GraphTargetItem replaced = checkLoop(ret, li, localData, loops, throwStates, sPreLoop);
-            if (replaced != li) {
-                int index = ret.indexOf(li);
-                ret.remove(index);
-                if (replaced != null) {
-                    ret.add(index, replaced);
-                }
-            }
-
-            if (currentLoop.loopBreak != null) {
-                printGraph(foundGotos, partCodes, partCodePos, visited, localData, sPreLoop, allParts, part, currentLoop.loopBreak, stopPart, stopPartKind, loops, throwStates, ret, staticOperation, path, recursionLevel + 1);
-            }
+            break;
         }
-
         return ret;
     }
 
@@ -2973,7 +3177,7 @@ public class Graph {
         }
     }
 
-    public static void makeAllCommands(List<GraphTargetItem> commands, TranslateStack stack) {
+    public void makeAllCommands(List<GraphTargetItem> commands, TranslateStack stack) {
         int clen = commands.size();
         boolean isExit = false;
         if (clen > 0) {
@@ -3097,7 +3301,7 @@ public class Graph {
         }
 
         //gotoTargets
-        GraphPart breakPart = getMostCommonPart(localData, caseBodyParts, loops, throwStates);
+        GraphPart breakPart = getMostCommonPart(localData, caseBodyParts, loops, throwStates, stopPart);
         //removeEdgeToFromList(gotoTargets, breakPart);
 
         List<List<GraphTargetItem>> caseCommands = new ArrayList<>();
@@ -3124,6 +3328,9 @@ public class Graph {
             for (int j = i + 1; j < caseBodies.size(); j++) {
                 GraphPart b2 = caseBodies.get(j);
                 if (b2.leadsTo(localData, this, code, b, loops, throwStates, false)) {
+                    if (b.leadsTo(localData, this, code, b2, loops, throwStates, false)) { //unstructured code
+                        continue;
+                    }
                     caseBodies.remove(j);
                     caseBodies.add(i, b2);
                     i--;
@@ -3152,6 +3359,8 @@ public class Graph {
                 }
             }
 
+            localData.allSwitchParts.add(caseBodies.get(i));
+
             List<GraphPart> stopPart2x = new ArrayList<>(stopPart);
             List<StopPartKind> stopPartKind2x = new ArrayList<>(stopPartKind);
             for (GraphPart b : caseBodies) {
@@ -3176,6 +3385,43 @@ public class Graph {
             caseCommands.add(currentCaseCommands);
         }
 
+        /*
+        switch(a)
+        {
+        case 0:
+        case 1:
+            break;
+        case 2:
+            break;        
+        }
+        
+        =>
+        
+        switch(a)
+        {
+        case 0:
+        case 1:
+        case 2:
+            break;        
+        }
+        
+         */
+        for (int i = 0; i < caseCommands.size(); i++) {
+            if (caseCommands.get(i).size() == 1
+                    && (caseCommands.get(i).get(0) instanceof BreakItem)
+                    && (((BreakItem) caseCommands.get(i).get(0)).loopId == currentLoop.id)) {
+                for (int j = i + 1; j < caseCommands.size(); j++) {
+                    if (caseCommands.get(j).size() == 1
+                            && (caseCommands.get(j).get(0) instanceof BreakItem)
+                            && (((BreakItem) caseCommands.get(j).get(0)).loopId == currentLoop.id)) {
+                        caseCommands.get(j - 1).remove(0);
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
         //If the lastone is default empty and alone, remove it
         if (!caseCommands.isEmpty()) {
             List<GraphTargetItem> lastc = caseCommands.get(caseCommands.size() - 1);
@@ -3195,7 +3441,7 @@ public class Graph {
                     caseValuesMap.remove(caseValuesMap.size() - 1);
                     valuesMapping.remove(valuesMapping.size() - 1);
                     if (cnt2 == 1) {
-                        caseCommands.remove(lastc);
+                        caseCommands.remove(caseCommands.size() - 1);
                     }
                 }
             }

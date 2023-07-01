@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -37,6 +37,7 @@ import com.jpexs.decompiler.flash.types.FILLSTYLEARRAY;
 import com.jpexs.decompiler.flash.types.FOCALGRADIENT;
 import com.jpexs.decompiler.flash.types.GRADIENT;
 import com.jpexs.decompiler.flash.types.GRADRECORD;
+import com.jpexs.decompiler.flash.types.ILINESTYLE;
 import com.jpexs.decompiler.flash.types.LINESTYLE;
 import com.jpexs.decompiler.flash.types.LINESTYLE2;
 import com.jpexs.decompiler.flash.types.LINESTYLEARRAY;
@@ -178,16 +179,7 @@ public class SvgImporter {
             SvgStyle style = new SvgStyle(this, idMap, rootElement);
             Matrix transform = new Matrix();
 
-            if (!fill) {
-                rect.Xmin -= origXmin;
-                rect.Xmax -= origXmin;
-                rect.Ymin -= origYmin;
-                rect.Ymax -= origYmin;
-                rect.Xmin = (int) Math.round(viewBox.x * SWF.unitDivisor);
-                rect.Ymin = (int) Math.round(viewBox.y * SWF.unitDivisor);
-                rect.Xmax = (int) Math.round((viewBox.x + viewBox.width) * SWF.unitDivisor);
-                rect.Ymax = (int) Math.round((viewBox.y + viewBox.height) * SWF.unitDivisor);
-            } else {
+            if (fill) {
                 double ratioX = rect.getWidth() / width / SWF.unitDivisor;
                 double ratioY = rect.getHeight() / height / SWF.unitDivisor;
                 transform = Matrix.getScaleInstance(ratioX, ratioY);
@@ -202,6 +194,9 @@ public class SvgImporter {
         shapes.shapeRecords.add(new EndShapeRecord());
 
         st.shapes = shapes;
+        if (!fill) {
+            st.updateBounds();
+        }
         st.setModified(true);
 
         return (Tag) st;
@@ -329,12 +324,42 @@ public class SvgImporter {
             showWarning(tagName + "tagNotSupported", "The SVG tag '" + tagName + "' is not supported.");
         }
     }
+
     private void processSvgObject(Map<String, Element> idMap, int shapeNum, SHAPEWITHSTYLE shapes, Element element, Matrix transform, SvgStyle style) {
         for (int i = 0; i < element.getChildNodes().getLength(); i++) {
             Node childNode = element.getChildNodes().item(i);
             if (childNode instanceof Element) {
                 Element childElement = (Element) childNode;
                 processElement(childElement, idMap, shapeNum, shapes, transform, style);
+            }
+        }
+    }
+
+    private void autoCloseFillPath(boolean empty, List<SHAPERECORD> newRecords, int fillStyle, int lineStyle, Point startPoint, Point prevPoint) {
+        if (!empty) {
+            if (!startPoint.equals(prevPoint)) {
+                if (fillStyle != 0) {
+                    if (lineStyle != 0) {
+                        StyleChangeRecord scr = new StyleChangeRecord();
+                        scr.lineStyle = 0; //no line
+                        scr.stateLineStyle = true;
+                        newRecords.add(scr);
+                    }
+
+                    StraightEdgeRecord serclose = new StraightEdgeRecord();
+                    Point p = startPoint;
+                    serclose.deltaX = (int) Math.round(p.x - prevPoint.x);
+                    serclose.deltaY = (int) Math.round(p.y - prevPoint.y);
+                    serclose.generalLineFlag = true;
+                    newRecords.add(serclose);
+
+                    if (lineStyle != 0) {
+                        StyleChangeRecord scr = new StyleChangeRecord();
+                        scr.lineStyle = lineStyle;
+                        scr.stateLineStyle = true;
+                        newRecords.add(scr);
+                    }
+                }
             }
         }
     }
@@ -360,12 +385,15 @@ public class SvgImporter {
 
         newRecords.add(scrStyle);
 
-        LINESTYLE lineStyleObj = scrStyle.lineStyles.lineStyles.length < 1 ? null : scrStyle.lineStyles.lineStyles[0];
         LINESTYLE2 lineStyle2Obj = null;
-        if (lineStyleObj instanceof LINESTYLE2) {
-            lineStyle2Obj = (LINESTYLE2) lineStyleObj;
-            lineStyle2Obj.noClose = true;
+        if (shapeNum == 4) {
+            lineStyle2Obj = scrStyle.lineStyles.lineStyles2.length < 1 ? null : scrStyle.lineStyles.lineStyles2[0];
+            if (lineStyle2Obj != null) {
+                lineStyle2Obj.noClose = true;
+            }
         }
+
+        boolean empty = true;
 
         for (PathCommand command : commands) {
             double x = x0;
@@ -380,6 +408,8 @@ public class SvgImporter {
             char cmd = command.command;
             switch (cmd) {
                 case 'M':
+                    autoCloseFillPath(empty, newRecords, fillStyle, lineStyle, startPoint, prevPoint);
+
                     StyleChangeRecord scr = new StyleChangeRecord();
                     if (fillStyle != 0) {
                         scr.stateFillStyle1 = true;
@@ -401,6 +431,7 @@ public class SvgImporter {
 
                     newRecords.add(scr);
                     startPoint = prevPoint;
+                    empty = true;
                     break;
                 case 'Z':
                     StraightEdgeRecord serz = new StraightEdgeRecord();
@@ -413,6 +444,7 @@ public class SvgImporter {
                     if (lineStyle2Obj != null) {
                         lineStyle2Obj.noClose = false;
                     }
+                    empty = true;
                     break;
                 case 'L':
                     StraightEdgeRecord serl = new StraightEdgeRecord();
@@ -426,6 +458,7 @@ public class SvgImporter {
                     serl.generalLineFlag = true;
                     serl.simplify();
                     newRecords.add(serl);
+                    empty = false;
                     break;
                 case 'H':
                     StraightEdgeRecord serh = new StraightEdgeRecord();
@@ -439,6 +472,7 @@ public class SvgImporter {
                     serh.generalLineFlag = true;
                     serh.simplify();
                     newRecords.add(serh);
+                    empty = false;
                     break;
                 case 'V':
                     StraightEdgeRecord serv = new StraightEdgeRecord();
@@ -453,6 +487,7 @@ public class SvgImporter {
                     serv.generalLineFlag = true;
                     serv.simplify();
                     newRecords.add(serv);
+                    empty = false;
                     break;
                 case 'Q':
                     CurvedEdgeRecord cer = new CurvedEdgeRecord();
@@ -472,6 +507,7 @@ public class SvgImporter {
                     cer.anchorDeltaY = (int) Math.round(p.y - prevPoint.y);
                     prevPoint = new Point(prevPoint.x + cer.anchorDeltaX, prevPoint.y + cer.anchorDeltaY);
                     newRecords.add(cer);
+                    empty = false;
                     break;
                 case 'C':
                     showWarning("cubicCurvesNotSupported", "Cubic curves are not supported by Flash.");
@@ -510,6 +546,7 @@ public class SvgImporter {
                         newRecords.add(cerc);
                     }
 
+                    empty = false;
                     break;
                 default:
                     Logger.getLogger(ShapeImporter.class.getName()).log(Level.WARNING, "Unknown command: {0}", command);
@@ -519,7 +556,8 @@ public class SvgImporter {
             x0 = x;
             y0 = y;
         }
-        applyStyleGradients(SHAPERECORD.getBounds(newRecords), scrStyle, transform2, shapeNum, style);
+        autoCloseFillPath(empty, newRecords, fillStyle, lineStyle, startPoint, prevPoint);
+        applyStyleGradients(SHAPERECORD.getBounds(newRecords, shapes.lineStyles, shapeNum, false), scrStyle, transform2, shapeNum, style);
         shapes.shapeRecords.addAll(newRecords);
     }
 
@@ -1148,7 +1186,7 @@ public class SvgImporter {
         st = (DefineShape4Tag) (new SvgImporter().importSvg(st, svgDataS, false));
         swf.addTag(st);
         SerializableImage si = new SerializableImage(480, 360, BufferedImage.TYPE_4BYTE_ABGR);
-        BitmapExporter.export(swf, st.shapes, Color.yellow, si, new Matrix(), new Matrix(), null, true);
+        BitmapExporter.export(st.getShapeNum(), swf, st.shapes, Color.yellow, si, 1, new Matrix(), new Matrix(), null, true, true);
         List<Tag> li = new ArrayList<>();
         li.add(st);
         ImageIO.write(si.getBufferedImage(), "PNG", new File(name + ".imported.png"));
@@ -1550,9 +1588,30 @@ public class SvgImporter {
                     break;
             }
 
-            fillStyle.gradient.gradientRecords = new GRADRECORD[gfill.stops.size()];
             int prevRatio = -1;
+
+            int recCount = 0;
             for (int i = 0; i < gfill.stops.size(); i++) {
+                SvgStop stop = gfill.stops.get(i);
+
+                int ratio = Math.max((int) Math.round(stop.offset * 255), prevRatio + 1);
+                recCount++;
+                //two finish stops
+                if (ratio == 255 && i + 1 < gfill.stops.size()) {
+                    if (prevRatio == 254) {
+                        break;
+                    }
+                    ratio = 254;
+                }
+                prevRatio = ratio;
+                if (prevRatio == 255) {
+                    break;
+                }
+            }
+
+            prevRatio = -1;
+            fillStyle.gradient.gradientRecords = new GRADRECORD[recCount];
+            for (int i = 0; i < recCount; i++) {
                 SvgStop stop = gfill.stops.get(i);
                 Color color = stop.color;
                 color = new Color(color.getRed(), color.getGreen(), color.getBlue(), (int) Math.round(color.getAlpha() * style.getOpacity()));
@@ -1560,11 +1619,11 @@ public class SvgImporter {
                 fillStyle.gradient.gradientRecords[i].inShape3 = shapeNum >= 3;
                 fillStyle.gradient.gradientRecords[i].color = getRGB(shapeNum, color);
                 int ratio = Math.max((int) Math.round(stop.offset * 255), prevRatio + 1);
+                if (ratio == 255 && i + 1 < recCount) {
+                    ratio = 254;
+                }
                 fillStyle.gradient.gradientRecords[i].ratio = ratio;
                 prevRatio = ratio;
-                if (prevRatio == 255) {
-                    break;
-                }
             }
         } else if (fill instanceof SvgBitmapFill) {
             SvgBitmapFill bfill = (SvgBitmapFill) fill;
@@ -1583,8 +1642,8 @@ public class SvgImporter {
         }
         SvgFill strokeFill = style.getStrokeFillWithOpacity();
         if (strokeFill != null) {
-            if (scr.lineStyles.lineStyles.length > 0 && scr.lineStyles.lineStyles[0] instanceof LINESTYLE2) {
-                applyFillGradients(strokeFill, ((LINESTYLE2) scr.lineStyles.lineStyles[0]).fillType, bounds, scr, transform, shapeNum, style);
+            if (shapeNum == 4 && scr.lineStyles.lineStyles2.length > 0 && scr.lineStyles.lineStyles2[0] instanceof LINESTYLE2) {
+                applyFillGradients(strokeFill, ((LINESTYLE2) scr.lineStyles.lineStyles2[0]).fillType, bounds, scr, transform, shapeNum, style);
             }
         }
     }
@@ -1619,10 +1678,9 @@ public class SvgImporter {
         if (strokeFill != null && strokeFill != SvgTransparentFill.INSTANCE) {
             Color lineColor = strokeFill.toColor();
 
-            scr.lineStyles.lineStyles = new LINESTYLE[1];
-            LINESTYLE lineStyle = shapeNum <= 3 ? new LINESTYLE() : new LINESTYLE2();
-            lineStyle.color = getRGB(shapeNum, lineColor);
-            lineStyle.width = (int) Math.round(style.getStrokeWidth() * SWF.unitDivisor);
+            ILINESTYLE lineStyle = shapeNum <= 3 ? new LINESTYLE() : new LINESTYLE2();
+            lineStyle.setColor(getRGB(shapeNum, lineColor));
+            lineStyle.setWidth((int) Math.round(style.getStrokeWidth() * SWF.unitDivisor));
             SvgLineCap lineCap = style.getStrokeLineCap();
             SvgLineJoin lineJoin = style.getStrokeLineJoin();
             if (lineStyle instanceof LINESTYLE2) {
@@ -1643,6 +1701,8 @@ public class SvgImporter {
                                 : lineJoin == SvgLineJoin.BEVEL ? LINESTYLE2.BEVEL_JOIN : 0;
                 lineStyle2.joinStyle = swfJoin;
                 lineStyle2.miterLimitFactor = (float) style.getStrokeMiterLimit();
+                scr.lineStyles.lineStyles2 = new LINESTYLE2[1];
+                scr.lineStyles.lineStyles2[0] = lineStyle2;
             } else {
                 if (lineCap != SvgLineCap.ROUND) {
                     showWarning("lineCapNotSupported", "LineCap style not supported in shape " + shapeNum);
@@ -1650,12 +1710,14 @@ public class SvgImporter {
                 if (lineJoin != SvgLineJoin.ROUND) {
                     showWarning("lineJoinNotSupported", "LineJoin style not supported in shape " + shapeNum);
                 }
+                scr.lineStyles.lineStyles = new LINESTYLE[1];
+                scr.lineStyles.lineStyles[0] = (LINESTYLE) lineStyle;
             }
 
-            scr.lineStyles.lineStyles[0] = lineStyle;
             scr.lineStyle = 1;
         } else {
             scr.lineStyles.lineStyles = new LINESTYLE[0];
+            scr.lineStyles.lineStyles2 = new LINESTYLE2[0];
             scr.lineStyle = 0;
         }
 

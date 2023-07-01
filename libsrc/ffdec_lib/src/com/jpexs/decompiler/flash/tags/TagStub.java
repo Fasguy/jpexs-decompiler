@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.tags;
 
 import com.jpexs.decompiler.flash.SWF;
@@ -20,6 +21,7 @@ import com.jpexs.decompiler.flash.SWFInputStream;
 import com.jpexs.decompiler.flash.SWFOutputStream;
 import com.jpexs.helpers.ByteArrayRange;
 import java.io.IOException;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -65,5 +67,14 @@ public class TagStub extends Tag {
 
     public SWFInputStream getDataStream() {
         return dataStream;
+    }
+
+    @Override
+    public String toString() {
+        Map<Integer, TagTypeInfo> classes = Tag.getKnownClasses();
+        if (classes.containsKey(id)) {
+            return tagName + " - " + classes.get(id).getName();
+        }
+        return tagName + " [ID = " + id + "]";
     }
 }

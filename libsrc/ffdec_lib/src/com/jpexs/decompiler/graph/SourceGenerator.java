@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -41,7 +41,7 @@ import java.util.List;
  * @author JPEXS
  */
 public interface SourceGenerator {
-
+    
     public List<GraphSourceItem> generate(SourceGeneratorLocalData localData, PushItem item) throws CompilationException;
 
     public List<GraphSourceItem> generate(SourceGeneratorLocalData localData, PopItem item) throws CompilationException;

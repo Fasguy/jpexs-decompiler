@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -53,10 +53,10 @@ public abstract class UnaryOpItem extends GraphTargetItem implements UnaryOp {
         if (value != null) {
             if (value.getPrecedence() > precedence) {
                 writer.append("(");
-                value.toString(writer, localData, coerce);
+                value.toString(writer, localData, ""); //coerce);
                 writer.append(")");
             } else {
-                value.toString(writer, localData, coerce);
+                value.toString(writer, localData, ""); //coerce);
             }
         } else {
             writer.append("null");

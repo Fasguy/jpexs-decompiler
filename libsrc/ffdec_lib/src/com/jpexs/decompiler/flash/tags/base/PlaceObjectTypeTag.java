@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -94,16 +94,26 @@ public abstract class PlaceObjectTypeTag extends Tag implements CharacterIdTag {
     @Override
     public String getName() {
         String result = super.getName();
-        String exportName = swf.getExportName(getCharacterId());
+        int charId = getCharacterId();
+        String charClassName = getClassName();
+        String exportName = null;
+        if (charId == -1 && charClassName != null) {
+            exportName = charClassName;
+            CharacterTag ch = swf.getCharacterByClass(charClassName);
+            if (ch != null) {
+                charId = ch.getCharacterId();                
+            }                        
+        } else {
+            exportName = swf.getExportName(charId);
+        }        
         String nameAppend = "";
         if (exportName != null) {
             nameAppend = ": " + exportName;
         }
 
-        if (getCharacterId() != -1) {
-            result += " (" + getCharacterId() + nameAppend + ")";
-        }
-        if (!nameAppend.isEmpty()) {
+        if (charId != -1) {
+            result += " (" + charId + nameAppend + ")";
+        } else if (!nameAppend.isEmpty()) {
             result += " (" + nameAppend + ")";
         }
 

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -22,15 +22,15 @@ import com.jpexs.decompiler.flash.SWF;
 import static com.jpexs.decompiler.flash.action.Action.adr2ip;
 import com.jpexs.decompiler.flash.action.model.DirectValueActionItem;
 import com.jpexs.decompiler.flash.action.model.EnumerateActionItem;
+import com.jpexs.decompiler.flash.action.model.EnumeratedValueActionItem;
 import com.jpexs.decompiler.flash.action.model.FunctionActionItem;
-import com.jpexs.decompiler.flash.action.model.GetMemberActionItem;
 import com.jpexs.decompiler.flash.action.model.GetPropertyActionItem;
-import com.jpexs.decompiler.flash.action.model.GetVariableActionItem;
 import com.jpexs.decompiler.flash.action.model.SetTarget2ActionItem;
 import com.jpexs.decompiler.flash.action.model.SetTargetActionItem;
 import com.jpexs.decompiler.flash.action.model.SetTypeActionItem;
 import com.jpexs.decompiler.flash.action.model.StoreRegisterActionItem;
 import com.jpexs.decompiler.flash.action.model.TemporaryRegister;
+import com.jpexs.decompiler.flash.action.model.TemporaryRegisterMark;
 import com.jpexs.decompiler.flash.action.model.clauses.ForInActionItem;
 import com.jpexs.decompiler.flash.action.model.clauses.TellTargetActionItem;
 import com.jpexs.decompiler.flash.action.model.operations.NeqActionItem;
@@ -90,10 +90,15 @@ public class ActionGraph extends Graph {
 
     private boolean insideFunction;
 
-    public ActionGraph(String path, boolean insideDoInitAction, boolean insideFunction, List<Action> code, HashMap<Integer, String> registerNames, HashMap<String, GraphTargetItem> variables, HashMap<String, GraphTargetItem> functions, int version) {
-        super(new ActionGraphSource(path, insideDoInitAction, code, version, registerNames, variables, functions), new ArrayList<>());
+    public ActionGraph(String path, boolean insideDoInitAction, boolean insideFunction, List<Action> code, HashMap<Integer, String> registerNames, HashMap<String, GraphTargetItem> variables, HashMap<String, GraphTargetItem> functions, int version, String charset) {
+        super(new ActionGraphSource(path, insideDoInitAction, code, version, registerNames, variables, functions, charset), new ArrayList<>());
         this.insideDoInitAction = insideDoInitAction;
         this.insideFunction = insideFunction;
+    }
+
+    @Override
+    public ActionGraphSource getGraphCode() {
+        return (ActionGraphSource) code;
     }
 
     @Override
@@ -109,16 +114,16 @@ public class ActionGraph extends Graph {
                 List<ActionList> outs = new ArrayList<>();
                 for (long size : cnt.getContainerSizes()) {
                     if (size == 0) {
-                        outs.add(new ActionList());
+                        outs.add(new ActionList(((ActionGraphSource) code).getCharset()));
                         continue;
                     }
-                    outs.add(new ActionList(alist.subList(adr2ip(alist, endAddr), adr2ip(alist, endAddr + size))));
+                    outs.add(new ActionList(alist.subList(adr2ip(alist, endAddr), adr2ip(alist, endAddr + size)), getGraphCode().getCharset()));
                     endAddr += size;
                 }
 
                 for (ActionList al : outs) {
                     subgraphs.put("loc" + Helper.formatAddress(code.pos2adr(ip)) + ": function " + functionName,
-                            new ActionGraph("", false, false, al, new HashMap<>(), new HashMap<>(), new HashMap<>(), SWF.DEFAULT_VERSION)
+                            new ActionGraph("", false, false, al, new HashMap<>(), new HashMap<>(), new HashMap<>(), SWF.DEFAULT_VERSION, ((ActionGraphSource) getGraphCode()).getCharset())
                     );
                 }
             }
@@ -136,8 +141,8 @@ public class ActionGraph extends Graph {
 
     }
 
-    public static List<GraphTargetItem> translateViaGraph(SecondPassData secondPassData, boolean insideDoInitAction, boolean insideFunction, HashMap<Integer, String> registerNames, HashMap<String, GraphTargetItem> variables, HashMap<String, GraphTargetItem> functions, List<Action> code, int version, int staticOperation, String path) throws InterruptedException {
-        ActionGraph g = new ActionGraph(path, insideDoInitAction, insideFunction, code, registerNames, variables, functions, version);
+    public static List<GraphTargetItem> translateViaGraph(SecondPassData secondPassData, boolean insideDoInitAction, boolean insideFunction, HashMap<Integer, String> registerNames, HashMap<String, GraphTargetItem> variables, HashMap<String, GraphTargetItem> functions, List<Action> code, int version, int staticOperation, String path, String charset) throws InterruptedException {
+        ActionGraph g = new ActionGraph(path, insideDoInitAction, insideFunction, code, registerNames, variables, functions, version, charset);
         ActionLocalData localData = new ActionLocalData(secondPassData, insideDoInitAction, registerNames);
         g.init(localData);
         return g.translate(localData, staticOperation, path);
@@ -350,29 +355,65 @@ public class ActionGraph extends Graph {
                     checkedLoop = null;
                 }
             }
-            if (checkedBody != null && (!checkedBody.isEmpty()) && (checkedBody.get(0) instanceof SetTypeActionItem)) {
-                SetTypeActionItem sti = (SetTypeActionItem) checkedBody.get(0);
-                if (checkedCondition instanceof NeqActionItem) {
-                    NeqActionItem ne = (NeqActionItem) checkedCondition;
-                    if (ne.rightSide instanceof DirectValueActionItem) {
-                        DirectValueActionItem dv = (DirectValueActionItem) ne.rightSide;
-                        if (dv.value == Null.INSTANCE) {
-                            GraphTargetItem en = list.get(t - 1);
-                            if (en instanceof EnumerateActionItem) {
-                                EnumerateActionItem eti = (EnumerateActionItem) en;
-                                list.remove(t);
-                                checkedBody.remove(0);
-                                if (checkedLoop == null) {
-                                    checkedLoop = new Loop(localData.loops.size(), null, null);
-                                    checkedBody.add(new BreakItem(null, null, checkedLoop.id));
+
+            if (checkedCondition instanceof NeqActionItem) {
+                NeqActionItem ne = (NeqActionItem) checkedCondition;
+                if (ne.rightSide instanceof DirectValueActionItem) {
+                    DirectValueActionItem dv = (DirectValueActionItem) ne.rightSide;
+                    if (dv.value == Null.INSTANCE) {
+                        GraphTargetItem en = list.get(t - 1);
+                        if (en instanceof EnumerateActionItem) {
+                            EnumerateActionItem eti = (EnumerateActionItem) en;
+                            if (checkedCondition instanceof NeqActionItem) {
+                                NeqActionItem neq = (NeqActionItem) checkedCondition;
+                                if (neq.leftSide instanceof StoreRegisterActionItem) {
+                                    if (checkedBody != null && (!checkedBody.isEmpty()) && (checkedBody.get(0) instanceof SetTypeActionItem)) {
+                                        SetTypeActionItem sti = (SetTypeActionItem) checkedBody.get(0);
+
+                                        if ((sti.getValue() instanceof DirectValueActionItem) && (((DirectValueActionItem) sti.getValue()).value instanceof RegisterNumber)) {
+                                            if ((neq.rightSide instanceof DirectValueActionItem) && (((DirectValueActionItem) neq.rightSide).value instanceof Null)) {
+                                                if (neq.leftSide.value instanceof EnumeratedValueActionItem) {
+                                                    if (((StoreRegisterActionItem) neq.leftSide).register.number == ((RegisterNumber) (((DirectValueActionItem) sti.getValue()).value)).number) {
+                                                        list.remove(t);
+                                                        checkedBody.remove(0);
+                                                        if (checkedLoop == null) {
+                                                            checkedLoop = new Loop(localData.loops.size(), null, null);
+                                                            checkedBody.add(new BreakItem(null, null, checkedLoop.id));
+                                                        }
+                                                        sti.setValue(new DirectValueActionItem(Null.INSTANCE));
+                                                        list.add(t, new ForInActionItem(null, null, checkedLoop, (GraphTargetItem) sti, eti.object, checkedBody));
+                                                        //sti.getObject()
+                                                        list.remove(t - 1);
+                                                        t--;
+                                                        continue;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if (checkedBody != null) {
+                                        list.remove(t);
+                                        if (checkedLoop == null) {
+                                            checkedLoop = new Loop(localData.loops.size(), null, null);
+                                            checkedBody.add(new BreakItem(null, null, checkedLoop.id));
+                                        }                                       
+                                        list.remove(t - 1);
+                                        t--;
+                                        if (eti.object instanceof SetTypeActionItem) {
+                                            list.add(t++, eti.object);
+                                            eti.object = ((SetTypeActionItem)eti.object).getObject();
+                                        }
+                                        list.add(t, new ForInActionItem(null, null, checkedLoop, (GraphTargetItem) neq.leftSide, eti.object, checkedBody));
+                                        if (t + 1 < list.size()) {
+                                            if (list.get(t + 1) instanceof EnumeratedValueActionItem) {
+                                                list.remove(t + 1);
+                                            }
+                                        }
+                                    }
                                 }
-                                sti.setValue(new DirectValueActionItem(Null.INSTANCE));
-                                list.add(t, new ForInActionItem(null, null, checkedLoop, (GraphTargetItem) sti/*sti.getObject()*/, eti.object, checkedBody));
-                                list.remove(t - 1);
-                                t--;
                             }
                         }
-
                     }
                 }
             }
@@ -381,6 +422,51 @@ public class ActionGraph extends Graph {
         //Handle for loops at the end:
         super.finalProcess(list, level, localData, path);
 
+    }
+
+    public void makeAllCommands(List<GraphTargetItem> commands, TranslateStack stack) {
+        GraphTargetItem enumerate = null;
+        if(!commands.isEmpty() && (commands.get(commands.size()-1) instanceof EnumerateActionItem)) {
+            enumerate = commands.remove(commands.size() -1 );
+        }
+        super.makeAllCommands(commands, stack);
+        //ags.getVariables()
+        ActionGraphSource ags = (ActionGraphSource) code;
+        for (String varName : ags.getVariables().keySet()) {
+            if (varName.matches("^__register.*")) {
+                GraphTargetItem varValue = ags.getVariables().get(varName);
+                if (varValue instanceof TemporaryRegister) {
+                    TemporaryRegister tempReg = (TemporaryRegister) varValue;
+
+                    if (!tempReg.used) {
+                        if (varValue.value instanceof SetTypeActionItem) {
+                            SetTypeActionItem st = (SetTypeActionItem) varValue.value;
+                            for (int i = 0; i < commands.size(); i++) {
+                                if (commands.get(i) instanceof TemporaryRegisterMark) {
+                                    TemporaryRegisterMark trm = (TemporaryRegisterMark) commands.get(i);
+                                    if (st.getValue() instanceof StoreRegisterActionItem) {
+                                        StoreRegisterActionItem sr = (StoreRegisterActionItem) st.getValue();
+                                        if (sr.register.number == tempReg.getRegId()) {
+                                            sr.temporary = false;
+                                        }
+                                    }
+                                    if (trm.tempReg == tempReg) {
+                                        commands.set(i, (GraphTargetItem) st);
+                                        ags.getVariables().put(varName, null);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    //System.err.println(varValue.value.getClass().getSimpleName());
+                }
+            }
+        }
+
+        if (enumerate != null) {
+            commands.add(enumerate);
+        }
     }
 
     @Override

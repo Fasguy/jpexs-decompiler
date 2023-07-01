@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,12 +12,13 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.helpers;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -41,7 +42,7 @@ public class StreamSearch implements Searchable {
 
     @Override
     public Map<Long, InputStream> search(ProgressListener progListener, byte[]... data) {
-        Map<Long, InputStream> ret = new HashMap<>();
+        Map<Long, InputStream> ret = new LinkedHashMap<>();
         int maxFindLen = 0;
         for (int i = 0; i < data.length; i++) {
             if (data[i].length > maxFindLen) {
@@ -83,7 +84,7 @@ public class StreamSearch implements Searchable {
                         }
                         if (match) {
                             // todo: support > 2GB files
-                            InputStream fis = new MemoryInputStream(is.getAllRead(), (int) pos + i);
+                            InputStream fis = new MemoryInputStream(is.getAllRead(), (int) pos + i);                            
                             ret.put(pos + i, fis);
                             continue loopdata;
                         }

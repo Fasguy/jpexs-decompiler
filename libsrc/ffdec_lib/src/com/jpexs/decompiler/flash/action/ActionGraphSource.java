@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,6 +18,7 @@ package com.jpexs.decompiler.flash.action;
 
 import com.jpexs.decompiler.flash.BaseLocalData;
 import com.jpexs.decompiler.flash.exporters.modes.ScriptExportMode;
+import com.jpexs.decompiler.graph.Graph;
 import com.jpexs.decompiler.graph.GraphPart;
 import com.jpexs.decompiler.graph.GraphPartChangeException;
 import com.jpexs.decompiler.graph.GraphSource;
@@ -52,21 +53,30 @@ public class ActionGraphSource extends GraphSource {
     private final boolean insideDoInitAction;
 
     private final String path;
+    
+    private String charset;
 
     public List<Action> getActions() {
         return actions;
     }
 
-    public ActionGraphSource(String path, boolean insideDoInitAction, List<Action> actions, int version, HashMap<Integer, String> registerNames, HashMap<String, GraphTargetItem> variables, HashMap<String, GraphTargetItem> functions) {
-        this.actions = actions instanceof ActionList ? (ActionList) actions : new ActionList(actions);
+    public ActionGraphSource(String path, boolean insideDoInitAction, List<Action> actions, int version, HashMap<Integer, String> registerNames, HashMap<String, GraphTargetItem> variables, HashMap<String, GraphTargetItem> functions, String charset) {
+        this.actions = actions instanceof ActionList ? (ActionList) actions : new ActionList(actions, charset);
         this.version = version;
         this.registerNames = registerNames;
         this.variables = variables;
         this.functions = functions;
         this.insideDoInitAction = insideDoInitAction;
         this.path = path;
+        this.charset = charset;
     }
 
+    public String getCharset() {
+        return charset;
+    }
+
+    
+    
     @Override
     public Set<Long> getImportantAddresses() {
         return Action.getActionsAllRefs(actions);
@@ -100,10 +110,10 @@ public class ActionGraphSource extends GraphSource {
     }
 
     @Override
-    public List<GraphTargetItem> translatePart(GraphPart part, BaseLocalData localData, TranslateStack stack, int start, int end, int staticOperation, String path) throws InterruptedException, GraphPartChangeException {
+    public List<GraphTargetItem> translatePart(Graph graph, GraphPart part, BaseLocalData localData, TranslateStack stack, int start, int end, int staticOperation, String path) throws InterruptedException, GraphPartChangeException {
         Reference<GraphSourceItem> fi = new Reference<>(localData.lineStartInstruction);
 
-        List<GraphTargetItem> r = Action.actionsPartToTree(localData.secondPassData, this.insideDoInitAction, fi, registerNames, variables, functions, stack, actions, start, end, version, staticOperation, path);
+        List<GraphTargetItem> r = Action.actionsPartToTree((ActionGraph)graph, localData.allSwitchParts, localData.secondPassData, this.insideDoInitAction, fi, registerNames, variables, functions, stack, actions, start, end, version, staticOperation, path, charset);
         localData.lineStartInstruction = fi.getVal();
         return r;
     }

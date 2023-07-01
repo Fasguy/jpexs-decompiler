@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.exporters;
 
 import com.google.typography.font.sfntly.Font;
@@ -60,6 +61,10 @@ public class FontExporter {
 
     public List<File> exportFonts(AbortRetryIgnoreHandler handler, String outdir, ReadOnlyTagList tags, final FontExportSettings settings, EventListener evl) throws IOException, InterruptedException {
         List<File> ret = new ArrayList<>();
+        if (Thread.currentThread().isInterrupted()) {
+            return ret;
+        }
+        
         if (tags.isEmpty()) {
             return ret;
         }
@@ -96,6 +101,10 @@ public class FontExporter {
                 }, handler).run();
 
                 ret.add(file);
+
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
+                }
 
                 if (evl != null) {
                     evl.handleExportedEvent("font", currentIndex, count, t.getName());
@@ -193,7 +202,7 @@ public class FontExporter {
             char c = t.glyphToChar(i);
             SHAPE s = shapes.get(i);
             final List<FPoint[]> contours = new ArrayList<>();
-            PathExporter seb = new PathExporter(swf, s, null) {
+            PathExporter seb = new PathExporter(1, swf, s, null) {
 
                 private double transformX(double x) {
                     return Math.ceil((double) (x / divider));

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.types.annotations.parser;
 
 import com.jpexs.decompiler.flash.types.annotations.Conditional;
@@ -32,13 +33,19 @@ import java.util.Stack;
 public class ConditionEvaluator {
 
     private final String[] values;
+    private final int[] tags;
+    private final boolean revert;
 
     public ConditionEvaluator(Conditional cond) {
         values = cond.value();
+        tags = cond.tags();
+        revert = cond.revert();
     }
 
     public ConditionEvaluator(ConditionalType cond) {
         values = cond.value();
+        tags = cond.tags();
+        revert = cond.revert();
     }
 
     private void expressionRest(Map<String, Boolean> fields, Stack<Boolean> stack, ConditionLexer lex) throws IOException, AnnotationParseException {
@@ -97,7 +104,25 @@ public class ConditionEvaluator {
         }
     }
 
-    public boolean eval(Map<String, Boolean> fields) throws AnnotationParseException {
+    public boolean eval(Map<String, Boolean> fields, int parentTagId) throws AnnotationParseException {
+        boolean result;
+        if (tags.length > 0) {
+            boolean tagFound = false;
+            for (int i = 0; i < tags.length; i++) {
+                if (tags[i] == parentTagId) {
+                    tagFound = true;
+                    break;
+                }
+            }
+            if (!tagFound) {
+                result = false;
+                if (revert) {
+                    return !result;
+                }
+                return result;                
+            }
+        }
+        
         ConditionLexer lex = new ConditionLexer(new StringReader(prepareCond()));
 
         Stack<Boolean> stack = new Stack<>();
@@ -108,13 +133,21 @@ public class ConditionEvaluator {
             throw new AnnotationParseException("Invalid condition:" + prepareCond(), lex.yyline());
         }
         if (prepareCond().isEmpty()) {
-            return true;
+            result = true;
+            if (revert) {
+                return !result;
+            }
+            return result;
         }
         if (stack.size() != 1) {
             throw new AnnotationParseException("Invalid condition:" + prepareCond(), lex.yyline());
         }
 
-        return stack.pop();
+        result = stack.pop();
+        if (revert) {
+            return !result;
+        }
+        return result;
     }
 
     private String prepareCond() {

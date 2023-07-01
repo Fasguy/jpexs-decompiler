@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -363,11 +363,12 @@ public class Multiname {
         } else {
             String name = abc.constants.getString(name_index);
 
-            if (namespace_index > 0 && getNamespace(abc.constants).kind == Namespace.KIND_NAMESPACE) {
+            int nskind = namespace_index <= 0 ? -1 : getNamespace(abc.constants).kind;
+            if (nskind == Namespace.KIND_NAMESPACE || nskind == Namespace.KIND_PACKAGE_INTERNAL) {
                 DottedChain dc = abc.findCustomNs(namespace_index);
                 String nsname = dc != null ? dc.getLast() : null;
-
-                if (nsname != null) {
+                
+                if (nsname != null && !"AS3".equals(nsname)) {
                     String identifier = dontDeobfuscate ? nsname : IdentifiersDeobfuscation.printIdentifier(true, nsname);
                     if (identifier != null && !identifier.isEmpty()) {
                         return nsname + "::" + name;
@@ -405,6 +406,10 @@ public class Multiname {
     }
 
     public DottedChain getNameWithNamespace(AVM2ConstantPool constants, boolean withSuffix) {
+        DottedChain cached = constants.getCachedMultinameWithNamespace(this);
+        if (cached != null) {
+            return cached;
+        }
         Namespace ns = getNamespace(constants);
         if (ns == null) {
             NamespaceSet nss = getNamespaceSet(constants);
@@ -415,10 +420,14 @@ public class Multiname {
             }
         }
         String name = getName(constants, null, true, false);
+        DottedChain ret;
         if (ns != null) {
-            return ns.getName(constants).add(name, withSuffix ? getNamespaceSuffix() : "");
+            ret = ns.getName(constants).add(name, withSuffix ? getNamespaceSuffix() : "");
+        } else {
+            ret = new DottedChain(new String[]{name}, new String[]{withSuffix ? getNamespaceSuffix() : ""});        
         }
-        return new DottedChain(new String[]{name}, withSuffix ? getNamespaceSuffix() : "");
+        constants.cacheMultinameWithNamespace(this, ret);
+        return ret;
     }
 
     public Namespace getNamespace(AVM2ConstantPool constants) {

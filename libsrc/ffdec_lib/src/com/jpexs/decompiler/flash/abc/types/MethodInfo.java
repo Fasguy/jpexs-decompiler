@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.abc.types;
 
 import com.jpexs.decompiler.flash.IdentifiersDeobfuscation;
@@ -41,7 +42,7 @@ public class MethodInfo {
     public boolean deleted;
 
     public void delete(ABC abc, boolean d) {
-        this.deleted = true;
+        this.deleted = d;
         MethodBody body = abc.findBody(this);
         if (body != null) {
             for (AVM2Instruction ins : body.getCode().code) {
@@ -59,7 +60,7 @@ public class MethodInfo {
     public int ret_type;
 
     public int name_index; //0=no name
-    // 1=need_arguments, 2=need_activation, 4=need_rest 8=has_optional 16=ignore_rest, 32=explicit, 64=setsdxns, 128=has_paramnames
+    // 1=need_arguments, 2=need_activation, 4=need_rest 8=has_optional 16=ignore_rest, 32=native, 64=setsdxns, 128=has_paramnames
 
     public static int FLAG_NEED_ARGUMENTS = 1;
 
@@ -71,7 +72,7 @@ public class MethodInfo {
 
     public static int FLAG_IGNORE_REST = 16;
 
-    public static int FLAG_EXPLICIT = 32;
+    public static int FLAG_NATIVE = 32;
 
     public static int FLAG_SETSDXNS = 64;
 
@@ -87,8 +88,8 @@ public class MethodInfo {
         flags |= FLAG_IGNORE_REST;
     }
 
-    public void setFlagExplicit() {
-        flags |= FLAG_EXPLICIT;
+    public void setFlagNative() {
+        flags |= FLAG_NATIVE;
     }
 
     public void setFlagNeed_Arguments() {
@@ -205,8 +206,8 @@ public class MethodInfo {
         return (flags & FLAG_IGNORE_REST) == FLAG_IGNORE_REST;
     }
 
-    public boolean flagExplicit() {
-        return (flags & FLAG_EXPLICIT) == FLAG_EXPLICIT;
+    public boolean flagNative() {
+        return (flags & FLAG_NATIVE) == FLAG_NATIVE;
     }
 
     public boolean flagSetsdxns() {
@@ -341,7 +342,7 @@ public class MethodInfo {
             } else {
                 writer.hilightSpecial(constants.getMultiname(param_types[i]).getName(constants, fullyQualifiedNames, false, true), HighlightSpecialType.PARAM, i);
             }
-            if (optional != null) {
+            if (optional != null && flagHas_optional()) {
                 if (i >= param_types.length - optional.length) {
                     int optionalIndex = i - (param_types.length - optional.length);
                     writer.appendNoHilight(" = ");
@@ -397,5 +398,80 @@ public class MethodInfo {
             }
         }
         return rname;
+    }
+    
+    public void toASMSource(AVM2ConstantPool constants, GraphTextWriter writer) {
+        writer.appendNoHilight("name ");
+        writer.hilightSpecial(name_index == 0 ? "null" : "\"" + Helper.escapeActionScriptString(getName(constants)) + "\"", HighlightSpecialType.METHOD_NAME);
+        writer.newLine();
+        if (flagNative()) {
+            writer.appendNoHilight("flag ");
+            writer.hilightSpecial("NATIVE", HighlightSpecialType.FLAG_NATIVE);
+            writer.newLine();
+        }
+        if (flagHas_optional()) {
+            writer.appendNoHilight("flag ");
+            writer.hilightSpecial("HAS_OPTIONAL", HighlightSpecialType.FLAG_HAS_OPTIONAL);
+            writer.newLine();
+        }
+        if (flagHas_paramnames()) {
+            writer.appendNoHilight("flag ");
+            writer.hilightSpecial("HAS_PARAM_NAMES", HighlightSpecialType.FLAG_HAS_PARAM_NAMES);
+            writer.newLine();
+        }
+        if (flagIgnore_rest()) {
+            writer.appendNoHilight("flag ");
+            writer.hilightSpecial("IGNORE_REST", HighlightSpecialType.FLAG_IGNORE_REST);
+            writer.newLine();
+        }
+        if (flagNeed_activation()) {
+            writer.appendNoHilight("flag ");
+            writer.hilightSpecial("NEED_ACTIVATION", HighlightSpecialType.FLAG_NEED_ACTIVATION);
+            writer.newLine();
+        }
+        if (flagNeed_arguments()) {
+            writer.appendNoHilight("flag ");
+            writer.hilightSpecial("NEED_ARGUMENTS", HighlightSpecialType.FLAG_NEED_ARGUMENTS);
+            writer.newLine();
+        }
+        if (flagNeed_rest()) {
+            writer.appendNoHilight("flag ");
+            writer.hilightSpecial("NEED_REST", HighlightSpecialType.FLAG_NEED_REST);
+            writer.newLine();
+        }
+        if (flagSetsdxns()) {
+            writer.appendNoHilight("flag ");
+            writer.hilightSpecial("SET_DXNS", HighlightSpecialType.FLAG_SET_DXNS);
+            writer.newLine();
+        }
+        for (int p = 0; p < param_types.length; p++) {
+            writer.appendNoHilight("param ");
+            writer.hilightSpecial(constants.multinameToString(param_types[p]), HighlightSpecialType.PARAM, p);
+            writer.newLine();
+        }
+        if (flagHas_paramnames()) {
+            for (int n : paramNames) {
+                writer.appendNoHilight("paramname ");
+                if (n == 0) {
+                    writer.appendNoHilight("null");
+                } else {
+                    writer.appendNoHilight("\"");
+                    writer.appendNoHilight(constants.getString(n));
+                    writer.appendNoHilight("\"");
+                }
+                writer.newLine();
+            }
+        }
+        if (flagHas_optional()) {
+            for (int i = 0; i < optional.length; i++) {
+                ValueKind vk = optional[i];
+                writer.appendNoHilight("optional ");
+                writer.hilightSpecial(vk.toASMString(constants), HighlightSpecialType.OPTIONAL, i);
+                writer.newLine();
+            }
+        }
+        writer.appendNoHilight("returns ");
+        writer.hilightSpecial(constants.multinameToString(ret_type), HighlightSpecialType.RETURNS);
+        writer.newLine();
     }
 }

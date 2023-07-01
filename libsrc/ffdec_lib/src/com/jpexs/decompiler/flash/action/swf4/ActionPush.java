@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.action.swf4;
 
 import com.jpexs.decompiler.flash.BaseLocalData;
@@ -24,12 +25,14 @@ import com.jpexs.decompiler.flash.action.ActionList;
 import com.jpexs.decompiler.flash.action.LocalDataArea;
 import com.jpexs.decompiler.flash.action.model.DirectValueActionItem;
 import com.jpexs.decompiler.flash.action.model.TemporaryRegister;
+import com.jpexs.decompiler.flash.action.model.TemporaryRegisterMark;
 import com.jpexs.decompiler.flash.action.model.UnresolvedConstantActionItem;
 import com.jpexs.decompiler.flash.action.parser.ActionParseException;
 import com.jpexs.decompiler.flash.action.parser.pcode.ASMParsedSymbol;
 import com.jpexs.decompiler.flash.action.parser.pcode.FlasmLexer;
 import com.jpexs.decompiler.flash.configuration.Configuration;
 import com.jpexs.decompiler.flash.dumpview.DumpInfo;
+import com.jpexs.decompiler.flash.ecma.EcmaScript;
 import com.jpexs.decompiler.flash.ecma.Null;
 import com.jpexs.decompiler.flash.ecma.Undefined;
 import com.jpexs.decompiler.flash.exporters.modes.ScriptExportMode;
@@ -71,7 +74,7 @@ public class ActionPush extends Action {
     public static final int MAX_CONSTANT_INDEX_TYPE8 = 255;
 
     public ActionPush(int actionLength, SWFInputStream sis, int version) throws IOException {
-        super(0x96, actionLength);
+        super(0x96, actionLength, sis.getCharset());
         int type;
         values = new ArrayList<>();
         DumpInfo di = sis.dumpInfo;
@@ -126,7 +129,11 @@ public class ActionPush extends Action {
 
     @Override
     protected void getContentBytes(SWFOutputStream sos) throws IOException {
-        for (Object o : values) {
+        List<Object> vals = values;
+        if (replacement != null) {
+            vals = replacement;
+        }
+        for (Object o : vals) {
             if (o instanceof String) {
                 sos.writeUI8(0);
                 sos.writeString((String) o);
@@ -177,8 +184,12 @@ public class ActionPush extends Action {
      */
     @Override
     protected int getContentBytesLength() {
+        List<Object> vals = values;
+        if (replacement != null) {
+            vals = replacement;
+        }
         int res = 0;
-        for (Object o : values) {
+        for (Object o : vals) {
             if (o instanceof String) {
                 res += Utf8Helper.getBytesLength((String) o) + 2;
             } else if (o instanceof Float) {
@@ -233,22 +244,22 @@ public class ActionPush extends Action {
         return true;
     }
 
-    public ActionPush(Object value) {
-        super(0x96, 0);
+    public ActionPush(Object value, String charset) {
+        super(0x96, 0, charset);
         this.values = new ArrayList<>();
         this.values.add(value);
         updateLength();
     }
 
-    public ActionPush(Object[] values) {
-        super(0x96, 0);
+    public ActionPush(Object[] values, String charset) {
+        super(0x96, 0, charset);
         this.values = new ArrayList<>();
         this.values.addAll(Arrays.asList(values));
         updateLength();
     }
 
-    public ActionPush(FlasmLexer lexer, List<String> constantPool) throws IOException, ActionParseException {
-        super(0x96, 0);
+    public ActionPush(FlasmLexer lexer, List<String> constantPool, String charset) throws IOException, ActionParseException {
+        super(0x96, 0, charset);
         this.constantPool = constantPool;
         values = new ArrayList<>();
         int count = 0;
@@ -336,6 +347,8 @@ public class ActionPush extends Action {
             ret = "\"" + Helper.escapeActionScriptString((String) value) + "\"";
         } else if (value instanceof RegisterNumber) {
             ret = ((RegisterNumber) value).toStringNoName();
+        } else if ((value instanceof Float)||(value instanceof Double)) {
+            ret = EcmaScript.toString(value);
         } else {
             ret = value.toString();
         }
@@ -400,36 +413,7 @@ public class ActionPush extends Action {
                 } else {
                     o = constantPool.get(((ConstantIndex) o).index);
                 }
-            }
-            /*if (o instanceof RegisterNumber) {
-             if (regNames.containsKey(((RegisterNumber) o).number)) {
-             ((RegisterNumber) o).name = regNames.get(((RegisterNumber) o).number);
-             } else if (output.size() >= 2) { //chained assignments:, ignore for class prototype assignment
-             GraphTargetItem last = output.get(output.size() - 1);
-             GraphTargetItem prev = output.get(output.size() - 2);
-             if (last instanceof SetTypeActionItem) {
-             if (prev instanceof StoreRegisterActionItem) {
-             StoreRegisterActionItem str = (StoreRegisterActionItem) prev;
-             if (str.register.number == ((RegisterNumber) o).number) {
-             SetTypeActionItem stt = (SetTypeActionItem) last;
-             stt.setTempRegister(((RegisterNumber) o).number);
-             if ((stt.getValue() instanceof IncrementActionItem) && (((IncrementActionItem) stt.getValue()).object.equals(stt.getObject()))) {
-             stack.push(new PreIncrementActionItem(this, lineStartAction, stt.getObject()));
-             } else if ((stt.getValue() instanceof DecrementActionItem) && (((DecrementActionItem) stt.getValue()).object.equals(stt.getObject()))) {
-             stack.push(new PreDecrementActionItem(this, lineStartAction, stt.getObject()));
-             } else {
-             //stack.push(last);
-             continue;
-             }
-             output.remove(output.size() - 1);
-             output.remove(output.size() - 1);
-             pos++;
-             continue;
-             }
-             }
-             }
-             }
-             }*/
+            }           
             if (o instanceof Boolean) {
                 Boolean b = (Boolean) o;
                 if (b) {
@@ -447,6 +431,16 @@ public class ActionPush extends Action {
                     }
                 }
                 if (dvt.computedRegValue instanceof TemporaryRegister) {
+                    ((TemporaryRegister)dvt.computedRegValue).used = true;
+                    for(int i = 0; i < output.size(); i++) {
+                        if(output.get(i) instanceof TemporaryRegisterMark) {
+                            TemporaryRegisterMark trm = (TemporaryRegisterMark)output.get(i);
+                            if(trm.tempReg == dvt.computedRegValue) {
+                                output.remove(i);
+                                break;
+                            }
+                        }
+                    }
                     stack.push(new TemporaryRegister(((RegisterNumber) o).number, ((TemporaryRegister) dvt.computedRegValue).value));
                 } else {
                     stack.push(dvt);

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -44,6 +44,7 @@ import com.jpexs.decompiler.graph.model.TrueItem;
 import com.jpexs.helpers.Reference;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -121,10 +122,10 @@ public abstract class GraphTargetItem implements Serializable, Cloneable {
             return new StringAVM2Item(null, null, (String) r);
         }
         if (r instanceof Long) {
-            return new IntegerValueAVM2Item(null, null, (Long) r);
+            return new FloatValueAVM2Item(null, null, (double) (Long) r);
         }
         if (r instanceof Integer) {
-            return new IntegerValueAVM2Item(null, null, (long) (int) (Integer) r);
+            return new IntegerValueAVM2Item(null, null, (Integer) r);
         }
 
         if (r instanceof Double) {
@@ -332,10 +333,23 @@ public abstract class GraphTargetItem implements Serializable, Cloneable {
 
     public GraphTextWriter appendTry(GraphTextWriter writer, LocalData localData, String implicitCoerce) throws InterruptedException {
         GraphTargetItem t = this;
-        if (!implicitCoerce.isEmpty()) {    //if implicit coerce equals explicit
-            if (t instanceof ConvertAVM2Item) {
+        if (!implicitCoerce.isEmpty()) {    //if implicit oerce equals explicit
+            /*if (t instanceof ConvertAVM2Item) {
                 if (implicitCoerce.equals((((ConvertAVM2Item) t).type.toString()))) {
                     t = t.value;
+                }
+            }*/
+            if (localData.abc != null) { //its AS3
+                List<String> numberTypes = Arrays.asList("int", "uint", "Number");
+                String returnTypeStr = t.returnType().toString();
+                
+                //To avoid Error: Implicit coercion of a value of type XXX to an unrelated type YYY
+                if (!t.returnType().equals(TypeItem.UNBOUNDED) &&
+                        !implicitCoerce.equals(returnTypeStr) &&
+                        !(numberTypes.contains(implicitCoerce) && numberTypes.contains(returnTypeStr)) &&
+                        !(implicitCoerce.equals("Boolean") && !returnTypeStr.equals("Function"))
+                        ) {
+                    t = new ConvertAVM2Item(null, null, t, new TypeItem(implicitCoerce));
                 }
             }
         }

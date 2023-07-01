@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,9 +12,11 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.tags;
 
+import com.jpexs.decompiler.flash.SWF;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,8 +28,17 @@ import java.util.Map;
  */
 public class TagInfo {
 
+    private SWF swf;            
     private final Map<String, List<TagInfoItem>> infos = new LinkedHashMap<>();
 
+    public TagInfo(SWF swf) {
+        this.swf = swf;
+    }
+
+    public SWF getSwf() {
+        return swf;
+    }        
+    
     public void addInfo(String categoryName, String name, Object value) {
         categoryName = "general"; // temporary add everything to general catagory
         List<TagInfoItem> category = infos.get(categoryName);

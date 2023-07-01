@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,9 +12,11 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.tags.gfx;
 
+import com.jpexs.decompiler.flash.SWF;
 import com.jpexs.decompiler.flash.SWFInputStream;
 import com.jpexs.decompiler.flash.SWFOutputStream;
 import com.jpexs.decompiler.flash.tags.Tag;
@@ -41,7 +43,7 @@ public class ExporterInfo extends Tag {
 
     public int bitmapFormat;
 
-    public byte[] prefix;
+    public String prefix;
 
     public String swfName;
 
@@ -70,8 +72,7 @@ public class ExporterInfo extends Tag {
             sos.writeUI32(flags);
         }
         sos.writeUI16(bitmapFormat);
-        sos.writeUI8(prefix.length);
-        sos.write(prefix);
+        sos.writeNetString(prefix);
         sos.writeNetString(swfName);
         if (codeOffsets != null) {
             sos.writeUI16(codeOffsets.size());
@@ -93,6 +94,14 @@ public class ExporterInfo extends Tag {
         readData(sis, data, 0, false, false, false);
     }
 
+    public ExporterInfo(SWF swf) {
+        super(swf, ID, NAME, null);
+        prefix = "";
+        swfName = "";
+    }
+    
+    
+
     @Override
     public final void readData(SWFInputStream sis, ByteArrayRange data, int level, boolean parallel, boolean skipUnusualTags, boolean lazy) throws IOException {
         this.version = sis.readUI16("version");
@@ -100,8 +109,7 @@ public class ExporterInfo extends Tag {
             flags = sis.readUI32("flags");
         }
         bitmapFormat = sis.readUI16("bitmapFormat");
-        int prefixLen = sis.readUI8("prefixLen");
-        prefix = sis.readBytesEx(prefixLen, "prefix");
+        prefix = sis.readNetString("prefix");
         swfName = sis.readNetString("swfName");
         if (sis.available() > 0) // (version >= 0x401) //?
         {

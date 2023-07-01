@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -116,10 +116,10 @@ public abstract class MorphShapeTag extends DrawableTag {
     }
 
     @Override
-    public void getNeededCharacters(Set<Integer> needed) {
-        morphFillStyles.getNeededCharacters(needed);
-        startEdges.getNeededCharacters(needed);
-        endEdges.getNeededCharacters(needed);
+    public void getNeededCharacters(Set<Integer> needed, SWF swf) {
+        morphFillStyles.getNeededCharacters(needed, swf);
+        startEdges.getNeededCharacters(needed, swf);
+        endEdges.getNeededCharacters(needed, swf);
     }
 
     @Override
@@ -230,8 +230,8 @@ public abstract class MorphShapeTag extends DrawableTag {
                 }
                 StyleChangeRecord scr = scr1.clone();
                 if (scr1.stateMoveTo || scr2.stateMoveTo) {
-                    scr.moveDeltaX = startPosX + (endPosX - startPosX) * ratio / MAX_RATIO;
-                    scr.moveDeltaY = startPosY + (endPosY - startPosY) * ratio / MAX_RATIO;
+                    scr.moveDeltaX = startPosX + (int)Math.round((endPosX - startPosX) * ratio / (double)MAX_RATIO);
+                    scr.moveDeltaY = startPosY + (int)Math.round((endPosY - startPosY) * ratio / (double)MAX_RATIO);
                     scr.stateMoveTo = scr.moveDeltaX != posX || scr.moveDeltaY != posY;
                 }
                 finalRecords.add(scr);
@@ -264,10 +264,10 @@ public abstract class MorphShapeTag extends DrawableTag {
                     continue;
                 }
                 CurvedEdgeRecord cer = new CurvedEdgeRecord();
-                cer.controlDeltaX = cer1.controlDeltaX + (cer2.controlDeltaX - cer1.controlDeltaX) * ratio / MAX_RATIO;
-                cer.controlDeltaY = cer1.controlDeltaY + (cer2.controlDeltaY - cer1.controlDeltaY) * ratio / MAX_RATIO;
-                cer.anchorDeltaX = cer1.anchorDeltaX + (cer2.anchorDeltaX - cer1.anchorDeltaX) * ratio / MAX_RATIO;
-                cer.anchorDeltaY = cer1.anchorDeltaY + (cer2.anchorDeltaY - cer1.anchorDeltaY) * ratio / MAX_RATIO;
+                cer.controlDeltaX = cer1.controlDeltaX + (int)Math.round((cer2.controlDeltaX - cer1.controlDeltaX) * ratio / (double)MAX_RATIO);
+                cer.controlDeltaY = cer1.controlDeltaY + (int)Math.round((cer2.controlDeltaY - cer1.controlDeltaY) * ratio / (double)MAX_RATIO);
+                cer.anchorDeltaX = cer1.anchorDeltaX + (int)Math.round((cer2.anchorDeltaX - cer1.anchorDeltaX) * ratio / (double)MAX_RATIO);
+                cer.anchorDeltaY = cer1.anchorDeltaY + (int)Math.round((cer2.anchorDeltaY - cer1.anchorDeltaY) * ratio / (double)MAX_RATIO);
                 startPosX += cer1.controlDeltaX + cer1.anchorDeltaX;
                 startPosY += cer1.controlDeltaY + cer1.anchorDeltaY;
                 endPosX += cer2.controlDeltaX + cer2.anchorDeltaX;
@@ -290,8 +290,8 @@ public abstract class MorphShapeTag extends DrawableTag {
                 StraightEdgeRecord ser = new StraightEdgeRecord();
                 ser.generalLineFlag = true;
                 ser.vertLineFlag = false;
-                ser.deltaX = ser1.deltaX + (ser2.deltaX - ser1.deltaX) * ratio / MAX_RATIO;
-                ser.deltaY = ser1.deltaY + (ser2.deltaY - ser1.deltaY) * ratio / MAX_RATIO;
+                ser.deltaX = ser1.deltaX + (int)Math.round((ser2.deltaX - ser1.deltaX) * ratio / (double)MAX_RATIO);
+                ser.deltaY = ser1.deltaY + (int)Math.round((ser2.deltaY - ser1.deltaY) * ratio / (double)MAX_RATIO);
                 startPosX += ser1.deltaX;
                 startPosY += ser1.deltaY;
                 endPosX += ser2.deltaX;
@@ -307,20 +307,20 @@ public abstract class MorphShapeTag extends DrawableTag {
         shape.shapeRecords = finalRecords;
         return shape;
     }
-
+    
     @Override
     public int getUsedParameters() {
         return PARAMETER_RATIO;
     }
 
     @Override
-    public void toImage(int frame, int time, int ratio, RenderContext renderContext, SerializableImage image, SerializableImage fullImage, boolean isClip, Matrix transformation, Matrix strokeTransformation, Matrix absoluteTransformation, Matrix fullTransformation, ColorTransform colorTransform, double unzoom, boolean sameImage, ExportRectangle viewRect, boolean scaleStrokes, int drawMode) {
+    public void toImage(int frame, int time, int ratio, RenderContext renderContext, SerializableImage image, SerializableImage fullImage, boolean isClip, Matrix transformation, Matrix strokeTransformation, Matrix absoluteTransformation, Matrix fullTransformation, ColorTransform colorTransform, double unzoom, boolean sameImage, ExportRectangle viewRect, boolean scaleStrokes, int drawMode, int blendMode, boolean canUseSmoothing) {
         SHAPEWITHSTYLE shape = getShapeAtRatio(ratio);
         // morphShape using shapeNum=3, morphShape2 using shapeNum=4
         // todo: Currently the generated image is not cached, because the cache
         // key contains the hashCode of the finalRecord object, and it is always
         // recreated
-        BitmapExporter.export(swf, shape, null, image, transformation, strokeTransformation, colorTransform, scaleStrokes);
+        BitmapExporter.export(getShapeNum() == 2 ? 4 : 1, swf, shape, null, image, unzoom, transformation, strokeTransformation, colorTransform, scaleStrokes, canUseSmoothing);
     }
 
     @Override
@@ -328,11 +328,11 @@ public abstract class MorphShapeTag extends DrawableTag {
         if (ratio == -2) {
             SHAPEWITHSTYLE beginShapes = getShapeAtRatio(0);
             SHAPEWITHSTYLE endShapes = getShapeAtRatio(65535);
-            SVGMorphShapeExporter shapeExporter = new SVGMorphShapeExporter(swf, beginShapes, endShapes, getCharacterId(), exporter, null, colorTransform, 1);
+            SVGMorphShapeExporter shapeExporter = new SVGMorphShapeExporter(getShapeNum(), swf, beginShapes, endShapes, getCharacterId(), exporter, null, colorTransform, 1);
             shapeExporter.export();
         } else {
             SHAPEWITHSTYLE shapes = getShapeAtRatio(ratio);
-            SVGShapeExporter shapeExporter = new SVGShapeExporter(swf, shapes, getCharacterId(), exporter, null, colorTransform, 1);
+            SVGShapeExporter shapeExporter = new SVGShapeExporter(getShapeNum() == 2 ? 4 : 1, swf, shapes, getCharacterId(), exporter, null, colorTransform, 1);
             shapeExporter.export();
         }
     }
@@ -349,14 +349,27 @@ public abstract class MorphShapeTag extends DrawableTag {
     }
 
     @Override
-    public Shape getOutline(int frame, int time, int ratio, RenderContext renderContext, Matrix transformation, boolean stroked) {
-        return transformation.toTransform().createTransformedShape(getShapeAtRatio(ratio).getOutline(swf, stroked));
+    public Shape getOutline(boolean fast, int frame, int time, int ratio, RenderContext renderContext, Matrix transformation, boolean stroked, ExportRectangle viewRect, double unzoom) {
+        return transformation.toTransform().createTransformedShape(getShapeAtRatio(ratio).getOutline(fast, getShapeNum() == 2 ? 4 : 1, swf, stroked));
     }
 
     @Override
     public void toHtmlCanvas(StringBuilder result, double unitDivisor) {
-        CanvasMorphShapeExporter cmse = new CanvasMorphShapeExporter(swf, getShapeAtRatio(0), getShapeAtRatio(MAX_RATIO), null, unitDivisor, 0, 0);
+        CanvasMorphShapeExporter cmse = new CanvasMorphShapeExporter(getShapeNum(), swf, getShapeAtRatio(0), getShapeAtRatio(MAX_RATIO), null, unitDivisor, 0, 0);
         cmse.export();
         result.append(cmse.getShapeData());
+    }
+    
+    public void updateStartBounds() {
+        startBounds = SHAPERECORD.getBounds(startEdges.shapeRecords, morphLineStyles.getStartLineStyles(getShapeNum()), getShapeNum() == 2 ? 4 : 3, false);
+    }
+    
+    public void updateEndBounds() {
+        startBounds = SHAPERECORD.getBounds(endEdges.shapeRecords, morphLineStyles.getEndLineStyles(getShapeNum()), getShapeNum() == 2 ? 4 : 3, false);
+    }
+    
+    public void updateBounds() {
+        updateStartBounds();
+        updateEndBounds();
     }
 }

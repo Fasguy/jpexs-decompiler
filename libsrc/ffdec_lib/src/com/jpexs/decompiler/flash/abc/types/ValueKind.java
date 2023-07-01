@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -17,6 +17,7 @@
 package com.jpexs.decompiler.flash.abc.types;
 
 import com.jpexs.decompiler.flash.abc.avm2.AVM2ConstantPool;
+import com.jpexs.decompiler.flash.ecma.EcmaScript;
 import com.jpexs.helpers.Helper;
 
 /**
@@ -131,13 +132,13 @@ public class ValueKind {
         String ret = "?";
         switch (value_kind) {
             case CONSTANT_Int:
-                ret = "" + constants.getInt(value_index);
+                ret = EcmaScript.toString(constants.getInt(value_index));
                 break;
             case CONSTANT_UInt:
-                ret = "" + constants.getUInt(value_index);
+                ret = EcmaScript.toString(constants.getUInt(value_index));
                 break;
             case CONSTANT_Double:
-                ret = "" + constants.getDouble(value_index);
+                ret = EcmaScript.toString(constants.getDouble(value_index));
                 break;
             case CONSTANT_DecimalOrFloat:
                 ret = "" + constants.getDecimal(value_index);
@@ -157,7 +158,7 @@ public class ValueKind {
             case CONSTANT_Undefined:
                 ret = "undefined";
                 break;
-            case CONSTANT_Namespace:
+            case CONSTANT_Namespace:                
             case CONSTANT_PackageInternalNs:
             case CONSTANT_ProtectedNamespace:
             case CONSTANT_ExplicitNamespace:
@@ -179,7 +180,7 @@ public class ValueKind {
                 ret = "UInteger(" + constants.getUInt(value_index) + ")";
                 break;
             case CONSTANT_Double:
-                ret = "Double(" + constants.getDouble(value_index) + ")";
+                ret = "Double(" + EcmaScript.toString(constants.getDouble(value_index)) + ")";
                 break;
             case CONSTANT_DecimalOrFloat:
                 ret = "Decimal(" + constants.getDecimal(value_index) + ")";
@@ -199,13 +200,34 @@ public class ValueKind {
             case CONSTANT_Undefined:
                 ret = "Undefined()"; //"Void()" is also synonym
                 break;
-            case CONSTANT_Namespace:
+            case CONSTANT_Namespace:               
             case CONSTANT_PackageInternalNs:
             case CONSTANT_ProtectedNamespace:
             case CONSTANT_ExplicitNamespace:
             case CONSTANT_StaticProtectedNs:
-            case CONSTANT_PrivateNs:
-                ret = constants.getNamespace(value_index).getKindStr() + "(\"" + constants.getNamespace(value_index).getName(constants).toRawString() + "\")"; //assume not null name
+            case CONSTANT_PrivateNs:                
+                String nsVal = constants.getNamespace(value_index).getKindStr() + "(\"" + constants.getNamespace(value_index).getName(constants).toRawString() + "\")"; //assume not null name
+                
+                switch (value_kind) {
+                    case CONSTANT_Namespace:   
+                        ret = "Namespace(" + nsVal + ")";
+                        break;
+                    case CONSTANT_PackageInternalNs:
+                        ret = "PackageInternalNs(" + nsVal + ")";
+                        break;
+                    case CONSTANT_ProtectedNamespace:
+                        ret = "ProtectedNamespace(" + nsVal + ")";
+                        break;
+                    case CONSTANT_ExplicitNamespace:
+                        ret = "ExplicitNamespace(" + nsVal + ")";
+                        break;
+                    case CONSTANT_StaticProtectedNs:
+                        ret = "StaticProtectedNs(" + nsVal + ")";
+                        break;
+                    case CONSTANT_PrivateNs:
+                        ret = "PrivateNamespace(" + nsVal + ")";
+                        break;
+                }
                 break;
         }
         return ret;

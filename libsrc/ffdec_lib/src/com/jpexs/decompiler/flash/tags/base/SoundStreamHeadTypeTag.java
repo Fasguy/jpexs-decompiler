@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,24 +12,31 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.tags.base;
 
+import com.jpexs.decompiler.flash.SWF;
 import com.jpexs.decompiler.flash.tags.SoundStreamBlockTag;
+import com.jpexs.decompiler.flash.tags.Tag;
+import com.jpexs.helpers.ByteArrayRange;
 import java.util.List;
 
 /**
  *
  * @author JPEXS
  */
-public interface SoundStreamHeadTypeTag extends CharacterIdTag, SoundTag {
+public abstract class SoundStreamHeadTypeTag extends Tag implements CharacterIdTag, SoundTag {
+
+    public SoundStreamHeadTypeTag(SWF swf, int id, String name, ByteArrayRange data) {
+        super(swf, id, name, data);
+    }
 
     @Override
-    public boolean getSoundSize();
+    public abstract boolean getSoundSize();
 
-    public long getSoundSampleCount();
+    public abstract long getSoundSampleCount();
 
-    public void setVirtualCharacterId(int ch);
+    public abstract List<SoundStreamBlockTag> getBlocks();       
 
-    public List<SoundStreamBlockTag> getBlocks();
 }

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,9 +12,13 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.types.gfx;
 
+import com.jpexs.decompiler.flash.types.LINESTYLE;
+import com.jpexs.decompiler.flash.types.LINESTYLE2;
+import com.jpexs.decompiler.flash.types.LINESTYLEARRAY;
 import com.jpexs.decompiler.flash.types.RECT;
 import com.jpexs.decompiler.flash.types.SHAPE;
 import com.jpexs.decompiler.flash.types.shaperecords.EndShapeRecord;
@@ -35,8 +39,20 @@ public class GlyphType implements Serializable {
 
     public ContourType[] contours;
 
+    public GlyphType() {
+        contours = new ContourType[0];
+        boundingBox = new int[4];
+        boundingBox[2] = 1; //xmax
+        boundingBox[3] = 1; //ymax
+    }
+    
+    
+
     public GlyphType(List<SHAPERECORD> records) {
-        RECT bounds = SHAPERECORD.getBounds(records);
+        LINESTYLEARRAY lsa = new LINESTYLEARRAY();
+        lsa.lineStyles = new LINESTYLE[0];
+        lsa.lineStyles2 = new LINESTYLE2[0];
+        RECT bounds = SHAPERECORD.getBounds(records, lsa, 1, false);
         boundingBox = new int[4];
         boundingBox[0] = bounds.Xmin;
         boundingBox[1] = bounds.Ymin;

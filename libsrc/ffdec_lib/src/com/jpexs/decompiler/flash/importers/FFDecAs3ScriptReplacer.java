@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,6 +20,7 @@ import com.jpexs.decompiler.flash.SWF;
 import com.jpexs.decompiler.flash.abc.ABC;
 import com.jpexs.decompiler.flash.abc.ScriptPack;
 import com.jpexs.decompiler.flash.abc.avm2.parser.AVM2ParseException;
+import com.jpexs.decompiler.flash.abc.avm2.parser.script.AbcIndexing;
 import com.jpexs.decompiler.flash.abc.avm2.parser.script.ActionScript3Parser;
 import com.jpexs.decompiler.flash.abc.types.ScriptInfo;
 import com.jpexs.decompiler.flash.abc.types.traits.TraitClass;
@@ -33,6 +34,14 @@ import java.util.List;
 
 public class FFDecAs3ScriptReplacer implements As3ScriptReplacerInterface {
 
+    private boolean air;
+    
+    public FFDecAs3ScriptReplacer(boolean air) {
+        this.air = air;                 
+    }
+
+    
+    
     @Override
     public void replaceScript(ScriptPack pack, String text) throws As3ScriptReplaceException, IOException, InterruptedException {
         ABC abc = pack.abc;
@@ -62,8 +71,10 @@ public class FFDecAs3ScriptReplacer implements As3ScriptReplacerInterface {
 
             otherAbcs.remove(abc);
             abc.script_info.get(oldIndex).delete(abc, true);
-
-            ActionScript3Parser.compile(text, abc, otherAbcs, scriptName, newClassIndex, oldIndex);
+            AbcIndexing abcIndex = swf.getAbcIndex();
+            abcIndex.selectAbc(abc);
+            
+            ActionScript3Parser.compile(text, abc, abcIndex, scriptName, newClassIndex, oldIndex, air);           
             if (pack.isSimple) {
                 // Move newly added script to its position
                 abc.script_info.set(oldIndex, abc.script_info.get(newIndex));
@@ -72,22 +83,28 @@ public class FFDecAs3ScriptReplacer implements As3ScriptReplacerInterface {
                 //???
             }
             abc.script_info.get(oldIndex).setModified(true);
-            abc.pack();//remove old deleted items            
+            abc.pack();//remove old deleted items
             ((Tag) abc.parentTag).setModified(true);
         } catch (AVM2ParseException ex) {
-            abc.script_info.get(oldIndex).delete(abc, false);
+            //ex.printStackTrace();
             throw new As3ScriptReplaceException(new As3ScriptReplaceExceptionItem(null, ex.text, (int) ex.line));
         } catch (CompilationException ex) {
-            abc.script_info.get(oldIndex).delete(abc, false);
+            //ex.printStackTrace();
             throw new As3ScriptReplaceException(new As3ScriptReplaceExceptionItem(null, ex.text, (int) ex.line));
         }
     }
 
     @Override
-    public boolean isAvailable() {
-        File swc = Configuration.getPlayerSWC();
+    public boolean isAvailable() {                
+        File swc = air ? Configuration.getAirSWC() : Configuration.getPlayerSWC();
         return !(swc == null || !swc.exists());
     }
+
+    public boolean isAir() {
+        return air;
+    }
+    
+    
 
     @Override
     public void initReplacement(ScriptPack pack) {

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Makes portions of a SWF file available for import by other SWF files
@@ -148,4 +149,9 @@ public class ExportAssetsTag extends SymbolClassTypeTag {
         }
         return modified;
     }
+
+    @Override
+    public void getNeededCharacters(Set<Integer> needed, SWF swf) {
+        needed.addAll(tags);
+    }        
 }

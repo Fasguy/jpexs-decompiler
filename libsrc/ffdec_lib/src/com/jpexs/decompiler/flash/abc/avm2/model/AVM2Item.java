@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -26,6 +26,8 @@ import com.jpexs.decompiler.flash.abc.avm2.model.clauses.ExceptionAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.parser.script.AVM2SourceGenerator;
 import com.jpexs.decompiler.flash.configuration.Configuration;
 import com.jpexs.decompiler.flash.helpers.GraphTextWriter;
+import com.jpexs.decompiler.flash.helpers.hilight.HighlightData;
+import com.jpexs.decompiler.flash.helpers.hilight.HighlightSpecialType;
 import com.jpexs.decompiler.graph.CompilationException;
 import com.jpexs.decompiler.graph.GraphSourceItem;
 import com.jpexs.decompiler.graph.GraphTargetItem;
@@ -72,7 +74,7 @@ public abstract class AVM2Item extends GraphTargetItem {
         return true;
     }
 
-    protected GraphTextWriter formatProperty(GraphTextWriter writer, GraphTargetItem object, GraphTargetItem propertyName, LocalData localData) throws InterruptedException {
+    protected GraphTextWriter formatProperty(GraphTextWriter writer, GraphTargetItem object, GraphTargetItem propertyName, LocalData localData, boolean isStatic) throws InterruptedException {
         boolean empty = object.getThroughDuplicate() instanceof FindPropertyAVM2Item;
         if (object instanceof LocalRegAVM2Item) {
             if (((LocalRegAVM2Item) object).computedValue != null) {
@@ -83,6 +85,8 @@ public abstract class AVM2Item extends GraphTargetItem {
         }
 
         if (object.getThroughDuplicate() instanceof FindPropertyAVM2Item) {
+            //TODO: this might not be a good idea - #595,
+            //but removing this fails testNames test
             FindPropertyAVM2Item fp = (FindPropertyAVM2Item) object.getThroughDuplicate();
             if (fp.propertyName instanceof FullMultinameAVM2Item) {
                 propertyName = fp.propertyName;
@@ -107,14 +111,32 @@ public abstract class AVM2Item extends GraphTargetItem {
         if (empty) {
             return propertyName.toString(writer, localData);
         }
+        
         if (propertyName instanceof FullMultinameAVM2Item) {
+            
+            HighlightData data = new HighlightData();
+            int multinameIndex = ((FullMultinameAVM2Item) propertyName).multinameIndex;
+            int namespaceIndex = localData.constantsAvm2.getMultiname(multinameIndex).namespace_index;
+            GraphTargetItem returnType = object.returnType();
+            if (returnType instanceof ApplyTypeAVM2Item) {
+                ApplyTypeAVM2Item ati = (ApplyTypeAVM2Item)returnType;
+                data.propertyType = ati.object.toString();
+                data.propertySubType = ati.params.get(0).toString();
+            } else {
+                data.propertyType = returnType.toString();
+            }
+            data.namespaceIndex = namespaceIndex;
+            data.isStatic = isStatic;
+            
             if (((FullMultinameAVM2Item) propertyName).name != null) {
-                if (((FullMultinameAVM2Item) propertyName).namespace != null) {
-                    writer.append(".");
+                if (((FullMultinameAVM2Item) propertyName).namespace != null) {                    
+                    //writer.append(".");
+                    writer.hilightSpecial(".", HighlightSpecialType.PROPERTY_TYPE, 0, data);
                 }
                 return propertyName.toString(writer, localData);
             } else {
-                writer.append(".");
+                writer.hilightSpecial(".", HighlightSpecialType.PROPERTY_TYPE, 0, data);
+                //writer.append(".");
                 return propertyName.toString(writer, localData);
             }
         } else {

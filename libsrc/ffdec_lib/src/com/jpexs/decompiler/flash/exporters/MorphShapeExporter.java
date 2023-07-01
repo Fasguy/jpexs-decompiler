@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -57,6 +57,10 @@ public class MorphShapeExporter {
     //TODO: implement morphshape export. How to handle 65536 frames?
     public List<File> exportMorphShapes(AbortRetryIgnoreHandler handler, final String outdir, ReadOnlyTagList tags, final MorphShapeExportSettings settings, EventListener evl) throws IOException, InterruptedException {
         List<File> ret = new ArrayList<>();
+        if (Thread.currentThread().isInterrupted()) {
+            return ret;
+        }
+        
         if (tags.isEmpty()) {
             return ret;
         }
@@ -93,45 +97,48 @@ public class MorphShapeExporter {
                     switch (settings.mode) {
                         case SVG:
                             try (OutputStream fos = new BufferedOutputStream(new FileOutputStream(file))) {
-                                ExportRectangle rect = new ExportRectangle(mst.getRect());
-                                rect.xMax *= settings.zoom;
-                                rect.yMax *= settings.zoom;
-                                rect.xMin *= settings.zoom;
-                                rect.yMin *= settings.zoom;
-                                SVGExporter exporter = new SVGExporter(rect, settings.zoom);
-                                mst.toSVG(exporter, -2, new CXFORMWITHALPHA(), 0);
-                                fos.write(Utf8Helper.getBytes(exporter.getSVG()));
-                            }
-                            break;
+                            ExportRectangle rect = new ExportRectangle(mst.getRect());
+                            rect.xMax *= settings.zoom;
+                            rect.yMax *= settings.zoom;
+                            rect.xMin *= settings.zoom;
+                            rect.yMin *= settings.zoom;
+                            SVGExporter exporter = new SVGExporter(rect, settings.zoom);
+                            mst.toSVG(exporter, -2, new CXFORMWITHALPHA(), 0);
+                            fos.write(Utf8Helper.getBytes(exporter.getSVG()));
+                        }
+                        break;
                         case CANVAS:
                             try (OutputStream fos = new BufferedOutputStream(new FileOutputStream(file))) {
-                                int deltaX = -Math.min(mst.getStartBounds().Xmin, mst.getEndBounds().Xmin);
-                                int deltaY = -Math.min(mst.getStartBounds().Ymin, mst.getEndBounds().Ymin);
-                                CanvasMorphShapeExporter cse = new CanvasMorphShapeExporter(((Tag) mst).getSwf(), mst.getShapeAtRatio(0), mst.getShapeAtRatio(DefineMorphShapeTag.MAX_RATIO), new CXFORMWITHALPHA(), SWF.unitDivisor, deltaX, deltaY);
-                                cse.export();
-                                Set<Integer> needed = new HashSet<>();
-                                CharacterTag ct = ((CharacterTag) mst);
-                                needed.add(ct.getCharacterId());
-                                ct.getNeededCharactersDeep(needed);
-                                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                                SWF.libraryToHtmlCanvas(ct.getSwf(), needed, baos);
-                                fos.write(Utf8Helper.getBytes(cse.getHtml(new String(baos.toByteArray(), Utf8Helper.charset), SWF.getTypePrefix(mst) + mst.getCharacterId(), mst.getRect())));
-                            }
-                            break;
+                            int deltaX = -Math.min(mst.getStartBounds().Xmin, mst.getEndBounds().Xmin);
+                            int deltaY = -Math.min(mst.getStartBounds().Ymin, mst.getEndBounds().Ymin);
+                            CanvasMorphShapeExporter cse = new CanvasMorphShapeExporter(mst.getShapeNum(), ((Tag) mst).getSwf(), mst.getShapeAtRatio(0), mst.getShapeAtRatio(DefineMorphShapeTag.MAX_RATIO), new CXFORMWITHALPHA(), SWF.unitDivisor, deltaX, deltaY);
+                            cse.export();
+                            Set<Integer> needed = new HashSet<>();
+                            CharacterTag ct = ((CharacterTag) mst);
+                            needed.add(ct.getCharacterId());
+                            ct.getNeededCharactersDeep(needed);
+                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                            SWF.libraryToHtmlCanvas(ct.getSwf(), needed, baos);
+                            fos.write(Utf8Helper.getBytes(cse.getHtml(new String(baos.toByteArray(), Utf8Helper.charset), SWF.getTypePrefix(mst) + mst.getCharacterId(), mst.getRect())));
+                        }
+                        break;
                         case SWF:
                             try (OutputStream fos = new BufferedOutputStream(new FileOutputStream(file))) {
-                                try {
-                                    new PreviewExporter().exportSwf(fos, mst, null, 0, false);
-                                } catch (ActionParseException ex) {
-                                    Logger.getLogger(MorphShapeExporter.class.getName()).log(Level.SEVERE, null, ex);
-                                }
+                            try {
+                                new PreviewExporter().exportSwf(fos, mst, null, 0, false);
+                            } catch (ActionParseException ex) {
+                                Logger.getLogger(MorphShapeExporter.class.getName()).log(Level.SEVERE, null, ex);
                             }
+                        }
 
-                            break;
+                        break;
                     }
                 }, handler).run();
                 ret.add(file);
 
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
+                }
                 if (evl != null) {
                     evl.handleExportedEvent("morphshape", currentIndex, count, t.getName());
                 }

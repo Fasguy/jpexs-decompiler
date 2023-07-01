@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -166,17 +166,17 @@ public class AdobeFlashExecutor {
                     codeSize += actionsToExecute.getBytesLength();
                 }
 
-                actions2.add(new ActionDefineFunction("testRun" + i, new ArrayList<>(), codeSize, swf.version));
+                actions2.add(new ActionDefineFunction("testRun" + i, new ArrayList<>(), codeSize, swf.version, swf.getCharset()));
                 actions2.addAll(task.actions);
                 actions2.add(new ActionReturn());
 
                 doaTag.setActions(actions2);
-                swf.addTag(doaTag, asm);
+                swf.addTagBefore(doaTag, (Tag) asm);
 
                 i++;
             }
 
-            item = actions.insertItemAfter(item, new ActionPush(new Object[]{tasks.size(), 1, "runTests"}));
+            item = actions.insertItemAfter(item, new ActionPush(new Object[]{tasks.size(), 1, "runTests"}, swf.getCharset()));
             actions.insertItemAfter(item, new ActionCallFunction());
             asm.setActions(actions.toActionList());
             asm.setModified();

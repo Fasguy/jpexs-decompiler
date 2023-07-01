@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@ public interface GenericTagEditor {
 
     public void reset();
 
-    public void save();
+    public boolean save();
 
     public void addChangeListener(ChangeListener l);
 

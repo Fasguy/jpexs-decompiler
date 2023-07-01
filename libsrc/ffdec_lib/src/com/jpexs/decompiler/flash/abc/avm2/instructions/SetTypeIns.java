@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,8 +21,10 @@ import com.jpexs.decompiler.flash.abc.avm2.model.AVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.CoerceAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.ConvertAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.LocalRegAVM2Item;
+import com.jpexs.decompiler.flash.abc.avm2.model.SetLocalAVM2Item;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.TranslateStack;
+import com.jpexs.decompiler.graph.TypeItem;
 import com.jpexs.decompiler.graph.model.DuplicateItem;
 import java.util.List;
 
@@ -32,7 +34,18 @@ import java.util.List;
  */
 public interface SetTypeIns {
 
-    public static void handleResult(GraphTargetItem value, TranslateStack stack, List<GraphTargetItem> output, AVM2LocalData localData, GraphTargetItem result, int regId) {
+    public static GraphTargetItem handleNumberToInt(GraphTargetItem value, GraphTargetItem type) {
+        if ((value instanceof ConvertAVM2Item) || (value instanceof CoerceAVM2Item)) {
+            if (type != null && (type.equals(TypeItem.INT) || type.equals(TypeItem.UINT))) {
+                if (value.value.returnType().equals(TypeItem.NUMBER)) {
+                    return value.value;
+                }
+            }
+        }
+        return value;
+    }
+    
+    public static void handleResult(GraphTargetItem value, TranslateStack stack, List<GraphTargetItem> output, AVM2LocalData localData, GraphTargetItem result, int regId, GraphTargetItem type) {
         GraphTargetItem notCoercedValue = value;
         if ((value instanceof CoerceAVM2Item) || (value instanceof ConvertAVM2Item)) {
             notCoercedValue = value.value;
@@ -59,11 +72,11 @@ public interface SetTypeIns {
                         result.value = value;
                         output.add(result);
                         for (int i = 0; i < numDups; i++) {
-                            stack.push(new LocalRegAVM2Item(null, localData.lineStartInstruction, regId, value));
+                            stack.push(new LocalRegAVM2Item(null, localData.lineStartInstruction, regId, value, localData.localRegTypes.containsKey(regId) ? localData.localRegTypes.get(regId) : value.returnType()));
                         }
                         return;
-                    } else {
-
+                    } else {                       
+                        
                         if ((value instanceof CoerceAVM2Item) || (value instanceof ConvertAVM2Item)) {
                             value.value = insideDup;
                         } else {
@@ -71,10 +84,14 @@ public interface SetTypeIns {
                         }
 
                         result.value = value;
+                        
+                        if ((result instanceof SetLocalAVM2Item) && regId > -1) {
+                            ((SetLocalAVM2Item)result).causedByDup = true;
+                        }
 
                         if (regId > -1 && AVM2Item.mustStayIntact2(insideDup.getNotCoerced())) { //hack
                             output.add(result);
-                            stack.push(new LocalRegAVM2Item(null, localData.lineStartInstruction, regId, value));
+                            stack.push(new LocalRegAVM2Item(null, localData.lineStartInstruction, regId, value, localData.localRegTypes.containsKey(regId) ? localData.localRegTypes.get(regId) : TypeItem.UNBOUNDED));
                             return;
                         }
 
@@ -83,7 +100,7 @@ public interface SetTypeIns {
                     }
                 }
             }
-        }
+        }                
         output.add(result);
     }
 }

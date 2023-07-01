@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -31,7 +31,6 @@ import com.jpexs.decompiler.flash.types.RGBA;
 import com.jpexs.decompiler.flash.types.SHAPE;
 import com.jpexs.helpers.Helper;
 import com.jpexs.helpers.SerializableImage;
-import java.awt.Color;
 
 /**
  *
@@ -82,6 +81,8 @@ public class CanvasShapeExporter extends ShapeExporterBase {
     protected int fillWidth = 0;
 
     protected int fillHeight = 0;
+    
+    protected boolean aliasedFill = false;
 
     public static String getJsPrefix() {
         return "<script>var canvas=document.getElementById(\"myCanvas\");\r\n"
@@ -149,8 +150,8 @@ public class CanvasShapeExporter extends ShapeExporterBase {
         return shapeData.toString();
     }
 
-    public CanvasShapeExporter(RGB basicFill, double unitDivisor, SWF swf, SHAPE shape, ColorTransform colorTransform, int deltaX, int deltaY) {
-        super(swf, shape, colorTransform);
+    public CanvasShapeExporter(int shapeNum, RGB basicFill, double unitDivisor, SWF swf, SHAPE shape, ColorTransform colorTransform, int deltaX, int deltaY) {
+        super(shapeNum, swf, shape, colorTransform);
         this.swf = swf;
         this.unitDivisor = unitDivisor;
         this.basicFill = basicFill;
@@ -169,6 +170,7 @@ public class CanvasShapeExporter extends ShapeExporterBase {
 
     @Override
     public void beginFills() {
+        aliasedFill = false;
     }
 
     @Override
@@ -277,7 +279,7 @@ public class CanvasShapeExporter extends ShapeExporterBase {
             }
         }
 
-        fillData.append("\tctx.fillStyle=").append(color(Color.RED.getRGB())).append(";\r\n");
+        fillData.append("\tctx.fillStyle=").append(color(SWF.ERROR_COLOR.getRGB())).append(";\r\n");
     }
 
     @Override
@@ -521,5 +523,10 @@ public class CanvasShapeExporter extends ShapeExporterBase {
 
         fillWidth = 0;
         fillHeight = 0;
+    }
+
+    @Override
+    public void beginAliasedFills() {
+        aliasedFill = true;
     }
 }

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -17,6 +17,8 @@
 package com.jpexs.decompiler.flash.exporters.shape;
 
 import com.jpexs.decompiler.flash.SWF;
+import com.jpexs.decompiler.flash.configuration.Configuration;
+import com.jpexs.decompiler.flash.exporters.ImageTagBufferedImage;
 import com.jpexs.decompiler.flash.exporters.commonshape.ExportRectangle;
 import com.jpexs.decompiler.flash.exporters.commonshape.Matrix;
 import com.jpexs.decompiler.flash.tags.base.ImageTag;
@@ -43,15 +45,14 @@ import java.awt.Shape;
 import java.awt.Stroke;
 import java.awt.TexturePaint;
 import java.awt.geom.AffineTransform;
+import java.awt.geom.Area;
 import java.awt.geom.GeneralPath;
 import java.awt.geom.NoninvertibleTransformException;
-import java.io.File;
-import java.io.IOException;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.imageio.ImageIO;
 
 /**
  *
@@ -74,6 +75,8 @@ public class BitmapExporter extends ShapeExporterBase {
     private final SWF swf;
 
     private final GeneralPath path = new GeneralPath(GeneralPath.WIND_EVEN_ODD);  //For correct intersections display;
+    
+    private Shape aliasedShape;
 
     private Paint fillPaint;
 
@@ -95,9 +98,22 @@ public class BitmapExporter extends ShapeExporterBase {
 
     private Matrix strokeTransformation;
 
+    private double thicknessScale;
+    private double thicknessScaleX;
+    private double thicknessScaleY;
+
+    private double unzoom;
+
     private static boolean linearGradientColorWarnignShown = false;
 
     private boolean scaleStrokes;
+    
+    private boolean aliasedFill = false;
+
+    @Override
+    public void beginAliasedFills() {
+        aliasedFill = true;
+    }
 
     private class TransformedStroke implements Stroke {
 
@@ -150,31 +166,46 @@ public class BitmapExporter extends ShapeExporterBase {
         }
     }
 
-    public static void export(SWF swf, SHAPE shape, Color defaultColor, SerializableImage image, Matrix transformation, Matrix strokeTransformation, ColorTransform colorTransform, boolean scaleStrokes) {
-        BitmapExporter exporter = new BitmapExporter(swf, shape, defaultColor, colorTransform);
-        exporter.exportTo(image, transformation, strokeTransformation, scaleStrokes);
+    public static void export(int shapeNum, SWF swf, SHAPE shape, Color defaultColor, SerializableImage image, double unzoom, Matrix transformation, Matrix strokeTransformation, ColorTransform colorTransform, boolean scaleStrokes, boolean canUseSmoothing) {
+        BitmapExporter exporter = new BitmapExporter(shapeNum, swf, shape, defaultColor, colorTransform);
+        exporter.setCanUseSmoothing(canUseSmoothing);
+        exporter.exportTo(shapeNum, image, unzoom, transformation, strokeTransformation, scaleStrokes);
     }
 
-    private BitmapExporter(SWF swf, SHAPE shape, Color defaultColor, ColorTransform colorTransform) {
-        super(swf, shape, colorTransform);
+    private BitmapExporter(int shapeNum, SWF swf, SHAPE shape, Color defaultColor, ColorTransform colorTransform) {
+        super(shapeNum, swf, shape, colorTransform);
         this.swf = swf;
         this.defaultColor = defaultColor;
     }
 
-    private void exportTo(SerializableImage image, Matrix transformation, Matrix strokeTransformation, boolean scaleStrokes) {
+    private void exportTo(int shapeNum, SerializableImage image, double unzoom, Matrix transformation, Matrix strokeTransformation, boolean scaleStrokes) {
         this.image = image;
         this.scaleStrokes = scaleStrokes;
-        ExportRectangle bounds = new ExportRectangle(shape.getBounds());
-        ExportRectangle transformedBounds = strokeTransformation.transform(bounds);
-
-        this.strokeTransformation = Matrix.getScaleInstance(transformedBounds.getWidth() / bounds.getWidth(), transformedBounds.getHeight() / bounds.getHeight());
+        ExportRectangle bounds = new ExportRectangle(shape.getBounds(shapeNum));
+        this.strokeTransformation = strokeTransformation;
+        calculateThicknessScale(bounds, transformation);
 
         graphics = (Graphics2D) image.getGraphics();
         AffineTransform at = transformation.toTransform();
         at.preConcatenate(AffineTransform.getScaleInstance(1 / SWF.unitDivisor, 1 / SWF.unitDivisor));
         graphics.setTransform(at);
         defaultStroke = graphics.getStroke();
+        this.unzoom = unzoom;
         super.export();
+    }
+
+    private void calculateThicknessScale(ExportRectangle bounds, Matrix transformation) {
+        com.jpexs.decompiler.flash.exporters.commonshape.Point p00 = strokeTransformation.transform(0, 0);
+        com.jpexs.decompiler.flash.exporters.commonshape.Point p11 = strokeTransformation.transform(1, 1);
+        thicknessScale = p00.distanceTo(p11) / Math.sqrt(2);
+        thicknessScaleX = Math.abs(p11.x - p00.x);
+        thicknessScaleY = Math.abs(p11.y - p00.y);
+
+        /*Matrix transPre = transformation.preConcatenate(Matrix.getScaleInstance(1 / SWF.unitDivisor, 1 / SWF.unitDivisor));
+        p00 = transPre.transform(0, 0);
+        p11 = transPre.transform(1, 1);
+        realZoom = p00.distanceTo(p11) / Math.sqrt(2);
+        System.out.println("realZoom=" + realZoom);*/
     }
 
     public SerializableImage getImage() {
@@ -191,6 +222,7 @@ public class BitmapExporter extends ShapeExporterBase {
 
     @Override
     public void beginFills() {
+        aliasedFill = false;
     }
 
     @Override
@@ -345,8 +377,12 @@ public class BitmapExporter extends ShapeExporterBase {
                 if (colorTransform != null) {
                     img = colorTransform.apply(img);
                 }
-
-                fillPaint = new TexturePaint(img.getBufferedImage(), new java.awt.Rectangle(img.getWidth(), img.getHeight()));
+                BufferedImage bufImg = img.getBufferedImage();
+                if (colorTransform == null) {
+                    bufImg = new ImageTagBufferedImage(imageTag, bufImg);
+                }
+                fillPaint = new TexturePaint(bufImg, new java.awt.Rectangle(img.getWidth(), img.getHeight()));
+               
                 fillTransform = matrix.toTransform();
                 fillRepeat = repeat;
                 fillSmooth = smooth;
@@ -354,8 +390,7 @@ public class BitmapExporter extends ShapeExporterBase {
             }
         }
 
-        // fill with red in case any error
-        fillPaint = Color.RED;
+        fillPaint = SWF.ERROR_COLOR;
         fillTransform = matrix.toTransform();
     }
 
@@ -398,26 +433,29 @@ public class BitmapExporter extends ShapeExporterBase {
         if (scaleStrokes) {
             switch (scaleMode) {
                 case "VERTICAL":
-                    thickness *= strokeTransformation.scaleY;
+                    thickness *= thicknessScaleY;
                     break;
                 case "HORIZONTAL":
-                    thickness *= strokeTransformation.scaleX;
+                    thickness *= thicknessScaleX;
                     break;
                 case "NORMAL":
-                    thickness *= Math.max(strokeTransformation.scaleX, strokeTransformation.scaleY);
+                    thickness *= thicknessScale;
                     break;
                 case "NONE":
                     break;
             }
         }
 
-        if (thickness < 0) {
-            thickness = -thickness;
+        //always display minimum stroke of 1 pixel, no matter how zoomed it is
+        if (thickness * unzoom < 1 * SWF.unitDivisor) {
+            thickness = 1 * SWF.unitDivisor / unzoom;
         }
 
         if (joinStyle == BasicStroke.JOIN_MITER) {
             lineStroke = new BasicStroke((float) thickness, capStyle, joinStyle, miterLimit);
-            //lineStroke = new MiterClipBasicStroke((BasicStroke) lineStroke);
+            if (Configuration.allowMiterClipLinestyle.get()) {
+                lineStroke = new MiterClipBasicStroke((BasicStroke) lineStroke);
+            }
         } else {
             lineStroke = new BasicStroke((float) thickness, capStyle, joinStyle);
         }
@@ -551,8 +589,7 @@ public class BitmapExporter extends ShapeExporterBase {
             }
         }
 
-        // fill with red in case any error
-        linePaint = Color.RED;
+        linePaint = SWF.ERROR_COLOR;
         lineTransform = matrix.toTransform();
     }
 
@@ -572,12 +609,21 @@ public class BitmapExporter extends ShapeExporterBase {
     }
 
     protected void finalizePath() {
-        if (fillPaint != null) {
+        if (fillPaint != null) {           
+            Shape shp = path;
+            if (aliasedFill) {
+                aliasedShape = new BasicStroke((float)(SWF.unitDivisor / unzoom / 2), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND).createStrokedShape(shp);
+                return;
+            } else if (aliasedShape != null) {
+                Area a = new Area(shp);
+                a.add(new Area(aliasedShape));
+                shp = a;
+            }
             graphics.setComposite(AlphaComposite.SrcOver);
             if (fillPaint instanceof MultipleGradientPaint) {
                 AffineTransform oldAf = graphics.getTransform();
                 Shape prevClip = graphics.getClip();
-                graphics.clip(path);
+                graphics.clip(shp);
                 Matrix inverse = null;
                 try {
                     double scx = fillTransform.getScaleX();
@@ -602,7 +648,7 @@ public class BitmapExporter extends ShapeExporterBase {
                 graphics.setPaint(fillPaint);
 
                 if (inverse != null) {
-                    ExportRectangle rect = inverse.transform(new ExportRectangle(path.getBounds2D()));
+                    ExportRectangle rect = inverse.transform(new ExportRectangle(shp.getBounds2D()));
                     double minX = rect.xMin;
                     double minY = rect.yMin;
                     graphics.fill(new java.awt.Rectangle((int) minX, (int) minY, (int) (rect.xMax - minX), (int) (rect.yMax - minY)));
@@ -613,9 +659,9 @@ public class BitmapExporter extends ShapeExporterBase {
             } else if (fillPaint instanceof TexturePaint) {
                 AffineTransform oldAf = graphics.getTransform();
                 Shape prevClip = graphics.getClip();
-                graphics.clip(path);
+                graphics.clip(shp);
                 Matrix inverse = null;
-                if (fillRepeat) {
+                //if (fillRepeat) {
                     try {
                         double scx = fillTransform.getScaleX();
                         double scy = fillTransform.getScaleY();
@@ -632,7 +678,7 @@ public class BitmapExporter extends ShapeExporterBase {
                     } catch (NoninvertibleTransformException ex) {
                         // it should never happen as we already checked the determinant of the matrix
                     }
-                }
+                //}
                 fillTransform.preConcatenate(oldAf);
                 graphics.setTransform(fillTransform);
                 graphics.setPaint(fillPaint);
@@ -646,13 +692,61 @@ public class BitmapExporter extends ShapeExporterBase {
                 if (fillRepeat) {
                     if (inverse != null) {
 
-                        ExportRectangle rect = inverse.transform(new ExportRectangle(path.getBounds2D()));
+                        ExportRectangle rect = inverse.transform(new ExportRectangle(shp.getBounds2D()));
                         double minX = rect.xMin;
                         double minY = rect.yMin;
                         graphics.fill(new Rectangle((int) minX, (int) minY, (int) (rect.xMax - minX), (int) (rect.yMax - minY)));
                     }
-                } else {
-                    graphics.drawImage(((TexturePaint) fillPaint).getImage(), 0, 0, null);
+                } else {            
+                    if (inverse != null) {
+                        ExportRectangle rect = inverse.transform(new ExportRectangle(shp.getBounds2D()));
+                        //left
+                        graphics.drawImage(((TexturePaint) fillPaint).getImage(), 
+                                (int)rect.xMin, 0, 0, ((TexturePaint) fillPaint).getImage().getHeight(),
+                                0,0,1,((TexturePaint) fillPaint).getImage().getHeight(),
+                               null);
+                        //top left
+                        graphics.drawImage(((TexturePaint) fillPaint).getImage(), 
+                                (int)rect.xMin, (int)rect.yMin, 0, 0,
+                                0,0,1, 1,
+                               null);                        
+                        //top
+                        graphics.drawImage(((TexturePaint) fillPaint).getImage(), 
+                                0, (int)rect.yMin, ((TexturePaint) fillPaint).getImage().getWidth(), 0,
+                                0,0,((TexturePaint) fillPaint).getImage().getWidth(),1,
+                               null);
+                        //top right
+                        graphics.drawImage(((TexturePaint) fillPaint).getImage(), 
+                                ((TexturePaint) fillPaint).getImage().getWidth(), (int)rect.yMin, (int)rect.xMax, 0,
+                                ((TexturePaint) fillPaint).getImage().getWidth() - 1,0,((TexturePaint) fillPaint).getImage().getWidth(), 1,
+                               null);                                               
+                        //right
+                        graphics.drawImage(((TexturePaint) fillPaint).getImage(), 
+                                ((TexturePaint) fillPaint).getImage().getWidth(), 0, (int)rect.xMax, ((TexturePaint) fillPaint).getImage().getHeight(),
+                                ((TexturePaint) fillPaint).getImage().getWidth() - 1,0,((TexturePaint) fillPaint).getImage().getWidth(),
+                                ((TexturePaint) fillPaint).getImage().getHeight(),
+                               null);
+                        //bottom right
+                        graphics.drawImage(((TexturePaint) fillPaint).getImage(), 
+                                ((TexturePaint) fillPaint).getImage().getWidth(),((TexturePaint) fillPaint).getImage().getHeight(), (int)rect.xMax, (int)rect.yMax,
+                                ((TexturePaint) fillPaint).getImage().getWidth() - 1, ((TexturePaint) fillPaint).getImage().getHeight() - 1,
+                                ((TexturePaint) fillPaint).getImage().getWidth(), ((TexturePaint) fillPaint).getImage().getHeight(),
+                               null);                                               
+                        //bottom
+                        graphics.drawImage(((TexturePaint) fillPaint).getImage(), 
+                                0, ((TexturePaint) fillPaint).getImage().getHeight(), ((TexturePaint) fillPaint).getImage().getWidth(), (int)rect.yMax,
+                                0,((TexturePaint) fillPaint).getImage().getHeight() - 1,((TexturePaint) fillPaint).getImage().getWidth(),((TexturePaint) fillPaint).getImage().getHeight(),
+                               null);
+                        //bottom left
+                        graphics.drawImage(((TexturePaint) fillPaint).getImage(), 
+                                (int)rect.xMin,((TexturePaint) fillPaint).getImage().getHeight(), 0, (int)rect.yMax,
+                                0, ((TexturePaint) fillPaint).getImage().getHeight() - 1,
+                                1, ((TexturePaint) fillPaint).getImage().getHeight(),
+                               null);                                               
+                        
+                        //actual central image
+                        graphics.drawImage(((TexturePaint) fillPaint).getImage(), 0, 0, null);
+                    }
                 }
                 graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, interpolationBefore);
 
@@ -660,10 +754,13 @@ public class BitmapExporter extends ShapeExporterBase {
                 graphics.setClip(prevClip);
             } else {
                 graphics.setPaint(fillPaint);
-                graphics.fill(path);
+                graphics.fill(shp);
             }
         }
         if (linePaint != null && lineStroke != null) {
+            if(true) {
+                //return;
+            }
             Shape strokedShape = lineStroke.createStrokedShape(path);
             graphics.setComposite(AlphaComposite.SrcOver);
             if (linePaint instanceof MultipleGradientPaint) {

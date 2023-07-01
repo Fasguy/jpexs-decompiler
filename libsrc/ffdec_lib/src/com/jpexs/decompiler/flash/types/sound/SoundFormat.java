@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -67,10 +67,10 @@ public class SoundFormat {
         switch (formatId) {
             case FORMAT_UNCOMPRESSED_NATIVE_ENDIAN:
             case FORMAT_UNCOMPRESSED_LITTLE_ENDIAN:
-            case FORMAT_ADPCM:
                 return SoundExportFormat.WAV;
             case FORMAT_MP3:
                 return SoundExportFormat.MP3;
+            case FORMAT_ADPCM:
             case FORMAT_NELLYMOSER16KHZ:
             case FORMAT_NELLYMOSER8KHZ:
             case FORMAT_NELLYMOSER:
@@ -227,10 +227,16 @@ public class SoundFormat {
             int inPointBytes = inPoint * 2 /*16bit*/ * (stereo ? 2 : 1);
             int outPointBytes = soundInfo.hasOutPoint ? outPoint * 2 /*16bit*/ * (stereo ? 2 : 1) : data.length;
             for (int i = inPointBytes; i < outPointBytes; i += (stereo ? 4 : 2)) {
+                if (i + 1 >= data.length) {
+                    break;
+                }
                 int left = ((data[i] & 0xff) + ((data[i + 1] & 0xff) << 8)) << 16 >> 16;
                 int right = left;
                 if (stereo) {
-                    right = ((data[i + 2] & 0xff) + ((data[i + 3] & 0xff) << 8)) << 16 >> 16;
+                    if (i + 3 >= data.length) {
+                        break;
+                    }  
+                    right = ((data[i + 2] & 0xff) + ((data[i + 3] & 0xff) << 8)) << 16 >> 16;                                  
                 }
 
                 if (soundInfo.hasEnvelope) {

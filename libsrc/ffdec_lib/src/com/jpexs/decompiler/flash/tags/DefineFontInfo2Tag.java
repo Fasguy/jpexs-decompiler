@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -26,10 +26,10 @@ import com.jpexs.decompiler.flash.types.annotations.Reserved;
 import com.jpexs.decompiler.flash.types.annotations.SWFType;
 import com.jpexs.decompiler.flash.types.annotations.SWFVersion;
 import com.jpexs.helpers.ByteArrayRange;
-import com.jpexs.helpers.utf8.Utf8Helper;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  *
@@ -92,11 +92,7 @@ public class DefineFontInfo2Tag extends FontInfoTag {
     @Override
     public final void readData(SWFInputStream sis, ByteArrayRange data, int level, boolean parallel, boolean skipUnusualTags, boolean lazy) throws IOException {
         fontID = sis.readUI16("fontID");
-        if (swf.version >= 6) {
-            fontName = sis.readNetString("fontName", Utf8Helper.charset);
-        } else {
-            fontName = sis.readNetString("fontName");
-        }
+        fontName = sis.readNetString("fontName");
         reserved = (int) sis.readUB(2, "reserved");
         fontFlagsSmallText = sis.readUB(1, "fontFlagsSmallText") == 1;
         fontFlagsShiftJIS = sis.readUB(1, "fontFlagsShiftJIS") == 1;
@@ -121,11 +117,7 @@ public class DefineFontInfo2Tag extends FontInfoTag {
     @Override
     public void getData(SWFOutputStream sos) throws IOException {
         sos.writeUI16(fontID);
-        if (swf.version >= 6) {
-            sos.writeNetString(fontName, Utf8Helper.charset);
-        } else {
-            sos.writeNetString(fontName);
-        }
+        sos.writeNetString(fontName);
         sos.writeUB(2, reserved);
         sos.writeUB(1, fontFlagsSmallText ? 1 : 0);
         sos.writeUB(1, fontFlagsShiftJIS ? 1 : 0);
@@ -182,5 +174,20 @@ public class DefineFontInfo2Tag extends FontInfoTag {
     @Override
     public void setFontFlagsItalic(boolean value) {
         fontFlagsItalic = value;
+    }
+
+    @Override
+    public boolean isAnsi() {
+        return fontFlagsANSI;
+    }
+
+    @Override
+    public boolean isShiftJIS() {
+        return fontFlagsShiftJIS;
+    }                
+    
+    @Override
+    public void getNeededCharacters(Set<Integer> needed, SWF swf) {
+        needed.add(fontID);
     }
 }

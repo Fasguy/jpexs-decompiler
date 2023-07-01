@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -31,12 +31,12 @@ import java.util.List;
  */
 public class ActionNop extends Action {
 
-    public ActionNop() {
-        super(-1, 0);
+    public ActionNop(String charset) {
+        super(-1, 0, charset);
     }
 
-    protected ActionNop(int actionCode) {
-        super(actionCode, 0);
+    protected ActionNop(int actionCode, String charset) {
+        super(actionCode, 0, charset);
     }
 
     @Override

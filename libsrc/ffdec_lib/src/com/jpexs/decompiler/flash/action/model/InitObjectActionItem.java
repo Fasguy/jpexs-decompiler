@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,6 +18,7 @@ package com.jpexs.decompiler.flash.action.model;
 
 import com.jpexs.decompiler.flash.IdentifiersDeobfuscation;
 import com.jpexs.decompiler.flash.SourceGeneratorLocalData;
+import com.jpexs.decompiler.flash.action.parser.script.ActionSourceGenerator;
 import com.jpexs.decompiler.flash.action.swf4.ActionPush;
 import com.jpexs.decompiler.flash.action.swf5.ActionInitObject;
 import com.jpexs.decompiler.flash.helpers.GraphTextWriter;
@@ -62,8 +63,15 @@ public class InitObjectActionItem extends ActionItem {
             if (i < values.size() - 1) {
                 writer.append(",");
             }
-            //AS1/2 does not allow quotes in name here
-            writer.append(IdentifiersDeobfuscation.printIdentifier(false, names.get(i).toStringNoQuotes(localData)));
+            //AS1/2 does not allow quotes in name here            
+            if ((names.get(i) instanceof DirectValueActionItem) 
+                &&(((DirectValueActionItem)names.get(i)).isSimpleValue())) {
+                writer.append(IdentifiersDeobfuscation.printIdentifier(false, names.get(i).toStringNoQuotes(localData)));           
+            } else {
+                writer.append("(");
+                names.get(i).appendTo(writer, localData);
+                writer.append(")");
+            }
             writer.append(":");
             if (values.get(i) instanceof TernarOpItem) { //Ternar operator contains ":"
                 writer.append("(");
@@ -90,12 +98,14 @@ public class InitObjectActionItem extends ActionItem {
 
     @Override
     public List<GraphSourceItem> toSource(SourceGeneratorLocalData localData, SourceGenerator generator) throws CompilationException {
+        ActionSourceGenerator asGenerator = (ActionSourceGenerator) generator;
+        String charset = asGenerator.getCharset();  
         List<GraphSourceItem> ret = new ArrayList<>();
         for (int i = values.size() - 1; i >= 0; i--) {
             ret.addAll(names.get(i).toSource(localData, generator));
             ret.addAll(values.get(i).toSource(localData, generator));
         }
-        ret.add(new ActionPush((Long) (long) values.size()));
+        ret.add(new ActionPush((Long) (long) values.size(), charset));
         ret.add(new ActionInitObject());
         return ret;
     }

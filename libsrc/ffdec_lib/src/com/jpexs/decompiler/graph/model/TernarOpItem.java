@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,7 @@ import com.jpexs.decompiler.graph.GraphSourceItem;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.GraphTargetVisitorInterface;
 import com.jpexs.decompiler.graph.SourceGenerator;
+import com.jpexs.decompiler.graph.TypeItem;
 import java.util.List;
 import java.util.Objects;
 
@@ -94,7 +95,16 @@ public class TernarOpItem extends GraphTargetItem {
 
     @Override
     public GraphTargetItem returnType() {
-        return onTrue.returnType();
+        GraphTargetItem onTrueType = onTrue.returnType();
+        GraphTargetItem onFalseType = onFalse.returnType();
+        if (onTrueType.equals(onFalseType)) {
+            return onTrueType;
+        }
+        if ((onTrueType.equals(TypeItem.NUMBER) || onTrueType.equals(TypeItem.INT) || onTrueType.equals(TypeItem.UINT))
+                && (onFalseType.equals(TypeItem.NUMBER) || onFalseType.equals(TypeItem.INT) || onFalseType.equals(TypeItem.UINT))) {
+            return TypeItem.NUMBER;
+        }
+        return TypeItem.UNKNOWN;
     }
 
     @Override

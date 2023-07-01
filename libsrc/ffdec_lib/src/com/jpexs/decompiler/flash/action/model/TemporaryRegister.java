@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -31,6 +31,8 @@ import java.util.Objects;
 public class TemporaryRegister extends ActionItem {
 
     private final int regId;
+    
+    public boolean used = false;
 
     public TemporaryRegister(int regId, GraphTargetItem value) {
         super(value.getSrc(), value.getLineStartItem(), value.getPrecedence(), value);

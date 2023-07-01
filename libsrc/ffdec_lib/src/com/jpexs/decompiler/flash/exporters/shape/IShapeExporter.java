@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -30,7 +30,9 @@ public interface IShapeExporter {
     public void beginShape();
 
     public void endShape();
-
+    
+    public void beginAliasedFills();
+    
     public void beginFills();
 
     public void endFills();

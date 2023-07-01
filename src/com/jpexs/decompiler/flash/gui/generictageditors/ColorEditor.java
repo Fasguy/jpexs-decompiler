@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@ import com.jpexs.decompiler.flash.gui.AppStrings;
 import com.jpexs.decompiler.flash.types.ARGB;
 import com.jpexs.decompiler.flash.types.RGB;
 import com.jpexs.decompiler.flash.types.RGBA;
+import com.jpexs.helpers.Helper;
 import com.jpexs.helpers.ReflectionTools;
 import java.awt.Color;
 import java.awt.Component;
@@ -33,6 +34,8 @@ import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.Objects;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JColorChooser;
@@ -143,13 +146,19 @@ public class ColorEditor extends JPanel implements GenericTagEditor, ActionListe
     }
 
     @Override
-    public void save() {
-        Object val = getChangedValue();
+    public boolean save() {
         try {
-            ReflectionTools.setValue(obj, field, index, val);
-        } catch (IllegalAccessException ex) {
+            Object oldValue = ReflectionTools.getValue(obj, field, index);
+            Object newValue = getChangedValue();
+            if (Objects.equals(oldValue, newValue)) {
+                return false;
+            }
+        
+            ReflectionTools.setValue(obj, field, index, newValue);
+        } catch (IllegalArgumentException | IllegalAccessException ex) {
             // ignore
         }
+        return true;
     }
 
     @Override
@@ -193,47 +202,57 @@ public class ColorEditor extends JPanel implements GenericTagEditor, ActionListe
     }
 
     private static Color noTransparencyColorChooser(Component component, String title, Color initialColor) throws Exception {
-        final JColorChooser pane = new JColorChooser(initialColor != null
-                ? initialColor : Color.white);
 
-        AbstractColorChooserPanel[] colorPanels = pane.getChooserPanels();
-        for (int i = 1; i < colorPanels.length; i++) {
-            AbstractColorChooserPanel cp = colorPanels[i];
-
-            Field f = cp.getClass().getDeclaredField("panel");
-            f.setAccessible(true);
-
-            Object colorPanel = f.get(cp);
-            Field f2 = colorPanel.getClass().getDeclaredField("spinners");
-            f2.setAccessible(true);
-            Object spinners = f2.get(colorPanel);
-
-            Object transpSlispinner = Array.get(spinners, 3);
-            if (i == colorPanels.length - 1) {
-                transpSlispinner = Array.get(spinners, 4);
-            }
-            Field f3 = transpSlispinner.getClass().getDeclaredField("slider");
-            f3.setAccessible(true);
-            JSlider slider = (JSlider) f3.get(transpSlispinner);
-            slider.setEnabled(false);
-            Field f4 = transpSlispinner.getClass().getDeclaredField("spinner");
-            f4.setAccessible(true);
-            JSpinner spinner = (JSpinner) f4.get(transpSlispinner);
-            spinner.setEnabled(false);
-        }
         final Color[] col = new Color[]{initialColor};
 
-        JDialog dialog = JColorChooser.createDialog(component, title, true, pane, new ActionListener() {
-
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                col[0] = pane.getColor();
+        if (Helper.getJavaVersion() >= 9) {
+            //To properly compile on Java 8, reflection is needed...
+            Method showDialog = JColorChooser.class.getDeclaredMethod("showDialog", Component.class, String.class, Color.class, boolean.class);
+            Color c = (Color) showDialog.invoke(null, component, title, initialColor, false);
+            if (c != null) {
+                col[0] = c;
             }
-        }, null);
+        } else {
+            final JColorChooser pane = new JColorChooser(initialColor != null
+                    ? initialColor : Color.white);
 
-        dialog.setVisible(true);
+            AbstractColorChooserPanel[] colorPanels = pane.getChooserPanels();
+            for (int i = 1; i < colorPanels.length; i++) {
+                AbstractColorChooserPanel cp = colorPanels[i];
+
+                Field f = cp.getClass().getDeclaredField("panel");
+                f.setAccessible(true);
+
+                Object colorPanel = f.get(cp);
+                Field f2 = colorPanel.getClass().getDeclaredField("spinners");
+                f2.setAccessible(true);
+                Object spinners = f2.get(colorPanel);
+
+                Object transpSlispinner = Array.get(spinners, 3);
+                if (i == colorPanels.length - 1) {
+                    transpSlispinner = Array.get(spinners, 4);
+                }
+                Field f3 = transpSlispinner.getClass().getDeclaredField("slider");
+                f3.setAccessible(true);
+                JSlider slider = (JSlider) f3.get(transpSlispinner);
+                slider.setEnabled(false);
+                Field f4 = transpSlispinner.getClass().getDeclaredField("spinner");
+                f4.setAccessible(true);
+                JSpinner spinner = (JSpinner) f4.get(transpSlispinner);
+                spinner.setEnabled(false);
+            }
+
+            JDialog dialog = JColorChooser.createDialog(component, title, true, pane, new ActionListener() {
+
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    col[0] = pane.getColor();
+                }
+            }, null);
+            dialog.setVisible(true);
+        }       
+        
         return col[0];
-
     }
 
     @Override

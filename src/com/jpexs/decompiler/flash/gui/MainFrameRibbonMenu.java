@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -17,8 +17,10 @@
 package com.jpexs.decompiler.flash.gui;
 
 import com.jpexs.decompiler.flash.SWF;
+import com.jpexs.decompiler.flash.abc.ABC;
 import com.jpexs.decompiler.flash.configuration.Configuration;
 import com.jpexs.decompiler.flash.search.ScriptSearchResult;
+import com.jpexs.decompiler.flash.treeitems.Openable;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -31,8 +33,10 @@ import java.util.Map;
 import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
@@ -168,8 +172,9 @@ public class MainFrameRibbonMenu extends MainFrameMenu {
             String groupName = translate("menu.recentSearches");
             searchHistoryPanel.addButtonGroup(groupName);
 
-            SWF swf = Main.getMainFrame().getPanel().getCurrentSwf();
-            List<Integer> indices = Main.searchResultsStorage.getIndicesForSwf(swf);
+            Openable openable = Main.getMainFrame().getPanel().getCurrentOpenable();
+            SWF swf = (openable instanceof SWF) ? (SWF) openable : ((ABC)openable).getSwf();
+            List<Integer> indices = Main.searchResultsStorage.getIndicesForOpenable(openable);
 
             int height = 0;
             height = searchHistoryPanel.getInsets().top + searchHistoryPanel.getInsets().bottom + 6/*groupInset top*/ + new JLabel(groupName).getPreferredSize().height + 4 /*layoutGap*/;
@@ -194,7 +199,7 @@ public class MainFrameRibbonMenu extends MainFrameMenu {
                     } else {
                         sr = new SearchResultsDialog<>(Main.getDefaultDialogsOwner(), searched, Main.searchResultsStorage.isIgnoreCaseAt(fi), Main.searchResultsStorage.isRegExpAt(fi), listeners);
                     }
-                    sr.setResults(Main.searchResultsStorage.getSearchResultsAt(Main.getMainFrame().getPanel().getAllSwfs(), fi));
+                    sr.setResults(Main.searchResultsStorage.getSearchResultsAt(Main.getMainFrame().getPanel().getAllOpenablesAndSwfs(), fi));
                     sr.setVisible(true);
                     Main.getMainFrame().getPanel().searchResultsDialogs.add(sr);
                 });
@@ -373,30 +378,41 @@ public class MainFrameRibbonMenu extends MainFrameMenu {
             final ActionListener subLoader = menuLoaders.get(sub);
             AbstractCommandButton but = null;
             if (subType == TYPE_MENUITEM || (subType == TYPE_MENU && subAction != null)) {
-                JCommandButton cbut;
-                if (subIcon != null) {
-                    cbut = new JCommandButton(fixCommandTitle(subTitle), View.getResizableIcon(subIcon, subPriority == PRIORITY_TOP ? 32 : 16));
+                if (parts.length == 4) {
+                    JMenuItem menuItem = new JMenuItem(subTitle);
+                    if (subIcon != null) {
+                        menuItem.setIcon(View.getIcon(subIcon, 16));
+                    }
+                    if (subAction != null) {
+                        menuItem.addActionListener(subAction);
+                    }
+                    menuItems.put(sub, menuItem);                    
                 } else {
-                    cbut = new JCommandButton(fixCommandTitle(subTitle));
-                }
-                if (subKey != null) {
-                    //cbut.setActionRichTooltip(new RichTooltip(subTitle, subKey.toString()));
-                }
-                if (subLoader != null) {
-                    cbut.setCommandButtonKind(JCommandButton.CommandButtonKind.ACTION_AND_POPUP_MAIN_ACTION);
-                    cbut.setPopupCallback(new PopupPanelCallback() {
+                    JCommandButton cbut;
+                    if (subIcon != null) {
+                        cbut = new JCommandButton(fixCommandTitle(subTitle), View.getResizableIcon(subIcon, subPriority == PRIORITY_TOP ? 32 : 16));
+                    } else {
+                        cbut = new JCommandButton(fixCommandTitle(subTitle));
+                    }
+                    if (subKey != null) {
+                        //cbut.setActionRichTooltip(new RichTooltip(subTitle, subKey.toString()));
+                    }
+                    if (subLoader != null) {
+                        cbut.setCommandButtonKind(JCommandButton.CommandButtonKind.ACTION_AND_POPUP_MAIN_ACTION);
+                        cbut.setPopupCallback(new PopupPanelCallback() {
 
-                        @Override
-                        public JPopupPanel getPopupPanel(JCommandButton jcb) {
-                            JPopupPanel jp = new JPopupPanel() {
-                            };
+                            @Override
+                            public JPopupPanel getPopupPanel(JCommandButton jcb) {
+                                JPopupPanel jp = new JPopupPanel() {
+                                };
 
-                            subLoader.actionPerformed(new ActionEvent(jp, 0, "load:" + sub));
-                            return jp;
-                        }
-                    });
+                                subLoader.actionPerformed(new ActionEvent(jp, 0, "load:" + sub));
+                                return jp;
+                            }
+                        });
+                    }
+                    but = cbut;
                 }
-                but = cbut;
             } else if (subType == TYPE_TOGGLEMENUITEM) {
                 if (onlyCheckboxes) {
                     JCheckBox cb = new JCheckBox(subTitle);
@@ -422,6 +438,44 @@ public class MainFrameRibbonMenu extends MainFrameMenu {
         }
 
         //if (parts.length == 3)
+        if (parts.length == 4)
+        {
+            JCommandButton popupButton;
+            if (icon != null) {
+                popupButton = new JCommandButton(fixCommandTitle(title), View.getResizableIcon(icon, priority == PRIORITY_TOP ? 32 : 16));
+            } else {
+                popupButton = new JCommandButton(fixCommandTitle(title));
+            }
+            JPopupMenu popupMenu = new JPopupMenu();
+            popupButton.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    popupMenu.show(popupButton, 0, popupButton.getHeight());
+                }
+            });
+            int cnt = 0;
+            for (String sub : subs) {
+                if (sub.equals("-")) {
+                    continue;
+                }
+
+                Object o = menuItems.get(sub);
+                int subPriority = menuPriorities.get(sub);
+                int subType = menuType.get(sub);
+                ActionListener subAction = menuActions.get(sub);
+                if (subType != TYPE_MENU || (subAction != null)) {
+                    if (o instanceof JMenuItem) {                        
+                        JMenuItem mi = (JMenuItem)o;
+                        popupMenu.add((JMenuItem) o);
+                        cnt++;
+                    }
+                }
+            }
+            if (cnt > 0) {
+                menuItems.put(path, popupButton);
+            }
+        }
+        else
         { //3rd level - it's a Band!
             JRibbonBand band = new JRibbonBand(title, icon != null ? View.getResizableIcon(icon, 16) : null, null);
             band.setResizePolicies(getResizePolicies(band));
@@ -435,7 +489,8 @@ public class MainFrameRibbonMenu extends MainFrameMenu {
                 int subPriority = menuPriorities.get(sub);
                 int subType = menuType.get(sub);
                 ActionListener subAction = menuActions.get(sub);
-                if (subType != TYPE_MENU || (subAction != null)) {
+                //if (subType != TYPE_MENU || (subAction != null)) 
+                {
                     if (o instanceof AbstractCommandButton) {
                         RibbonElementPriority ribbonPriority = RibbonElementPriority.MEDIUM;
                         switch (subPriority) {
@@ -452,6 +507,8 @@ public class MainFrameRibbonMenu extends MainFrameMenu {
 
                         band.addCommandButton((AbstractCommandButton) o, ribbonPriority);
                         cnt++;
+                    } else if (o instanceof JRibbonBand) {
+                        //ignore
                     } else if (o instanceof JComponent) {
                         band.addRibbonComponent(new JRibbonComponent((JComponent) o));
                         cnt++;

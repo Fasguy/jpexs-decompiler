@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -16,13 +16,15 @@
  */
 package com.jpexs.decompiler.flash.timeline;
 
-import com.jpexs.decompiler.flash.SWF;
 import com.jpexs.decompiler.flash.tags.DoActionTag;
+import com.jpexs.decompiler.flash.tags.FrameLabelTag;
 import com.jpexs.decompiler.flash.tags.ShowFrameTag;
 import com.jpexs.decompiler.flash.tags.Tag;
 import com.jpexs.decompiler.flash.tags.base.ASMSourceContainer;
+import com.jpexs.decompiler.flash.tags.base.CharacterTag;
 import com.jpexs.decompiler.flash.tags.base.Exportable;
 import com.jpexs.decompiler.flash.tags.base.PlaceObjectTypeTag;
+import com.jpexs.decompiler.flash.treeitems.Openable;
 import com.jpexs.decompiler.flash.treeitems.TreeItem;
 import com.jpexs.decompiler.flash.types.RGB;
 import com.jpexs.decompiler.flash.types.RGBA;
@@ -58,6 +60,8 @@ public class Frame implements TreeItem, Exportable {
     public List<ASMSourceContainer> actionContainers = new ArrayList<>();
 
     public List<Tag> innerTags = new ArrayList<>();
+    
+    public List<Tag> allInnerTags = new ArrayList<>();
 
     public ShowFrameTag showFrameTag = null; // can be null for the last frame
 
@@ -84,13 +88,23 @@ public class Frame implements TreeItem, Exportable {
     }
 
     @Override
-    public SWF getSwf() {
+    public Openable getOpenable() {
         return timeline.swf;
     }
 
     @Override
     public String toString() {
-        return "frame " + (frame + 1);
+        String name = "frame " + (frame + 1);
+        List<String> labels = new ArrayList<>();
+        for (Tag t : innerTags) {
+            if (t instanceof FrameLabelTag) {
+                labels.add(((FrameLabelTag)t).name);
+            }
+        }
+        if (!labels.isEmpty()) {
+            name += " (" + String.join(", ", labels) + ")";
+        }
+        return name;
     }
 
     @Override
@@ -113,15 +127,24 @@ public class Frame implements TreeItem, Exportable {
         return timeline.hashCode() ^ Integer.hashCode(frame);
     }
 
+    public boolean isAllInnerTagsModified() {
+        for (Tag t : allInnerTags) {
+            if (t.isModified() && !t.isReadOnly()) {
+                return true;
+            }
+        }        
+        return false;
+    }
+    
     @Override
     public boolean isModified() {
         for (Tag t : innerTags) {
-            if (t.isModified()) {
+            if (t.isModified() && !t.isReadOnly()) {
                 return true;
             }
         }
         for (Tag t : actions) {
-            if (t.isModified()) {
+            if (t.isModified() && !t.isReadOnly()) {
                 return true;
             }
         }
@@ -130,7 +153,7 @@ public class Frame implements TreeItem, Exportable {
                 return true;
             }
         }
-        if (showFrameTag != null && showFrameTag.isModified()) {
+        if (showFrameTag != null && showFrameTag.isModified() && !showFrameTag.isReadOnly()) {
             return true;
         }
         return false;
@@ -139,9 +162,28 @@ public class Frame implements TreeItem, Exportable {
     public void getNeededCharacters(Set<Integer> needed) {
         for (Tag t : innerTags) {
             if(t instanceof PlaceObjectTypeTag) {
-                needed.add(((PlaceObjectTypeTag)t).getCharacterId());
+                PlaceObjectTypeTag place = (PlaceObjectTypeTag)t;                
+                int characterId = place.getCharacterId();
+                if (characterId != -1) {
+                    needed.add(characterId);
+                }
             }
         }
-        needed.remove(-1);
+    }
+    
+    public void getNeededCharactersDeep(Set<Integer> needed) {
+        for (Tag t : innerTags) {
+            if(t instanceof PlaceObjectTypeTag) {  
+                PlaceObjectTypeTag place = (PlaceObjectTypeTag)t;                
+                int characterId = ((PlaceObjectTypeTag)t).getCharacterId();
+                if (characterId != -1) {
+                    CharacterTag character = place.getSwf().getCharacter(characterId);
+                    if (character != null) {
+                        character.getNeededCharactersDeep(needed);
+                    }
+                    needed.add(characterId);
+                }
+            }
+        }
     }
 }

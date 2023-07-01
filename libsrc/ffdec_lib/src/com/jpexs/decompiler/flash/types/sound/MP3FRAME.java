@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.types.sound;
 
 import java.io.IOException;
@@ -34,10 +35,21 @@ public class MP3FRAME {
     private Header h;
 
     private SampleBuffer samples;
+    
+    private byte[] fullData;
 
     private MP3FRAME() {
 
     }
+
+    public void setFullData(byte[] fullData) {
+        this.fullData = fullData;
+    }
+   
+    public byte[] getBytes() {
+        return fullData;
+    }
+    
 
     public static MP3FRAME readFrame(Bitstream bitstream, Decoder decoder) throws IOException {
         MP3FRAME ret = new MP3FRAME();
@@ -54,8 +66,32 @@ public class MP3FRAME {
         } catch (DecoderException ex) {
             Logger.getLogger(MP3FRAME.class.getName()).log(Level.SEVERE, null, ex);
         }
-        bitstream.closeFrame();
+        bitstream.closeFrame();        
         return ret;
+    }
+    
+    public int getSampleCount() {
+       if (h.version() == Header.MPEG1) {
+           switch(h.layer()) {
+               case 1:
+                   return 384;
+               case 2:
+                   return 1152;
+               case 3:
+                   return 1152;
+           }
+       }
+       if (h.version() == Header.MPEG2_LSF || h.version() == Header.MPEG25_LSF) {
+           switch(h.layer()) {
+               case 1:
+                   return 384;
+               case 2:
+                   return 1152;
+               case 3:
+                   return 576;
+           }
+       }
+       return 0;
     }
 
     public boolean isStereo() {

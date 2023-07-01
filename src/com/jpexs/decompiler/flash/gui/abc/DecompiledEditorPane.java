@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -24,14 +24,15 @@ import com.jpexs.decompiler.flash.abc.avm2.instructions.AVM2Instruction;
 import com.jpexs.decompiler.flash.abc.avm2.instructions.construction.ConstructSuperIns;
 import com.jpexs.decompiler.flash.abc.avm2.instructions.executing.CallSuperIns;
 import com.jpexs.decompiler.flash.abc.avm2.instructions.executing.CallSuperVoidIns;
-import com.jpexs.decompiler.flash.abc.types.ClassInfo;
-import com.jpexs.decompiler.flash.abc.types.InstanceInfo;
+import com.jpexs.decompiler.flash.abc.avm2.parser.script.AbcIndexing;
 import com.jpexs.decompiler.flash.abc.types.Multiname;
 import com.jpexs.decompiler.flash.abc.types.ScriptInfo;
 import com.jpexs.decompiler.flash.abc.types.traits.Trait;
+import com.jpexs.decompiler.flash.abc.types.traits.TraitClass;
 import com.jpexs.decompiler.flash.abc.types.traits.TraitFunction;
 import com.jpexs.decompiler.flash.abc.types.traits.TraitMethodGetterSetter;
 import com.jpexs.decompiler.flash.abc.types.traits.TraitSlotConst;
+import com.jpexs.decompiler.flash.abc.types.traits.Traits;
 import com.jpexs.decompiler.flash.action.deobfuscation.BrokenScriptDetector;
 import com.jpexs.decompiler.flash.gui.AppStrings;
 import com.jpexs.decompiler.flash.gui.Main;
@@ -44,6 +45,7 @@ import com.jpexs.decompiler.flash.helpers.hilight.HighlightSpecialType;
 import com.jpexs.decompiler.flash.helpers.hilight.Highlighting;
 import com.jpexs.decompiler.flash.tags.ABCContainerTag;
 import com.jpexs.decompiler.graph.DottedChain;
+import com.jpexs.decompiler.graph.TypeItem;
 import com.jpexs.helpers.CancellableWorker;
 import com.jpexs.helpers.Reference;
 import java.awt.Point;
@@ -93,9 +95,25 @@ public class DecompiledEditorPane extends DebuggableEditorPane implements CaretL
     private CancellableWorker setSourceWorker;
 
     private final List<Runnable> scriptListeners = new ArrayList<>();
+    
+    private boolean scriptLoaded = true;
 
     public void addScriptListener(Runnable l) {
         scriptListeners.add(l);
+    }
+        
+    public void runWhenLoaded(Runnable l) {
+        if (scriptLoaded) {
+            l.run();
+        } else {
+            addScriptListener(new Runnable() {
+                @Override
+                public void run() {
+                    l.run();
+                    removeScriptListener(this);
+                }
+            });
+        }
     }
 
     public ABCPanel getAbcPanel() {
@@ -132,7 +150,7 @@ public class DecompiledEditorPane extends DebuggableEditorPane implements CaretL
     }
 
     public void setNoTrait() {
-        abcPanel.detailPanel.showCard(DetailPanel.UNSUPPORTED_TRAIT_CARD, null, 0);
+        abcPanel.detailPanel.showCard(DetailPanel.UNSUPPORTED_TRAIT_CARD, null, 0, null);
     }
 
     public void hilightSpecial(HighlightSpecialType type, long index) {
@@ -204,9 +222,11 @@ public class DecompiledEditorPane extends DebuggableEditorPane implements CaretL
             return false;
         }
         int bi = abc.findBodyIndex(methodIndex);
-        if (bi == -1) {
+        
+        //in interfaces, there is no body
+        /*if (bi == -1) {
             return false;
-        }
+        }*/
 
         //fix for inner functions:
         if (trait instanceof TraitMethodGetterSetter) {
@@ -221,10 +241,10 @@ public class DecompiledEditorPane extends DebuggableEditorPane implements CaretL
                 trait = null;
             }
         }
-        abcPanel.detailPanel.showCard(DetailPanel.METHOD_GETTER_SETTER_TRAIT_CARD, trait, traitIndex);
+        abcPanel.detailPanel.showCard(DetailPanel.METHOD_GETTER_SETTER_TRAIT_CARD, trait, traitIndex, abc);
         MethodCodePanel methodCodePanel = abcPanel.detailPanel.methodTraitPanel.methodCodePanel;
-        if (reset || (methodCodePanel.getBodyIndex() != bi)) {
-            methodCodePanel.setBodyIndex(scriptName, bi, abc, name, trait, script.scriptIndex);
+        if (reset || (methodCodePanel.getMethodIndex()!= methodIndex) || (methodCodePanel.getABC() != abc)) {
+            methodCodePanel.setMethod(scriptName, methodIndex, bi, abc, name, trait, script.scriptIndex);
             abcPanel.detailPanel.setEditMode(false);
             this.isStatic = isStatic;
         }
@@ -317,27 +337,96 @@ public class DecompiledEditorPane extends DebuggableEditorPane implements CaretL
         return -1;
     }
 
-    public boolean getPropertyTypeAtPos(int pos, Reference<Integer> abcIndex, Reference<Integer> classIndex, Reference<Integer> traitIndex, Reference<Boolean> classTrait, Reference<Integer> multinameIndex, Reference<ABC> abcUsed) {
+    public boolean getPropertyTypeAtPos(AbcIndexing indexing, int pos, Reference<Integer> abcIndex, Reference<Integer> classIndex, Reference<Integer> traitIndex, Reference<Boolean> classTrait, Reference<Integer> multinameIndex, Reference<ABC> abcUsed) {
 
         int m = getMultinameAtPos(pos, true, abcUsed);
-        if (m <= 0) {
+        
+        if (indexing == null) {
             return false;
         }
+        /*int m = getMultinameAtPos(pos, true, abcUsed);
+        if (m <= 0) {
+            return false;
+        }*/
         SyntaxDocument sd = (SyntaxDocument) getDocument();
         Token t = sd.getTokenAt(pos + 1);
         Token lastToken = t;
         Token prev;
-        while (t.type == TokenType.IDENTIFIER || t.type == TokenType.KEYWORD || t.type == TokenType.REGEX) {
-            prev = sd.getPrevToken(t);
-            if (prev != null) {
-                if (!".".equals(prev.getString(sd))) {
-                    break;
-                }
-                t = sd.getPrevToken(prev);
-            } else {
+        String propName = t.getString(sd);
+        if (!(t.type == TokenType.IDENTIFIER || t.type == TokenType.KEYWORD || t.type == TokenType.REGEX)) {
+            return false;
+        }
+        prev = sd.getPrevToken(t);
+        if (prev == null) {
+            return false;
+        }
+        if (!".".equals(prev.getString(sd))) {
+            return false;
+        }
+        Highlighting sh = Highlighting.search(highlightedText.getSpecialHighlights(), new HighlightData(), prev.start, prev.start);
+        if (sh == null) {
+            return false;
+        }
+        
+        HighlightData data = sh.getProperties();
+        
+        String parentType = data.propertyType;
+        if (parentType.equals("*")) {
+            return false;
+        }
+        AbcIndexing.TraitIndex propertyTraitIndex = indexing.findProperty(new AbcIndexing.PropertyDef(propName, new TypeItem(parentType), getABC(), data.namespaceIndex), data.isStatic, !data.isStatic, true);
+        if (propertyTraitIndex == null) {
+            return false;
+        }
+        
+        List<ABCContainerTag> abcs = getABC().getSwf().getAbcList();
+        int index = 0;
+        boolean found = false;
+        for (ABCContainerTag cnt:abcs) {
+            if (cnt.getABC() == propertyTraitIndex.abc) {
+                abcIndex.setVal(index);
+                found = true;
+                break;
+            }
+            index++;
+        }
+        if (!found) {
+            return false;
+        }
+        
+        abcUsed.setVal(propertyTraitIndex.abc);
+        
+        index = propertyTraitIndex.abc.findClassByName(propertyTraitIndex.objType.toString());
+        if (index == -1) {
+            return false;
+        }
+        classIndex.setVal(index);
+        
+        classTrait.setVal(data.isStatic);
+        
+        Traits ts;
+        if (data.isStatic) {
+            ts = propertyTraitIndex.abc.class_info.get(index).static_traits;
+        } else {
+            ts = propertyTraitIndex.abc.instance_info.get(index).instance_traits;
+        }
+        
+        found = false;
+        for (int i = 0; i < ts.traits.size(); i++) {
+            if (ts.traits.get(i) == propertyTraitIndex.trait) {
+                traitIndex.setVal(i);
+                found = true;
                 break;
             }
         }
+        if (!found) {
+            return false;
+        }
+        
+        multinameIndex.setVal(propertyTraitIndex.trait.name_index);
+        
+        return true;
+        /*
         if (t.type != TokenType.IDENTIFIER && t.type != TokenType.KEYWORD && t.type != TokenType.REGEX) {
             return false;
         }
@@ -346,9 +435,8 @@ public class DecompiledEditorPane extends DebuggableEditorPane implements CaretL
         DottedChain currentType = locTypeRef.getVal();
         if (currentType.equals(DottedChain.ALL)) {
             return false;
-        }
-        boolean found;
-
+        }     
+         
         while (!currentType.equals(DottedChain.ALL)) {
             String ident = t.getString(sd);
             found = false;
@@ -361,7 +449,7 @@ public class DecompiledEditorPane extends DebuggableEditorPane implements CaretL
                     InstanceInfo ii = a.instance_info.get(cindex);
                     for (int j = 0; j < ii.instance_traits.traits.size(); j++) {
                         Trait tr = ii.instance_traits.traits.get(j);
-                        if (ident.equals(tr.getName(a).getName(a.constants, null, false /*NOT RAW!*/, true))) {
+                        if (ident.equals(tr.getName(a).getName(a.constants, null, false --not raw--, true))) { 
                             classIndex.setVal(cindex);
                             abcIndex.setVal(i);
                             traitIndex.setVal(j);
@@ -376,7 +464,7 @@ public class DecompiledEditorPane extends DebuggableEditorPane implements CaretL
                     ClassInfo ci = a.class_info.get(cindex);
                     for (int j = 0; j < ci.static_traits.traits.size(); j++) {
                         Trait tr = ci.static_traits.traits.get(j);
-                        if (ident.equals(tr.getName(a).getName(a.constants, null, false /*NOT RAW!*/, true))) {
+                        if (ident.equals(tr.getName(a).getName(a.constants, null, false --not raw--, true))) {
                             classIndex.setVal(cindex);
                             abcIndex.setVal(i);
                             traitIndex.setVal(j);
@@ -402,7 +490,7 @@ public class DecompiledEditorPane extends DebuggableEditorPane implements CaretL
             }
             t = sd.getNextToken(t);
         }
-        return true;
+        return true;*/
     }
 
     public int getMultinameAtPos(int pos, Reference<ABC> abcUsed) {
@@ -489,6 +577,7 @@ public class DecompiledEditorPane extends DebuggableEditorPane implements CaretL
         Highlighting sh = Highlighting.searchPos(highlightedText.getSpecialHighlights(), pos);
         if (sh != null) {
             switch (sh.getProperties().subtype) {
+                case CLASS_NAME:                
                 case TYPE_NAME:
                     String typeName = sh.getProperties().specialValue;
                     for (int i = 1; i < abc.constants.getMultinameCount(); i++) {
@@ -507,7 +596,8 @@ public class DecompiledEditorPane extends DebuggableEditorPane implements CaretL
                     break;
                 case TRAIT_NAME:
                     if (currentTrait != null) {
-                        //return currentTrait.name_index;
+                        //TODO: this should be handled better = to match method usages on the same class, not all matching classes. But that requires decompiling target usages.
+                        return currentTrait.name_index;
                     }
                     break;
                 case RETURNS:
@@ -563,6 +653,10 @@ public class DecompiledEditorPane extends DebuggableEditorPane implements CaretL
                     if (currentTrait != null) {
                         name += ":" + currentTrait.getName(abc).getName(abc.constants, null, false, true);
                     }
+                    
+                    if (currentTrait instanceof TraitSlotConst) {
+                        currentTrait = null;
+                    }
                 }
 
                 displayMethod(pos, (int) tm.getProperties().index, name, currentTrait, lastTraitIndex, isStatic);
@@ -581,13 +675,27 @@ public class DecompiledEditorPane extends DebuggableEditorPane implements CaretL
                 lastTraitIndex = (int) currentTraitHighlight.getProperties().index;
                 currentTrait = getCurrentTrait();
                 if (currentTrait != null) {
-                    if (currentTrait instanceof TraitSlotConst) {
+                    if (currentTrait instanceof TraitClass) {
+                        abcPanel.detailPanel.classTraitPanel.load((TraitClass)currentTrait, abc, true);
+                        final Trait ftrait = currentTrait;
+                        final int ftraitIndex = lastTraitIndex;
+                        View.execInEventDispatch(() -> {
+                            abcPanel.detailPanel.showCard(DetailPanel.CLASS_TRAIT_CARD, ftrait, ftraitIndex, abc);
+                        });
+                        abcPanel.detailPanel.setEditMode(false);
+                        currentMethodHighlight = null;
+                        Highlighting spec = Highlighting.searchPos(highlightedText.getSpecialHighlights(), pos, currentTraitHighlight.startPos, currentTraitHighlight.startPos + currentTraitHighlight.len);
+                        if (spec != null) {
+                            abcPanel.detailPanel.classTraitPanel.hilightSpecial(spec);
+                        }
+                        return;
+                    } else if (currentTrait instanceof TraitSlotConst) {
                         abcPanel.detailPanel.slotConstTraitPanel.load((TraitSlotConst) currentTrait, abc,
                                 abc.isStaticTraitId(classIndex, lastTraitIndex));
                         final Trait ftrait = currentTrait;
                         final int ftraitIndex = lastTraitIndex;
                         View.execInEventDispatch(() -> {
-                            abcPanel.detailPanel.showCard(DetailPanel.SLOT_CONST_TRAIT_CARD, ftrait, ftraitIndex);
+                            abcPanel.detailPanel.showCard(DetailPanel.SLOT_CONST_TRAIT_CARD, ftrait, ftraitIndex, abc);
                         });
                         abcPanel.detailPanel.setEditMode(false);
                         currentMethodHighlight = null;
@@ -644,10 +752,53 @@ public class DecompiledEditorPane extends DebuggableEditorPane implements CaretL
         }
     }
 
+    /**
+     * WARNING: This won't change script. This only hilights class in current script     
+     */
+    public void gotoClassHeader() {
+        Highlighting tc = Highlighting.searchIndex(highlightedText.getClassHighlights(), classIndex);
+        if (tc != null) {
+            final int fpos = tc.startPos;
+            new Timer().schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    if (fpos <= getDocument().getLength()) {
+                        setCaretPosition(fpos);
+                    }
+                }
+            }, 100);
+        }
+    }
+    
     public void gotoTrait(int traitId) {
         boolean isScriptInit = traitId == GraphTextWriter.TRAIT_SCRIPT_INITIALIZER;
 
         Highlighting tc = Highlighting.searchIndex(highlightedText.getClassHighlights(), classIndex);
+        
+        if (!isScriptInit && tc == null) {
+            List<Highlighting> traitHighlights = highlightedText.getTraitHighlights();
+            List<Highlighting> classHighlights = highlightedText.getClassHighlights();
+            looph: for (Highlighting th:traitHighlights) {
+                if (th.getProperties().index == traitId) {
+                    for (Highlighting tc2:classHighlights) {
+                        if (tc2.startPos <= th.startPos && tc2.startPos + tc2.len >= th.startPos+th.len) {
+                            continue looph;
+                        }
+                    }
+                    final int fpos = th.startPos;
+                    new Timer().schedule(new TimerTask() {
+                        @Override
+                        public void run() {
+                            if (fpos <= getDocument().getLength()) {
+                                setCaretPosition(fpos);
+                            }
+                        }
+                    }, 100);
+                    break;
+                }
+            }            
+        }
+        
         if (tc != null || isScriptInit) {
             Highlighting th = Highlighting.searchIndex(highlightedText.getTraitHighlights(), traitId, isScriptInit ? 0 : tc.startPos, isScriptInit ? -1 : tc.startPos + tc.len);
             int pos = 0;
@@ -696,11 +847,14 @@ public class DecompiledEditorPane extends DebuggableEditorPane implements CaretL
             setSourceWorker.cancel(true);
             setSourceWorker = null;
         }
+        scriptLoaded = false;
 
-        if (!force && this.script == scriptLeaf) {
+        if (!force && this.script == scriptLeaf) {            
+            scriptLoaded = true;
             fireScript();
             return;
         }
+               
 
         String sn = scriptLeaf.getClassPath().toString();
         setScriptName(sn);
@@ -806,6 +960,8 @@ public class DecompiledEditorPane extends DebuggableEditorPane implements CaretL
                 }
             }
         }
+        
+        scriptLoaded = true;
 
         fireScript();
     }

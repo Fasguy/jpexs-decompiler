@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -23,8 +23,7 @@ import java.awt.Component;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.lang.reflect.Field;
-import java.text.DecimalFormat;
-import java.text.ParseException;
+import java.util.Objects;
 import javax.swing.JFormattedTextField;
 import javax.swing.JSpinner;
 import javax.swing.SpinnerModel;
@@ -93,15 +92,21 @@ public class NumberEditor extends JSpinner implements GenericTagEditor {
     }
 
     @Override
-    public void save() {
+    public boolean save() {
         try {
-            Object value = getChangedValue();
-            if (value != null) {
-                ReflectionTools.setValue(obj, field, index, value);
+            Object oldValue = ReflectionTools.getValue(obj, field, index);
+            Object newValue = getChangedValue();
+            if (newValue == null) {
+                return false;
             }
+            if (Objects.equals(oldValue, newValue)) {
+                return false;
+            }
+            ReflectionTools.setValue(obj, field, index, newValue);            
         } catch (IllegalArgumentException | IllegalAccessException ex) {
             // ignore
         }
+        return true;
     }
 
     private SpinnerModel getModel(SWFType swfType, Object value) {

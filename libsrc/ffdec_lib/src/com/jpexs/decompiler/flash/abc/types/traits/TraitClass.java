@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,8 +18,11 @@ package com.jpexs.decompiler.flash.abc.types.traits;
 
 import com.jpexs.decompiler.flash.abc.ABC;
 import com.jpexs.decompiler.flash.abc.avm2.model.CallPropertyAVM2Item;
+import com.jpexs.decompiler.flash.abc.avm2.model.ClassAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.FullMultinameAVM2Item;
+import com.jpexs.decompiler.flash.abc.avm2.model.GetLexAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.GetPropertyAVM2Item;
+import com.jpexs.decompiler.flash.abc.avm2.model.GlobalAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.IntegerValueAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.ThisAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.parser.script.AbcIndexing;
@@ -77,35 +80,35 @@ public class TraitClass extends Trait implements TraitWithSlot {
     }
 
     @Override
-    public void getDependencies(int scriptIndex, int classIndex, boolean isStatic, String customNs, ABC abc, List<Dependency> dependencies, List<String> uses, DottedChain ignorePackage, List<DottedChain> fullyQualifiedNames) throws InterruptedException {
-        super.getDependencies(scriptIndex, -1, false, customNs, abc, dependencies, uses, ignorePackage == null ? getPackage(abc) : ignorePackage, fullyQualifiedNames);
+    public void getDependencies(AbcIndexing abcIndex, int scriptIndex, int classIndex, boolean isStatic, String customNs, ABC abc, List<Dependency> dependencies, DottedChain ignorePackage, List<DottedChain> fullyQualifiedNames) throws InterruptedException {
+        super.getDependencies(abcIndex, scriptIndex, -1, false, customNs, abc, dependencies, ignorePackage == null ? getPackage(abc) : ignorePackage, fullyQualifiedNames);
         ClassInfo classInfo = abc.class_info.get(class_info);
         InstanceInfo instanceInfo = abc.instance_info.get(class_info);
         DottedChain packageName = instanceInfo.getName(abc.constants).getNamespace(abc.constants).getName(abc.constants); //assume not null name
 
         //DependencyParser.parseDependenciesFromMultiname(customNs, abc, dependencies, uses, abc.constants.getMultiname(instanceInfo.name_index), packageName, fullyQualifiedNames);
         if (instanceInfo.super_index > 0) {
-            DependencyParser.parseDependenciesFromMultiname(customNs, abc, dependencies, uses, abc.constants.getMultiname(instanceInfo.super_index), packageName, fullyQualifiedNames, DependencyType.INHERITANCE);
+            DependencyParser.parseDependenciesFromMultiname(abcIndex, customNs, abc, dependencies, abc.constants.getMultiname(instanceInfo.super_index), packageName, fullyQualifiedNames, DependencyType.INHERITANCE);
         }
         for (int i : instanceInfo.interfaces) {
-            DependencyParser.parseDependenciesFromMultiname(customNs, abc, dependencies, uses, abc.constants.getMultiname(i), packageName, fullyQualifiedNames, DependencyType.INHERITANCE);
+            DependencyParser.parseDependenciesFromMultiname(abcIndex, customNs, abc, dependencies, abc.constants.getMultiname(i), packageName, fullyQualifiedNames, DependencyType.INHERITANCE);
         }
 
         //static
-        classInfo.static_traits.getDependencies(scriptIndex, class_info, true, customNs, abc, dependencies, uses, packageName, fullyQualifiedNames);
+        classInfo.static_traits.getDependencies(abcIndex, scriptIndex, class_info, true, customNs, abc, dependencies, packageName, fullyQualifiedNames);
 
         //static initializer
-        DependencyParser.parseDependenciesFromMethodInfo(null, scriptIndex, class_info, true, customNs, abc, classInfo.cinit_index, dependencies, uses, packageName, fullyQualifiedNames, new ArrayList<>());
+        DependencyParser.parseDependenciesFromMethodInfo(abcIndex, null, scriptIndex, class_info, true, customNs, abc, classInfo.cinit_index, dependencies, packageName, fullyQualifiedNames, new ArrayList<>());
 
         //instance
-        instanceInfo.instance_traits.getDependencies(scriptIndex, class_info, false, customNs, abc, dependencies, uses, packageName, fullyQualifiedNames);
+        instanceInfo.instance_traits.getDependencies(abcIndex, scriptIndex, class_info, false, customNs, abc, dependencies, packageName, fullyQualifiedNames);
 
         //instance initializer
-        DependencyParser.parseDependenciesFromMethodInfo(null, scriptIndex, class_info, false, customNs, abc, instanceInfo.iinit_index, dependencies, uses, packageName, fullyQualifiedNames, new ArrayList<>());
+        DependencyParser.parseDependenciesFromMethodInfo(abcIndex, null, scriptIndex, class_info, false, customNs, abc, instanceInfo.iinit_index, dependencies, packageName, fullyQualifiedNames, new ArrayList<>());
     }
 
     @Override
-    public GraphTextWriter toStringHeader(Trait parent, ConvertData convertData, String path, ABC abc, boolean isStatic, ScriptExportMode exportMode, int scriptIndex, int classIndex, GraphTextWriter writer, List<DottedChain> fullyQualifiedNames, boolean parallel) {
+    public GraphTextWriter toStringHeader(Trait parent, ConvertData convertData, String path, ABC abc, boolean isStatic, ScriptExportMode exportMode, int scriptIndex, int classIndex, GraphTextWriter writer, List<DottedChain> fullyQualifiedNames, boolean parallel, boolean insideInterface) {
         abc.instance_info.get(class_info).getClassHeaderStr(writer, abc, fullyQualifiedNames, false);
         return writer;
     }
@@ -115,27 +118,31 @@ public class TraitClass extends Trait implements TraitWithSlot {
     }
 
     @Override
-    public GraphTextWriter toString(Trait parent, ConvertData convertData, String path, ABC abc, boolean isStatic, ScriptExportMode exportMode, int scriptIndex, int classIndex, GraphTextWriter writer, List<DottedChain> fullyQualifiedNames, boolean parallel) throws InterruptedException {
+    public GraphTextWriter toString(AbcIndexing abcIndex, Trait parent, ConvertData convertData, String path, ABC abc, boolean isStatic, ScriptExportMode exportMode, int scriptIndex, int classIndex, GraphTextWriter writer, List<DottedChain> fullyQualifiedNames, boolean parallel, boolean insideInterface) throws InterruptedException {
 
         InstanceInfo instanceInfo = abc.instance_info.get(class_info);
+        
+        boolean isInterface  = instanceInfo.isInterface();
+        
         Multiname instanceInfoMultiname = instanceInfo.getName(abc.constants);
         DottedChain packageName = instanceInfoMultiname.getNamespace(abc.constants).getName(abc.constants); //assume not null name
 
         fullyQualifiedNames = new ArrayList<>();
-        writeImportsUsages(scriptIndex, classIndex, false, abc, writer, packageName, fullyQualifiedNames);
+        writeImports(abcIndex, scriptIndex, classIndex, false, abc, writer, packageName, fullyQualifiedNames);
 
         String instanceInfoName = instanceInfoMultiname.getName(abc.constants, fullyQualifiedNames, false, true);
 
-        writer.startClass(class_info);
-
+        
         getMetaData(parent, convertData, abc, writer);
         //class header
         instanceInfo.getClassHeaderStr(writer, abc, fullyQualifiedNames, false);
+        writer.endTrait();        
         writer.startBlock();
+        writer.startClass(class_info);
 
         //static variables & constants
         ClassInfo classInfo = abc.class_info.get(class_info);
-        classInfo.static_traits.toString(new Class[]{TraitSlotConst.class}, this, convertData, path +/*packageName +*/ "/" + instanceInfoName, abc, true, exportMode, false, scriptIndex, class_info, writer, fullyQualifiedNames, parallel, new ArrayList<>());
+        classInfo.static_traits.toString(abcIndex, new Class[]{TraitSlotConst.class}, this, convertData, path +/*packageName +*/ "/" + instanceInfoName, abc, true, exportMode, false, scriptIndex, class_info, writer, fullyQualifiedNames, parallel, new ArrayList<>(), isInterface);
 
         //static initializer
         int bodyIndex = abc.findBodyIndex(classInfo.cinit_index);
@@ -145,7 +152,9 @@ public class TraitClass extends Trait implements TraitWithSlot {
             if (exportMode != ScriptExportMode.AS_METHOD_STUBS) {
                 if (!classInitializerIsEmpty) {
                     writer.startBlock();
-                    abc.bodies.get(bodyIndex).toString(path +/*packageName +*/ "/" + instanceInfoName + ".staticinitializer", exportMode, abc, this, writer, fullyQualifiedNames, new HashSet<>());
+                    List<MethodBody> callStack = new ArrayList<>();
+                    callStack.add(abc.bodies.get(bodyIndex));
+                    abc.bodies.get(bodyIndex).toString(callStack, abcIndex, path +/*packageName +*/ "/" + instanceInfoName + ".staticinitializer", exportMode, abc, this, writer, fullyQualifiedNames, new HashSet<>());
                     writer.endBlock();
                 } else {
                     //Note: There must be trait/method highlight even if the initializer is empty to TraitList in GUI to work correctly
@@ -163,22 +172,12 @@ public class TraitClass extends Trait implements TraitWithSlot {
         }
 
         //instance variables
-        instanceInfo.instance_traits.toString(new Class[]{TraitSlotConst.class}, this, convertData, path +/*packageName +*/ "/" + instanceInfoName, abc, false, exportMode, false, scriptIndex, class_info, writer, fullyQualifiedNames, parallel, new ArrayList<>());
+        instanceInfo.instance_traits.toString(abcIndex, new Class[]{TraitSlotConst.class}, this, convertData, path +/*packageName +*/ "/" + instanceInfoName, abc, false, exportMode, false, scriptIndex, class_info, writer, fullyQualifiedNames, parallel, new ArrayList<>(), isInterface);
 
         //instance initializer - constructor
         if (!instanceInfo.isInterface()) {
-            String modifier = "";
-            Multiname m = abc.constants.getMultiname(instanceInfo.name_index);
-            Namespace ns = m.getNamespace(abc.constants);
-            if (ns != null) {
-                modifier = ns.getPrefix(abc) + " ";
-                if (modifier.equals(" ")) {
-                    modifier = "";
-                }
-                if (modifier.startsWith("private")) { //cannot have private constuctor
-                    modifier = "";
-                }
-            }
+            String modifier = "public ";
+            Multiname m = abc.constants.getMultiname(instanceInfo.name_index);           
 
             writer.newLine();
             writer.startTrait(GraphTextWriter.TRAIT_INSTANCE_INITIALIZER);
@@ -193,7 +192,9 @@ public class TraitClass extends Trait implements TraitWithSlot {
             writer.appendNoHilight(")").startBlock();
             if (exportMode != ScriptExportMode.AS_METHOD_STUBS) {
                 if (body != null) {
-                    body.toString(path +/*packageName +*/ "/" + instanceInfoName + ".initializer", exportMode, abc, this, writer, fullyQualifiedNames, new HashSet<>());
+                    List<MethodBody> callStack = new ArrayList<>();
+                    callStack.add(body);
+                    body.toString(callStack, abcIndex, path +/*packageName +*/ "/" + instanceInfoName + ".initializer", exportMode, abc, this, writer, fullyQualifiedNames, new HashSet<>());
                 }
             }
 
@@ -203,19 +204,19 @@ public class TraitClass extends Trait implements TraitWithSlot {
         }
 
         //static methods
-        classInfo.static_traits.toString(new Class[]{TraitClass.class, TraitFunction.class, TraitMethodGetterSetter.class}, this, convertData, path +/*packageName +*/ "/" + instanceInfoName, abc, true, exportMode, false, scriptIndex, class_info, writer, fullyQualifiedNames, parallel, new ArrayList<>());
+        classInfo.static_traits.toString(abcIndex, new Class[]{TraitClass.class, TraitFunction.class, TraitMethodGetterSetter.class}, this, convertData, path +/*packageName +*/ "/" + instanceInfoName, abc, true, exportMode, false, scriptIndex, class_info, writer, fullyQualifiedNames, parallel, new ArrayList<>(), isInterface);
 
         //instance methods
-        instanceInfo.instance_traits.toString(new Class[]{TraitClass.class, TraitFunction.class, TraitMethodGetterSetter.class}, this, convertData, path +/*packageName +*/ "/" + instanceInfoName, abc, false, exportMode, false, scriptIndex, class_info, writer, fullyQualifiedNames, parallel, convertData.ignoreFrameScripts ? frameTraitNames : new ArrayList<>());
+        instanceInfo.instance_traits.toString(abcIndex, new Class[]{TraitClass.class, TraitFunction.class, TraitMethodGetterSetter.class}, this, convertData, path +/*packageName +*/ "/" + instanceInfoName, abc, false, exportMode, false, scriptIndex, class_info, writer, fullyQualifiedNames, parallel, convertData.ignoreFrameScripts ? frameTraitNames : new ArrayList<>(), isInterface);
 
+        writer.endClass();        
         writer.endBlock(); // class
-        writer.endClass();
         writer.newLine();
         return writer;
     }
 
     @Override
-    public void convert(Trait parent, ConvertData convertData, String path, ABC abc, boolean isStatic, ScriptExportMode exportMode, int scriptIndex, int classIndex, NulWriter writer, List<DottedChain> fullyQualifiedNames, boolean parallel) throws InterruptedException {
+    public void convert(AbcIndexing abcIndex, Trait parent, ConvertData convertData, String path, ABC abc, boolean isStatic, ScriptExportMode exportMode, int scriptIndex, int classIndex, NulWriter writer, List<DottedChain> fullyQualifiedNames, boolean parallel, ScopeStack scopeStack) throws InterruptedException {
 
         fullyQualifiedNames = new ArrayList<>();
 
@@ -229,24 +230,42 @@ public class TraitClass extends Trait implements TraitWithSlot {
         if (sIndex > -1) {
             int nsIndex = abc.constants.getNamespaceId(Namespace.KIND_PACKAGE, DottedChain.TOPLEVEL, sIndex, false);
             if (nsIndex > -1) {
-                convertData.thisHasDefaultToPrimitive = null == index.findProperty(new AbcIndexing.PropertyDef("toString", new TypeItem(instanceInfo.getName(abc.constants).getNameWithNamespace(abc.constants, true)), abc, nsIndex), false, true);
+                convertData.thisHasDefaultToPrimitive = null == index.findProperty(new AbcIndexing.PropertyDef("toString", new TypeItem(instanceInfo.getName(abc.constants).getNameWithNamespace(abc.constants, true)), abc, nsIndex), false, true, false);
             } else {
                 convertData.thisHasDefaultToPrimitive = true;
             }
         } else {
             convertData.thisHasDefaultToPrimitive = true;
-        }
-
+        }        
+        ScopeStack newScopeStack = (ScopeStack)scopeStack.clone();
         //class initializer
         int bodyIndex = abc.findBodyIndex(classInfo.cinit_index);
         if (bodyIndex != -1) {
             writer.mark();
             List<Traits> ts = new ArrayList<>();
             ts.add(classInfo.static_traits);
-            abc.bodies.get(bodyIndex).convert(convertData, path +/*packageName +*/ "/" + instanceInfoName + ".staticinitializer", exportMode, true, classInfo.cinit_index, scriptIndex, class_info, abc, this, new ScopeStack(), GraphTextWriter.TRAIT_CLASS_INITIALIZER, writer, fullyQualifiedNames, ts, true, new HashSet<>());
+            List<MethodBody> callStack = new ArrayList<>();
+            callStack.add(abc.bodies.get(bodyIndex));   
+            
+            if (!abc.instance_info.get(class_info).isInterface()) {
+                AbcIndexing.ClassIndex cls = abcIndex.findClass(AbcIndexing.multinameToType(abc.instance_info.get(class_info).name_index, abc.constants), abc, scriptIndex);
+                List<AbcIndexing.ClassIndex> clsList = new ArrayList<>();
+                cls = cls.parent;
+                while(cls != null) {
+                    clsList.add(0, cls);
+                    cls = cls.parent;
+                }
+                for (AbcIndexing.ClassIndex cls2: clsList) {
+                    newScopeStack.push(new ClassAVM2Item(cls2.abc.instance_info.get(cls2.index).getName(cls2.abc.constants).getNameWithNamespace(cls2.abc.constants, true)));
+                }                
+            }                                                 
+            
+            abc.bodies.get(bodyIndex).convert(callStack, abcIndex, convertData, path +/*packageName +*/ "/" + instanceInfoName + ".staticinitializer", exportMode, true, classInfo.cinit_index, scriptIndex, class_info, abc, this, newScopeStack, GraphTextWriter.TRAIT_CLASS_INITIALIZER, writer, fullyQualifiedNames, ts, true, new HashSet<>());
+            
+            newScopeStack.push(new ClassAVM2Item(abc.instance_info.get(class_info).getName(abc.constants)));        
             classInitializerIsEmpty = !writer.getMark();
-        }
-
+        }            
+        
         //constructor - instance initializer
         if (!instanceInfo.isInterface()) {
             bodyIndex = abc.findBodyIndex(instanceInfo.iinit_index);
@@ -254,7 +273,9 @@ public class TraitClass extends Trait implements TraitWithSlot {
                 List<Traits> ts = new ArrayList<>();
                 ts.add(instanceInfo.instance_traits);
                 MethodBody constructorBody = abc.bodies.get(bodyIndex);
-                constructorBody.convert(convertData, path +/*packageName +*/ "/" + instanceInfoName + ".initializer", exportMode, false, instanceInfo.iinit_index, scriptIndex, class_info, abc, this, new ScopeStack(), GraphTextWriter.TRAIT_INSTANCE_INITIALIZER, writer, fullyQualifiedNames, ts, true, new HashSet<>());
+                List<MethodBody> callStack = new ArrayList<>();
+                callStack.add(constructorBody);                
+                constructorBody.convert(callStack, abcIndex, convertData, path +/*packageName +*/ "/" + instanceInfoName + ".initializer", exportMode, false, instanceInfo.iinit_index, scriptIndex, class_info, abc, this, new ScopeStack(), GraphTextWriter.TRAIT_INSTANCE_INITIALIZER, writer, fullyQualifiedNames, ts, true, new HashSet<>());
 
                 if (convertData.ignoreFrameScripts) {
                     //find all addFrameScript(xx,this.method) in constructor
@@ -282,7 +303,10 @@ public class TraitClass extends Trait implements TraitWithSlot {
                                     if ("addFrameScript".equals(propName.resolvedMultinameName)) {
                                         for (int i = 0; i < callProp.arguments.size(); i += 2) {
                                             if (callProp.arguments.get(i) instanceof IntegerValueAVM2Item) {
-                                                if (callProp.arguments.get(i + 1) instanceof GetPropertyAVM2Item) {
+                                                if (callProp.arguments.get(i + 1) instanceof GetLexAVM2Item) {
+                                                    GetLexAVM2Item lex = (GetLexAVM2Item) callProp.arguments.get(i + 1);
+                                                    frameTraitNames.add(abc.constants.getMultinameId(lex.propertyName, false));
+                                                } else if (callProp.arguments.get(i + 1) instanceof GetPropertyAVM2Item) {
                                                     GetPropertyAVM2Item getProp = (GetPropertyAVM2Item) callProp.arguments.get(i + 1);
                                                     if (getProp.object instanceof ThisAVM2Item) {
                                                         if (getProp.propertyName instanceof FullMultinameAVM2Item) {
@@ -306,9 +330,9 @@ public class TraitClass extends Trait implements TraitWithSlot {
         }
 
         //static variables,constants & methods
-        classInfo.static_traits.convert(this, convertData, path +/*packageName +*/ "/" + instanceInfoName, abc, true, exportMode, false, scriptIndex, class_info, writer, fullyQualifiedNames, parallel);
+        classInfo.static_traits.convert(abcIndex, this, convertData, path +/*packageName +*/ "/" + instanceInfoName, abc, true, exportMode, false, scriptIndex, class_info, writer, fullyQualifiedNames, parallel, newScopeStack);
 
-        instanceInfo.instance_traits.convert(this, convertData, path +/*packageName +*/ "/" + instanceInfoName, abc, false, exportMode, false, scriptIndex, class_info, writer, fullyQualifiedNames, parallel);
+        instanceInfo.instance_traits.convert(abcIndex, this, convertData, path +/*packageName +*/ "/" + instanceInfoName, abc, false, exportMode, false, scriptIndex, class_info, writer, fullyQualifiedNames, parallel, newScopeStack);
     }
 
     @Override
@@ -338,12 +362,41 @@ public class TraitClass extends Trait implements TraitWithSlot {
     @Override
     public GraphTextWriter convertTraitHeader(ABC abc, GraphTextWriter writer) {
         convertCommonHeaderFlags("class", abc, writer);
-        writer.appendNoHilight(" slotid ");
+        writer.newLine();
+        writer.appendNoHilight("slotid ");
         writer.hilightSpecial(Integer.toString(slot_id), HighlightSpecialType.SLOT_ID);
         writer.newLine();
-        /*writer.appendNoHilight("class_info "); //not in RAbcDasm
-        writer.appendNoHilight("" + class_info);
-        writer.newLine();*/
+        writer.appendNoHilight("class").newLine();
+        writer.indent();
+        InstanceInfo ii = abc.instance_info.get(class_info);
+        writer.appendNoHilight("instance ").hilightSpecial(abc.constants.multinameToString(ii.name_index), HighlightSpecialType.INSTANCE_NAME).newLine();
+        writer.indent();
+        writer.appendNoHilight("extends ").hilightSpecial(abc.constants.multinameToString(ii.super_index), HighlightSpecialType.EXTENDS).newLine();
+        for(int iface : ii.interfaces) {
+            writer.appendNoHilight("implements ").hilightSpecial(abc.constants.multinameToString(iface), HighlightSpecialType.IMPLEMENTS).newLine();
+        }
+        if ((ii.flags & InstanceInfo.CLASS_SEALED) == InstanceInfo.CLASS_SEALED) {
+            writer.appendNoHilight("flag SEALED").newLine();
+        }
+        if ((ii.flags & InstanceInfo.CLASS_FINAL) == InstanceInfo.CLASS_FINAL) {
+            writer.appendNoHilight("flag FINAL").newLine();
+        }
+        if ((ii.flags & InstanceInfo.CLASS_INTERFACE) == InstanceInfo.CLASS_INTERFACE) {
+            writer.appendNoHilight("flag INTERFACE").newLine();
+        }
+        if ((ii.flags & InstanceInfo.CLASS_PROTECTEDNS) == InstanceInfo.CLASS_PROTECTEDNS) {
+            writer.appendNoHilight("flag PROTECTEDNS").newLine();
+        }        
+        if ((ii.flags & InstanceInfo.CLASS_NON_NULLABLE) == InstanceInfo.CLASS_NON_NULLABLE) {
+            writer.appendNoHilight("flag NON_NULLABLE").newLine();
+        }
+        if ((ii.flags & InstanceInfo.CLASS_PROTECTEDNS) == InstanceInfo.CLASS_PROTECTEDNS) {
+            writer.appendNoHilight("protectedns ").hilightSpecial(Multiname.namespaceToString(abc.constants, ii.protectedNS), HighlightSpecialType.PROTECTEDNS).newLine();
+        }
+        writer.unindent();
+        writer.appendNoHilight("end ; instance").newLine();
+        writer.unindent();
+        writer.appendNoHilight("end ; class").newLine();        
         return writer;
     }
 

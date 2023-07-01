@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -46,6 +46,12 @@ public class GetPropertyAVM2Item extends AVM2Item {
     public GraphTargetItem object;
 
     public GraphTargetItem propertyName;
+    
+    public GraphTargetItem type;
+    
+    public GraphTargetItem callType;
+    
+    public boolean isStatic;
 
     @Override
     public void visit(GraphTargetVisitorInterface visitor) {
@@ -127,15 +133,18 @@ public class GetPropertyAVM2Item extends AVM2Item {
         return null;
     }
 
-    public GetPropertyAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, GraphTargetItem object, GraphTargetItem propertyName) {
+    public GetPropertyAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, GraphTargetItem object, GraphTargetItem propertyName, GraphTargetItem type, GraphTargetItem callType, boolean isStatic) {
         super(instruction, lineStartIns, PRECEDENCE_PRIMARY);
         this.object = object;
         this.propertyName = propertyName;
+        this.type = type;
+        this.callType = callType;
+        this.isStatic = isStatic;
     }
 
     @Override
     public GraphTextWriter appendTo(GraphTextWriter writer, LocalData localData) throws InterruptedException {
-        return formatProperty(writer, object, propertyName, localData);
+        return formatProperty(writer, object, propertyName, localData, isStatic);
     }
 
     @Override
@@ -147,7 +156,22 @@ public class GetPropertyAVM2Item extends AVM2Item {
 
     @Override
     public GraphTargetItem returnType() {
-        return TypeItem.UNBOUNDED;
+        if (object instanceof FindPropertyAVM2Item) {
+            FindPropertyAVM2Item fprop = (FindPropertyAVM2Item)object;
+            if (fprop.propertyName instanceof FullMultinameAVM2Item) {
+                FullMultinameAVM2Item fmul = (FullMultinameAVM2Item)fprop.propertyName;                
+                if (this.propertyName.equals(fmul)) {
+                    switch(fmul.resolvedMultinameName) {
+                        case "NaN":
+                            return TypeItem.NUMBER;
+                        case "undefined":
+                            return TypeItem.UNDEFINED;
+                    }
+                }
+            }
+        }
+        return type;
+        //return TypeItem.UNBOUNDED;
     }
 
     @Override

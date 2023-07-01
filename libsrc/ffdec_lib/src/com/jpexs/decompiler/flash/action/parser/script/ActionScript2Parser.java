@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -41,7 +41,6 @@ import com.jpexs.decompiler.flash.action.model.GetURL2ActionItem;
 import com.jpexs.decompiler.flash.action.model.GetVariableActionItem;
 import com.jpexs.decompiler.flash.action.model.GetVersionActionItem;
 import com.jpexs.decompiler.flash.action.model.GotoFrame2ActionItem;
-import com.jpexs.decompiler.flash.action.model.GotoLabelActionItem;
 import com.jpexs.decompiler.flash.action.model.InitArrayActionItem;
 import com.jpexs.decompiler.flash.action.model.InitObjectActionItem;
 import com.jpexs.decompiler.flash.action.model.LoadMovieActionItem;
@@ -230,9 +229,11 @@ public class ActionScript2Parser {
     private final int swfVersion;
     private List<String> swfClasses = new ArrayList<>();
     private final ASMSource targetSource;
+    private String charset;
 
     public ActionScript2Parser(SWF swf, ASMSource targetSource) {
         this.swfVersion = swf.version;
+        this.charset = swf.getCharset();
         parseSwfClasses(swf);
         this.targetSource = targetSource;
     }
@@ -503,7 +504,7 @@ public class ActionScript2Parser {
                             traitsStatic.add(false);
 
                             if (isSetter) {
-                                //add return getter automatically                            
+                                //add return getter automatically
                                 GraphTargetItem thisVar = new VariableActionItem("this", null, false);
                                 ft.addVariable((VariableActionItem) thisVar);
                                 GraphTargetItem callM = new CallMethodActionItem(null, null, thisVar, pushConst("__get__" + fname), new ArrayList<>());
@@ -722,7 +723,7 @@ public class ActionScript2Parser {
 
                 s = lex();
                 expected(s, lexer.yyline(), SymbolType.PARENT_CLOSE, SymbolType.COMMA);
-                int lvmethod = 1;
+                int lvmethod = 0;
                 if (s.type == SymbolType.COMMA) {
                     s = lex();
                     expected(s, lexer.yyline(), SymbolType.STRING);
@@ -2333,16 +2334,17 @@ public class ActionScript2Parser {
         return retTree;
     }
 
-    private List<GraphSourceItem> generateActionList(List<GraphTargetItem> tree, List<String> constantPool) throws CompilationException {
-        ActionSourceGenerator gen = new ActionSourceGenerator(swfVersion, constantPool);
+    private List<GraphSourceItem> generateActionList(List<GraphTargetItem> tree, List<String> constantPool, boolean secondRun) throws CompilationException {
+        ActionSourceGenerator gen = new ActionSourceGenerator(swfVersion, constantPool, charset);
         SourceGeneratorLocalData localData = new SourceGeneratorLocalData(new HashMap<>(), 0, Boolean.FALSE, 0);
+        localData.secondRun = secondRun;
         return gen.generate(localData, tree);
     }
 
-    private List<Action> actionsFromTree(List<GraphTargetItem> tree, List<String> constantPool, boolean doOrder) throws CompilationException, NeedsGenerateAgainException {
+    private List<Action> actionsFromTree(List<GraphTargetItem> tree, List<String> constantPool, boolean doOrder, String charset) throws CompilationException, NeedsGenerateAgainException {
         List<Action> ret = new ArrayList<>();
 
-        List<GraphSourceItem> srcList = generateActionList(tree, constantPool);
+        List<GraphSourceItem> srcList = generateActionList(tree, constantPool, doOrder == false);
 
         if (doOrder) {
             List<String> orderedConstantPool = new ArrayList<>();
@@ -2352,7 +2354,7 @@ public class ActionScript2Parser {
                 //can change constant indices as ActionPush contains always 1 byte per constant
                 canChangeInPlace = true;
             } else {
-                //variable number bytes per ActionPush constant, 
+                //variable number bytes per ActionPush constant,
                 //must generate again to make relative offsets in jumps work
                 canChangeInPlace = false;
             }
@@ -2390,23 +2392,23 @@ public class ActionScript2Parser {
                 ret.add((Action) s);
             }
         }
-        ret.add(0, new ActionConstantPool(constantPool));
+        ret.add(0, new ActionConstantPool(constantPool, charset));
         return ret;
     }
 
-    public List<Action> actionsFromString(String s) throws ActionParseException, IOException, CompilationException, InterruptedException {
+    public List<Action> actionsFromString(String s, String charset) throws ActionParseException, IOException, CompilationException, InterruptedException {
         try {
             List<String> constantPool = new ArrayList<>();
             List<GraphTargetItem> tree = treeFromString(s, constantPool);
-            return actionsFromTree(tree, constantPool, true);
+            return actionsFromTree(tree, constantPool, true, charset);
         } catch (NeedsGenerateAgainException nga) {
             //Can happen when constantpool needs reordering and number of constants > 256
             try {
                 List<String> newConstantPool = nga.getNewConstantPool();
                 List<GraphTargetItem> tree = treeFromString(s, newConstantPool);
-                return actionsFromTree(tree, newConstantPool, false /*do not order again*/);
+                return actionsFromTree(tree, newConstantPool, false /*do not order again*/, charset);
             } catch (NeedsGenerateAgainException ex) {
-                //should not happen as doOrder parameter is set to false 
+                //should not happen as doOrder parameter is set to false
                 return new ArrayList<>();
             }
         }

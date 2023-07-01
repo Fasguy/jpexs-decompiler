@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.docs;
 
 import static com.jpexs.decompiler.flash.docs.As3PCodeOtherDocs.NEWLINE;
@@ -30,7 +31,7 @@ import java.util.logging.Logger;
 
 public class AbstractDocs {
 
-    protected static Cache<String, String> docsCache = Cache.getInstance(false, true, "abstractDocsCache");
+    protected static Cache<String, String> docsCache = Cache.getInstance(false, true, "abstractDocsCache", false);
 
     protected static String htmlFooter() {
         StringBuilder sb = new StringBuilder();

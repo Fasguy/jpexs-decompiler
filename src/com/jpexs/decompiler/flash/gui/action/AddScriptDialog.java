@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2021 JPEXS
+ *  Copyright (C) 2021-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -227,7 +227,8 @@ public class AddScriptDialog extends AppDialog {
         for (Tag t : swf.getTags()) {
 
             if (t instanceof DoActionTag) {
-                hasScript = true;
+                //It is no longer a problem to have more than single DoAction
+                //hasScript = true;
             }
             if (t instanceof ShowFrameTag) {
                 MyFrame myf = new MyFrame(f);
@@ -288,7 +289,8 @@ public class AddScriptDialog extends AppDialog {
                 boolean hasScript = false;
                 for (Tag t2 : s.getTags()) {
                     if (t2 instanceof DoActionTag) {
-                        hasScript = true;
+                        //It is no longer a problem to have more than single DoAction
+                        //hasScript = true;
                     }
                     if (t2 instanceof ShowFrameTag) {
                         MyTreeNode frameNode = new MyTreeNode();
@@ -730,22 +732,22 @@ public class AddScriptDialog extends AppDialog {
             int f = ((MyFrame) ((MyTreeNode) tnode.getParent()).getData()).frame;
             Object parent = ((MyTreeNode) tnode.getParent().getParent()).getData();
             if (parent instanceof DefineSpriteTag) {
-                instancePreviewPanel.showImagePanel((DefineSpriteTag) parent, swf, f - 1);
+                instancePreviewPanel.showImagePanel((DefineSpriteTag) parent, swf, f - 1, true, Configuration.autoPlayPreviews.get(), !Configuration.animateSubsprites.get(), false, !Configuration.playFrameSounds.get(), true, false);
             } else {
-                instancePreviewPanel.showImagePanel(swf, swf, f - 1);
+                instancePreviewPanel.showImagePanel(swf, swf, f - 1, true, Configuration.autoPlayPreviews.get(), !Configuration.animateSubsprites.get(), false, !Configuration.playFrameSounds.get(), true, false);
             }
 
         } else if (tnode.getData() instanceof DefineSpriteTag) {
             instancePreviewPanel.selectImageDepth(-1);
-            instancePreviewPanel.showImagePanel((DefineSpriteTag) tnode.getData(), swf, -1);
+            instancePreviewPanel.showImagePanel((DefineSpriteTag) tnode.getData(), swf, -1, true, Configuration.autoPlayPreviews.get(), !Configuration.animateSubsprites.get(), false, !Configuration.playFrameSounds.get(), true, false);
         } else if (tnode.getData() instanceof MyFrame) {
             instancePreviewPanel.selectImageDepth(-1);
             int f = ((MyFrame) tnode.getData()).frame;
             Object parent = ((MyTreeNode) tnode.getParent()).getData();
             if (parent instanceof DefineSpriteTag) {
-                instancePreviewPanel.showImagePanel((DefineSpriteTag) parent, swf, f - 1);
+                instancePreviewPanel.showImagePanel((DefineSpriteTag) parent, swf, f - 1, true, Configuration.autoPlayPreviews.get(), !Configuration.animateSubsprites.get(), false, !Configuration.playFrameSounds.get(), true, false);
             } else {
-                instancePreviewPanel.showImagePanel(swf, swf, f - 1);
+                instancePreviewPanel.showImagePanel(swf, swf, f - 1, true, Configuration.autoPlayPreviews.get(), !Configuration.animateSubsprites.get(), false, !Configuration.playFrameSounds.get(), true, false);
             }
         }
         checkEnabled();
@@ -759,7 +761,7 @@ public class AddScriptDialog extends AppDialog {
             checkEnabled();
             return;
         }
-        spriteInitPreviewPanel.showImagePanel(spriteInitList.getSelectedValue(), swf, -1);
+        spriteInitPreviewPanel.showImagePanel(spriteInitList.getSelectedValue(), swf, -1, true, Configuration.autoPlayPreviews.get(), !Configuration.animateSubsprites.get(), false, !Configuration.playFrameSounds.get(), true, false);
         checkEnabled();
     }
 
@@ -771,7 +773,7 @@ public class AddScriptDialog extends AppDialog {
             checkEnabled();
             return;
         }
-        framePreviewPanel.showImagePanel(swf, swf, selectedIndex);
+        framePreviewPanel.showImagePanel(swf, swf, selectedIndex, true, Configuration.autoPlayPreviews.get(), !Configuration.animateSubsprites.get(), false, !Configuration.playFrameSounds.get(), true, false);
         int f = selectedIndex + 1;
 
         if (!frameTextField.getText().equals("" + f)) {
@@ -783,7 +785,7 @@ public class AddScriptDialog extends AppDialog {
     private void buttonValueChanged(ListSelectionEvent e) {
         buttonPreviewPanel.showEmpty();
         if (buttonList.getSelectedIndex() >= 0) {
-            buttonPreviewPanel.showImagePanel(MainPanel.makeTimelined(buttonList.getSelectedValue()), swf, -1);
+            buttonPreviewPanel.showImagePanel(MainPanel.makeTimelined(buttonList.getSelectedValue()), swf, -1, true, Configuration.autoPlayPreviews.get(), !Configuration.animateSubsprites.get(), false, !Configuration.playFrameSounds.get(), true, false);
         }
 
         checkEnabled();
@@ -799,14 +801,14 @@ public class AddScriptDialog extends AppDialog {
         }
         MyTreeNode tnode = (MyTreeNode) selection.getLastPathComponent();
         if (tnode.getData() instanceof DefineSpriteTag) {
-            spriteFramePreviewPanel.showImagePanel((DefineSpriteTag) tnode.getData(), swf, -1);
+            spriteFramePreviewPanel.showImagePanel((DefineSpriteTag) tnode.getData(), swf, -1, true, Configuration.autoPlayPreviews.get(), !Configuration.animateSubsprites.get(), false, !Configuration.playFrameSounds.get(), true, false);
         } else if (tnode.getData() instanceof MyFrame) {
             int f = ((MyFrame) tnode.getData()).frame;
             Object parent = ((MyTreeNode) tnode.getParent()).getData();
             if (parent instanceof DefineSpriteTag) {
-                spriteFramePreviewPanel.showImagePanel((DefineSpriteTag) parent, swf, f - 1);
+                spriteFramePreviewPanel.showImagePanel((DefineSpriteTag) parent, swf, f - 1, true, Configuration.autoPlayPreviews.get(), !Configuration.animateSubsprites.get(), false, !Configuration.playFrameSounds.get(), true, false);
             } else {
-                spriteFramePreviewPanel.showImagePanel(swf, swf, f - 1);
+                spriteFramePreviewPanel.showImagePanel(swf, swf, f - 1, true, Configuration.autoPlayPreviews.get(), !Configuration.animateSubsprites.get(), false, !Configuration.playFrameSounds.get(), true, false);
             }
             if (!spriteFrameTextField.getText().equals("" + f)) {
                 spriteFrameTextField.setText("" + f);

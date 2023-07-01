@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -145,8 +145,10 @@ public class AS3Generator {
                             
                             Configuration.autoDeobfuscate.set(clsName.toLowerCase().contains("obfus"));
                             
-                            b.convert(new ConvertData(), "", ScriptExportMode.AS, false, ((TraitMethodGetterSetter) t).method_info, pack.scriptIndex, classId, abc, null, new ScopeStack(), 0, new NulWriter(), new ArrayList<>(), ts, true, new HashSet<>());
-                            b.toString("", ScriptExportMode.AS, abc, null, src, new ArrayList<>(), new HashSet<>());
+                            List<MethodBody> callStack = new ArrayList<>();
+                            callStack.add(b);
+                            b.convert(callStack, swf.getAbcIndex(),new ConvertData(), "", ScriptExportMode.AS, false, ((TraitMethodGetterSetter) t).method_info, pack.scriptIndex, classId, abc, null, new ScopeStack(), 0, new NulWriter(), new ArrayList<>(), ts, true, new HashSet<>());
+                            b.toString(callStack, swf.getAbcIndex(), "", ScriptExportMode.AS, abc, null, src, new ArrayList<>(), new HashSet<>());
                             String[] srcs = src.toString().split("[\r\n]+");
                             for (int i = 0; i < srcs.length; i++) {
                                 String ss = srcs[i];

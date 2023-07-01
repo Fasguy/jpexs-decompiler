@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -29,6 +29,7 @@ import com.jpexs.decompiler.flash.action.model.PostIncrementActionItem;
 import com.jpexs.decompiler.flash.action.model.SetPropertyActionItem;
 import com.jpexs.decompiler.flash.action.model.StoreRegisterActionItem;
 import com.jpexs.decompiler.flash.action.model.TemporaryRegister;
+import com.jpexs.decompiler.flash.action.model.TemporaryRegisterMark;
 import com.jpexs.decompiler.flash.action.model.operations.PreDecrementActionItem;
 import com.jpexs.decompiler.flash.action.model.operations.PreIncrementActionItem;
 import com.jpexs.decompiler.flash.types.annotations.SWFVersion;
@@ -36,6 +37,7 @@ import com.jpexs.decompiler.graph.GraphSourceItem;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.SecondPassData;
 import com.jpexs.decompiler.graph.TranslateStack;
+import com.jpexs.helpers.utf8.Utf8Helper;
 import java.util.HashMap;
 import java.util.List;
 import java.util.logging.Level;
@@ -49,7 +51,7 @@ import java.util.logging.Logger;
 public class ActionSetProperty extends Action {
 
     public ActionSetProperty() {
-        super(0x23, 0);
+        super(0x23, 0, Utf8Helper.charsetName);
     }
 
     @Override
@@ -163,7 +165,9 @@ public class ActionSetProperty extends Action {
                     sr.temporary = true;
                     ((SetPropertyActionItem) ret).setValue(sr);
                 }
-                variables.put("__register" + sr.register.number, new TemporaryRegister(sr.register.number, ret));
+                TemporaryRegister tr = new TemporaryRegister(sr.register.number, ret);
+                variables.put("__register" + sr.register.number, tr);
+                output.add(new TemporaryRegisterMark(tr));                
                 return;
             }
         }

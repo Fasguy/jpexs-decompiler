@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -96,8 +96,13 @@ public class SVGExporter {
             Element svgRoot = _svg.getDocumentElement();
             svgRoot.setAttribute("xmlns:xlink", xlinkNamespace);
             if (bounds != null) {
-                svgRoot.setAttribute("width", (bounds.getWidth() / SWF.unitDivisor) + "px");
-                svgRoot.setAttribute("height", (bounds.getHeight() / SWF.unitDivisor) + "px");
+                if (Configuration.svgRetainBounds.get()) {
+                    svgRoot.setAttribute("width", (bounds.xMax / SWF.unitDivisor) + "px");
+                    svgRoot.setAttribute("height", (bounds.yMax / SWF.unitDivisor) + "px");
+                } else {
+                    svgRoot.setAttribute("width", (bounds.getWidth() / SWF.unitDivisor) + "px");
+                    svgRoot.setAttribute("height", (bounds.getHeight() / SWF.unitDivisor) + "px");
+                }
                 createDefGroup(bounds, null, zoom);
             }
         } catch (ParserConfigurationException ex) {
@@ -131,7 +136,12 @@ public class SVGExporter {
     public final void createDefGroup(ExportRectangle bounds, String id, double zoom) {
         Element g = _svg.createElement("g");
         if (bounds != null) {
-            Matrix mat = Matrix.getTranslateInstance(-bounds.xMin, -bounds.yMin);
+            Matrix mat;
+            if (Configuration.svgRetainBounds.get()) {
+                mat = new Matrix();
+            } else {
+                mat = Matrix.getTranslateInstance(-bounds.xMin, -bounds.yMin);
+            }
             mat.scale(zoom);
             g.setAttribute("transform", mat.getSvgTransformationString(SWF.unitDivisor, 1));
         }
@@ -228,7 +238,7 @@ public class SVGExporter {
 
     }
 
-    private void addScalingGridUse(Matrix transform, RECT boundRect, String href, String instanceName, RECT scalingRect) {
+    private void addScalingGridUse(Matrix transform, RECT boundRect, String href, String instanceName, RECT scalingRect, String characterId, String characterName) {
 
         Element image = _svg.createElement("g");
 
@@ -403,12 +413,21 @@ public class SVGExporter {
         if (instanceName != null) {
             image.setAttribute("id", instanceName);
         }
+        if (characterId != null) {
+            image.setAttribute("data-characterId", characterId);
+        }
+        if (characterName != null) {
+            image.setAttribute("data-characterName", characterName);
+        }
         _svgGs.peek().appendChild(image);
     }
-
+    
     public Element addUse(Matrix transform, RECT boundRect, String href, String instanceName, RECT scalingRect) {
+        return addUse(transform, boundRect, href, instanceName, scalingRect, null, null);
+    }
+    public Element addUse(Matrix transform, RECT boundRect, String href, String instanceName, RECT scalingRect, String characterId, String characterName) {
         if (scalingRect != null && (transform == null || (Double.compare(transform.rotateSkew0, 0.0) == 0 && Double.compare(transform.rotateSkew1, 0.0) == 0))) {
-            addScalingGridUse(transform, boundRect, href, instanceName, scalingRect);
+            addScalingGridUse(transform, boundRect, href, instanceName, scalingRect, characterId, characterName);
             return null; //??
         }
         Element image = _svg.createElement("use");
@@ -419,6 +438,12 @@ public class SVGExporter {
         }
         if (instanceName != null) {
             image.setAttribute("id", instanceName);
+        }
+        if (characterId != null) {
+            image.setAttribute("data-characterId", characterId);
+        }
+        if (characterName != null) {
+            image.setAttribute("data-characterName", characterName);
         }
         image.setAttribute("xlink:href", "#" + href);
         _svgGs.peek().appendChild(image);

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -44,17 +44,17 @@ import java.util.Objects;
  */
 public class InitVectorAVM2Item extends AVM2Item {
 
-    public static final DottedChain VECTOR_PACKAGE = new DottedChain(new String[]{"__AS3__", "vec"}, "");
+    public static final DottedChain VECTOR_PACKAGE = new DottedChain(new String[]{"__AS3__", "vec"});
 
-    public static final DottedChain VECTOR_FQN = new DottedChain(new String[]{"__AS3__", "vec", "Vector"}, "");
+    public static final DottedChain VECTOR_FQN = new DottedChain(new String[]{"__AS3__", "vec", "Vector"});
 
-    public static final DottedChain VECTOR_INT = new DottedChain(new String[]{"__AS3__", "vec", "Vector$int"}, "");
+    public static final DottedChain VECTOR_INT = new DottedChain(new String[]{"__AS3__", "vec", "Vector$int"});
 
-    public static final DottedChain VECTOR_DOUBLE = new DottedChain(new String[]{"__AS3__", "vec", "Vector$double"}, "");
+    public static final DottedChain VECTOR_DOUBLE = new DottedChain(new String[]{"__AS3__", "vec", "Vector$double"});
 
-    public static final DottedChain VECTOR_UINT = new DottedChain(new String[]{"__AS3__", "vec", "Vector$uint"}, "");
+    public static final DottedChain VECTOR_UINT = new DottedChain(new String[]{"__AS3__", "vec", "Vector$uint"});
 
-    public static final DottedChain VECTOR_OBJECT = new DottedChain(new String[]{"__AS3__", "vec", "Vector$object"}, "");
+    public static final DottedChain VECTOR_OBJECT = new DottedChain(new String[]{"__AS3__", "vec", "Vector$object"});
 
     public GraphTargetItem subtype;
 
@@ -123,13 +123,13 @@ public class InitVectorAVM2Item extends AVM2Item {
                 ins(AVM2Instructions.GetProperty, constants.getMultinameId(Multiname.createMultiname(false, constants.getStringId("Vector", true), allNsSet(g.abcIndex)), true)),
                 subtype,
                 ins(AVM2Instructions.ApplyType, 1),
-                new IntegerValueAVM2Item(null, null, (long) arguments.size()),
+                new IntegerValueAVM2Item(null, null, arguments.size()),
                 ins(AVM2Instructions.Construct, 1)
         );
         for (int i = 0; i < arguments.size(); i++) {
             ret.addAll(toSourceMerge(localData, generator,
                     ins(AVM2Instructions.Dup),
-                    new IntegerValueAVM2Item(null, null, (long) i),
+                    new IntegerValueAVM2Item(null, null, i),
                     arguments.get(i),
                     ins(AVM2Instructions.SetProperty, constants.getMultinameId(Multiname.createMultinameL(false, NamespaceItem.getCpoolSetIndex(g.abcIndex, openedNamespaces)), true))
             ));

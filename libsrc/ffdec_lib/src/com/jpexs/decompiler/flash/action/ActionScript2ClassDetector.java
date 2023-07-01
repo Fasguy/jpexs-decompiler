@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -32,6 +32,7 @@ import com.jpexs.decompiler.flash.action.model.SetMemberActionItem;
 import com.jpexs.decompiler.flash.action.model.SetVariableActionItem;
 import com.jpexs.decompiler.flash.action.model.StoreRegisterActionItem;
 import com.jpexs.decompiler.flash.action.model.TemporaryRegister;
+import com.jpexs.decompiler.flash.action.model.TemporaryRegisterMark;
 import com.jpexs.decompiler.flash.action.model.clauses.ClassActionItem;
 import com.jpexs.decompiler.flash.action.model.clauses.InterfaceActionItem;
 import com.jpexs.decompiler.flash.action.swf4.RegisterNumber;
@@ -301,28 +302,6 @@ public class ActionScript2ClassDetector {
                 }
             }
 
-            /*
-            Hack:
-            When register is not used after setting, then FFDec discards its value,
-            but the value is crucial as there is setmember, atc.
-            This will bypass the situation.
-            
-            This happens when there are no methods/vars, constructor only.
-             */
-            int numr = 0;
-            for (String s : variables.keySet()) {
-                Matcher m = regPattern.matcher(s);
-                if (m.matches()) {
-                    if (variables.get(s) instanceof TemporaryRegister) {
-                        int regId = Integer.parseInt(m.group(1));
-                        if (!definedRegisters.contains(regId)) {
-                            parts.add(partsPos + numr, variables.get(s).value);
-                            numr++;
-                        }
-                    }
-                }
-            }
-
             if (parts.size() > partsPos) {
                 item = parts.get(partsPos);
 
@@ -363,16 +342,18 @@ public class ActionScript2ClassDetector {
                     List<String> protoPath = new ArrayList<>(classNamePath);
                     protoPath.add("prototype");
                     List<String> smPath = getSetMembersPath(sm);
-                    if (smPath.get(0).equals("_global")) {
-                        smPath.remove(0);
-                    }
-                    if (smPath.equals(protoPath)) {
-                        if (sm.value instanceof StoreRegisterActionItem) {
-                            partsPos++;
-                            if (parts.size() > partsPos) {
-                                item = parts.get(partsPos);
-                            } else {
-                                item = null;
+                    if (smPath != null) { //null = can start with TempRegister for example
+                        if (smPath.get(0).equals("_global")) {
+                            smPath.remove(0);
+                        }
+                        if (smPath.equals(protoPath)) {
+                            if (sm.value instanceof StoreRegisterActionItem) {
+                                partsPos++;
+                                if (parts.size() > partsPos) {
+                                    item = parts.get(partsPos);
+                                } else {
+                                    item = null;
+                                }
                             }
                         }
                     }
@@ -717,6 +698,10 @@ public class ActionScript2ClassDetector {
                 } else if (item instanceof DirectValueActionItem) {
                     //ignore such values
                     //TODO: maybe somehow display in the class ?
+                } else if (item instanceof ScriptEndItem) {
+                    //ignore
+                } else if (item instanceof TemporaryRegisterMark) {
+                    //ignore
                 } else {
                     throw new AssertException("unknown item - " + item.getClass().getSimpleName());
                 }
@@ -834,7 +819,13 @@ public class ActionScript2ClassDetector {
                         }
                         List<String> classPath = pathToSearchVariant1;
                         classPath.remove(0); //remove _global
-                        if (this.checkClassContent(ifItem.onTrue, variables, 0, pos, checkPos, commands, classPath, scriptPath)) {
+                        if (ifItem.onTrue.isEmpty()) { //if can have zero offset as the code is larger than bytes limit. TODO: make this check also for variant 2 (?)
+                            if (this.checkClassContent(commands, variables, checkPos + 1, pos, commands.size() - 1, commands, classPath, scriptPath)) {
+                                return true;
+                            } else {
+                                break check_variant1;
+                            }
+                        } else if (this.checkClassContent(ifItem.onTrue, variables, 0, pos, checkPos, commands, classPath, scriptPath)) {
                             return true;
                         } else {
                             break check_variant1;

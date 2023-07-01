@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.action.swf4;
 
 import com.jpexs.decompiler.flash.SWFInputStream;
@@ -56,13 +57,13 @@ public class ActionIf extends Action {
         this.offset = offset;
     }
 
-    public ActionIf(int offset) {
-        super(0x9D, 2);
+    public ActionIf(int offset, String charset) {
+        super(0x9D, 2, charset);
         setJumpOffset(offset);
     }
 
     public ActionIf(int actionLength, SWFInputStream sis) throws IOException {
-        super(0x9D, actionLength);
+        super(0x9D, actionLength, sis.getCharset());
         setJumpOffset(sis.readSI16("offset"));
     }
 
@@ -97,8 +98,8 @@ public class ActionIf extends Action {
         return "If loc" + ofsStr + (!jumpUsed ? " ;compileTimeIgnore" : (!ignoreUsed ? " ;compileTimeJump" : ""));
     }
 
-    public ActionIf(FlasmLexer lexer) throws IOException, ActionParseException {
-        super(0x9D, 2);
+    public ActionIf(FlasmLexer lexer, String charset) throws IOException, ActionParseException {
+        super(0x9D, 2, charset);
         identifier = lexIdentifier(lexer);
     }
 

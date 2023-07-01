@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,26 +12,55 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.tags.gfx;
 
+import com.jpexs.decompiler.flash.SWF;
 import com.jpexs.decompiler.flash.SWFInputStream;
 import com.jpexs.decompiler.flash.SWFOutputStream;
-import com.jpexs.decompiler.flash.tags.Tag;
+import com.jpexs.decompiler.flash.gfx.TgaSupport;
+import com.jpexs.decompiler.flash.helpers.ImageHelper;
+import com.jpexs.decompiler.flash.tags.base.ImageTag;
+import com.jpexs.decompiler.flash.tags.enums.ImageFormat;
+import com.jpexs.decompiler.flash.types.annotations.HideInRawEdit;
 import com.jpexs.helpers.ByteArrayRange;
+import com.jpexs.helpers.SerializableImage;
+import java.awt.Dimension;
+import java.awt.Graphics;
+import java.awt.Image;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Objects;
+import javax.imageio.ImageIO;
+import net.npe.dds.DDSReader;
 
 /**
  *
  * @author JPEXS
  */
-public class DefineExternalImage2 extends Tag {
+public class DefineExternalImage2 extends ImageTag {
 
     public static final int ID = 1009;
 
     public static final String NAME = "DefineExternalImage2";
 
-    public long characterId;
+    public int imageID;
+
+    public static final int UNKNOWN_IS_STANDALONE = 0;
+    public static final int UNKNOWN_HAS_SUBIMAGES = 9;
+
+    /**
+     * Special unknown field. This seems to have value of 9 when it has
+     * DefineSubImages and in this case, imageId is not treated as a
+     * characterId. If it has value of 0, this tag is threated as standalone
+     * external image - standard character.
+     */
+    public int unknownID;
 
     public int bitmapFormat;
 
@@ -51,6 +80,20 @@ public class DefineExternalImage2 extends Tag {
 
     public static final int BITMAP_FORMAT_DDS = 2;
 
+    //It looks like gfxexport produces BITMAP_FORMAT2_* values for format,
+    //but BITMAP_FORMAT_* works the same way
+    public static final int BITMAP_FORMAT2_JPEG = 10;
+
+    public static final int BITMAP_FORMAT2_TGA = 13;
+
+    public static final int BITMAP_FORMAT2_DDS = 14;
+
+    @HideInRawEdit
+    private SerializableImage serImage;
+
+    @HideInRawEdit
+    private String cachedImageFilename = null;
+    
     /**
      * Gets data bytes
      *
@@ -59,7 +102,8 @@ public class DefineExternalImage2 extends Tag {
      */
     @Override
     public void getData(SWFOutputStream sos) throws IOException {
-        sos.writeUI32(characterId);
+        sos.writeUI16(imageID);
+        sos.writeUI16(unknownID);
         sos.writeUI16(bitmapFormat);
         sos.writeUI16(targetWidth);
         sos.writeUI16(targetHeight);
@@ -80,18 +124,148 @@ public class DefineExternalImage2 extends Tag {
     public DefineExternalImage2(SWFInputStream sis, ByteArrayRange data) throws IOException {
         super(sis.getSwf(), ID, NAME, data);
         readData(sis, data, 0, false, false, false);
+        characterID = unknownID == 0 ? imageID : - 1;
+    }
+
+    public DefineExternalImage2(SWF swf) {
+        super(swf, ID, NAME, null);
+        exportName = "";
+        fileName = "";
+        targetWidth = 1;
+        targetHeight = 1;
+        unknownID = UNKNOWN_HAS_SUBIMAGES;
+        bitmapFormat = BITMAP_FORMAT2_DDS;
+        characterID = -1;
+        createFailedImage();
     }
 
     @Override
     public final void readData(SWFInputStream sis, ByteArrayRange data, int level, boolean parallel, boolean skipUnusualTags, boolean lazy) throws IOException {
-        characterId = sis.readUI32("characterId");
+        imageID = sis.readUI16("imageID");
+        unknownID = sis.readUI16("unknownID");
         bitmapFormat = sis.readUI16("bitmapFormat");
         targetWidth = sis.readUI16("targetWidth");
         targetHeight = sis.readUI16("targetHeight");
         exportName = sis.readNetString("exportName");
         fileName = sis.readNetString("fileName");
-        if (sis.available() > 0) { //there is usually one zero byte, bod knows why
+        if (sis.available() > 0) { //there is usually one zero byte, god knows why
             extraData = sis.readBytesEx(sis.available(), "extraData");
         }
+    }
+
+    private void createFailedImage() {
+        if (targetWidth <= 0 || targetHeight <= 0) {
+            serImage = new SerializableImage(1, 1, BufferedImage.TYPE_4BYTE_ABGR_PRE);
+            serImage.fillTransparent();
+            return;
+        }
+
+        serImage = new SerializableImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_ARGB_PRE);
+        Graphics g = serImage.getGraphics();
+        g.setColor(SWF.ERROR_COLOR);
+        g.fillRect(0, 0, targetWidth, targetHeight);
+        cachedImageFilename = null;
+    }
+
+    @Override
+    public void setImage(byte[] data) throws IOException {
+        serImage = new SerializableImage(ImageHelper.read(data));
+        clearCache();
+        setModified(true);
+    }
+
+    @Override
+    public ImageFormat getImageFormat() {
+        return ImageFormat.PNG;
+    }
+
+    @Override
+    public ImageFormat getOriginalImageFormat() {
+        return ImageFormat.PNG;
+    }
+
+    @Override
+    public InputStream getOriginalImageData() {
+        return null;
+    }
+
+    @Override
+    public SerializableImage getImage() {
+        initImage();
+        return serImage;
+    }
+
+    @Override
+    public Dimension getImageDimension() {
+        return new Dimension(targetWidth, targetHeight);
+    }
+
+    private void initImage() {
+        if (!Objects.equals(cachedImageFilename, fileName)
+                || (serImage != null && (serImage.getWidth() != targetWidth || serImage.getHeight() != targetHeight))) {
+
+            if (targetWidth <= 0 || targetHeight <= 0) {
+                serImage = new SerializableImage(1, 1, BufferedImage.TYPE_4BYTE_ABGR_PRE);
+                serImage.fillTransparent();               
+            } else if (bitmapFormat == BITMAP_FORMAT2_JPEG || bitmapFormat == BITMAP_FORMAT2_TGA || bitmapFormat == BITMAP_FORMAT_TGA) {
+                Path imagePath = getSwf().getFile() == null ? null : Paths.get(getSwf().getFile()).getParent().resolve(Paths.get(fileName));
+                if (imagePath != null && imagePath.toFile().exists()) {
+                    try {
+                        if (bitmapFormat == BITMAP_FORMAT2_TGA || bitmapFormat == BITMAP_FORMAT_TGA) {
+                            TgaSupport.init();
+                        }
+                        BufferedImage bufImage = ImageIO.read(imagePath.toFile());
+                        Image scaled = bufImage.getScaledInstance(targetWidth, targetHeight, Image.SCALE_DEFAULT);
+                        bufImage = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_ARGB);
+                        bufImage.getGraphics().drawImage(scaled, 0, 0, null);
+                        serImage = new SerializableImage(bufImage);
+                        cachedImageFilename = fileName;
+                    } catch (IOException ex) {
+                        createFailedImage();
+                    }
+                } else {
+                    createFailedImage();
+                }               
+            } else if (bitmapFormat == BITMAP_FORMAT2_DDS || bitmapFormat == BITMAP_FORMAT2_DDS) {
+                Path imagePath = getSwf().getFile() == null ? null : Paths.get(getSwf().getFile()).getParent().resolve(Paths.get(fileName));
+                if (imagePath != null && imagePath.toFile().exists()) {
+                    try {
+                        byte[] imageData = Files.readAllBytes(imagePath);
+                        int[] pixels = DDSReader.read(imageData, DDSReader.ARGB, 0);
+                        BufferedImage bufImage = new BufferedImage(DDSReader.getWidth(imageData), DDSReader.getHeight(imageData), BufferedImage.TYPE_INT_ARGB);
+                        bufImage.getRaster().setDataElements(0, 0, bufImage.getWidth(), bufImage.getHeight(), pixels);
+                        Image scaled = bufImage.getScaledInstance(targetWidth, targetHeight, Image.SCALE_DEFAULT);
+                        bufImage = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_ARGB);
+                        bufImage.getGraphics().drawImage(scaled, 0, 0, null);
+                        serImage = new SerializableImage(bufImage);
+                        cachedImageFilename = fileName;
+                    } catch (IOException ex) {
+                        createFailedImage();
+                    }
+                } else {
+                    createFailedImage();
+                }
+            } else {
+                createFailedImage();
+            }
+        }
+    }
+
+    @Override
+    public boolean importSupported() {
+        return false;
+    }
+
+    @Override
+    public String toString() {
+        if (unknownID == 0) {
+            return super.toString();
+        }
+        return tagName + " (i" + imageID + ")";
+    }
+
+    @Override
+    public void setCharacterId(int characterId) {
+
     }
 }

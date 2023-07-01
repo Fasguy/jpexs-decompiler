@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -22,6 +22,7 @@ import com.jpexs.decompiler.flash.helpers.CodeFormatting;
 import com.jpexs.decompiler.flash.helpers.FontHelper;
 import com.jpexs.decompiler.flash.importers.TextImportResizeTextBoundsMode;
 import com.jpexs.helpers.Helper;
+import com.jpexs.helpers.Path;
 import java.awt.Font;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -32,6 +33,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.lang.reflect.Field;
+import java.net.URISyntaxException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
@@ -80,7 +82,7 @@ public final class Configuration {
 
     @ConfigurationDefaultInt(10)
     @ConfigurationCategory("decompilation")
-    private static ConfigurationItem<Integer> parallelSpeedUpThreadCount = null;
+    public static ConfigurationItem<Integer> parallelSpeedUpThreadCount = null;
 
     @ConfigurationDefaultBoolean(false)
     @ConfigurationCategory("script")
@@ -159,6 +161,9 @@ public final class Configuration {
 
     @ConfigurationDefaultBoolean(false)
     public static ConfigurationItem<Boolean> useDetailedLogging = null;
+    
+    @ConfigurationDefaultBoolean(true)
+    public static ConfigurationItem<Boolean> warningOpeningReadOnly = null;
 
     /**
      * Debug mode = throwing an error when comparing original file and
@@ -279,7 +284,10 @@ public final class Configuration {
     public static ConfigurationItem<HashMap<String, String>> fontPairingMap = null;
 
     public static ConfigurationItem<HashMap<String, SwfSpecificConfiguration>> swfSpecificConfigs = null;
-
+    
+    public static ConfigurationItem<HashMap<String, SwfSpecificCustomConfiguration>> swfSpecificCustomConfigs = null;
+    
+        
     @ConfigurationDefaultCalendar(0)
     public static ConfigurationItem<Calendar> lastUpdatesCheckDate = null;
 
@@ -525,6 +533,11 @@ public final class Configuration {
     public static ConfigurationItem<String> lastSessionFileTitles = null;
 
     public static ConfigurationItem<String> lastSessionSelection = null;
+    
+    public static ConfigurationItem<String> lastSessionTagListSelection = null;
+    
+    @ConfigurationDefaultInt(0)
+    public static ConfigurationItem<Integer> lastView = null;
 
     @ConfigurationDefaultBoolean(true)
     @ConfigurationCategory("ui")
@@ -744,7 +757,164 @@ public final class Configuration {
     @ConfigurationDefaultBoolean(true)
     @ConfigurationCategory("ui")
     public static ConfigurationItem<Boolean> showImportXmlInfo = null;
-
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationCategory("ui")
+    public static ConfigurationItem<Boolean> showImportImageInfo = null;
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationCategory("display")
+    public static ConfigurationItem<Boolean> autoPlaySwfs = null;
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationCategory("ui")
+    public static ConfigurationItem<Boolean> expandFirstLevelOfTreeOnLoad = null;
+    
+    @ConfigurationDefaultBoolean(false)
+    @ConfigurationCategory("ui")
+    public static ConfigurationItem<Boolean> allowPlacingDefinesIntoSprites = null;
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationCategory("ui")
+    public static ConfigurationItem<Boolean> allowDragAndDropInTagListTree = null;
+    
+    @ConfigurationDefaultBoolean(false)
+    @ConfigurationCategory("display")
+    public static ConfigurationItem<Boolean> allowMiterClipLinestyle = null;
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationCategory("display")
+    public static ConfigurationItem<Boolean> animateSubsprites = null;
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationCategory("display")
+    public static ConfigurationItem<Boolean> autoPlayPreviews = null;
+    
+    @ConfigurationDefaultInt(5 * 60 * 1000)
+    @ConfigurationCategory("limit")
+    public static ConfigurationItem<Integer> maxCachedTime = null;
+    
+    @ConfigurationDefaultInt(500)
+    @ConfigurationCategory("limit")
+    public static ConfigurationItem<Integer> maxCachedNum = null;
+    
+    @ConfigurationDefaultString("")
+    @ConfigurationCategory("paths")
+    @ConfigurationFile(".*\\.swc$")
+    public static ConfigurationItem<String> airLibLocation = null;
+        
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationCategory("ui")
+    public static ConfigurationItem<Boolean> showImportShapeInfo = null;
+    
+    @ConfigurationDefaultString("")    
+    public static ConfigurationItem<String> pinnedItemsTagTreePaths = null;
+    
+    @ConfigurationDefaultString("")    
+    public static ConfigurationItem<String> pinnedItemsTagListPaths = null;
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationCategory("script")
+    public static ConfigurationItem<Boolean> flattenASPackages = null;
+    
+    @ConfigurationDefaultDouble(1.0)
+    @ConfigurationCategory("display")
+    @ConfigurationName("gui.scale")
+    public static ConfigurationItem<Double> uiScale = null;  
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationName("warning.video.vlc")
+    @ConfigurationCategory("display")
+    public static ConfigurationItem<Boolean> warningVideoVlc = null;
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationCategory("display")
+    public static ConfigurationItem<Boolean> playFrameSounds = null;
+    
+    @ConfigurationDefaultBoolean(false)
+    @ConfigurationCategory("display")
+    public static ConfigurationItem<Boolean> fixAntialiasConflation = null;
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationCategory("display")
+    public static ConfigurationItem<Boolean> autoPlaySounds = null;
+    
+    @ConfigurationDefaultBoolean(false)
+    @ConfigurationCategory("script")
+    public static ConfigurationItem<Boolean> deobfuscateAs12RemoveInvalidNamesAssignments = null;
+    
+    @ConfigurationDefaultDouble(0.6)
+    @ConfigurationName("gui.splitPanePlace.dividerLocationPercent")
+    @ConfigurationInternal
+    public static ConfigurationItem<Double> guiSplitPanePlaceDividerLocationPercent = null;
+    
+    @ConfigurationDefaultDouble(0.6)
+    @ConfigurationName("gui.splitPaneTransform1.dividerLocationPercent")
+    @ConfigurationInternal
+    public static ConfigurationItem<Double> guiSplitPaneTransform1DividerLocationPercent = null;
+    
+    @ConfigurationDefaultDouble(0.6)
+    @ConfigurationName("gui.splitPaneTransform2.dividerLocationPercent")
+    @ConfigurationInternal
+    public static ConfigurationItem<Double> guiSplitPaneTransform2DividerLocationPercent = null;
+    
+    @ConfigurationDefaultString("")
+    @ConfigurationName("gui.transform.lastExpandedCards")
+    @ConfigurationInternal
+    public static ConfigurationItem<String> guiTransformLastExpandedCards = null;
+    
+    @ConfigurationDefaultBoolean(false)
+    @ConfigurationCategory("ui")
+    public static ConfigurationItem<Boolean> doubleClickNodeToEdit = null;
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationCategory("script")
+    public static ConfigurationItem<Boolean> warningDeobfuscation = null;
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationCategory("script")
+    public static ConfigurationItem<Boolean> warningRenameIdentifiers = null;
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationCategory("ui")
+    public static ConfigurationItem<Boolean> showImportMovieInfo = null;
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationCategory("ui")
+    public static ConfigurationItem<Boolean> showImportSoundInfo = null;
+    
+    @ConfigurationDefaultBoolean(false)
+    @ConfigurationCategory("export")
+    public static ConfigurationItem<Boolean> svgRetainBounds = null;
+    
+    @ConfigurationDefaultBoolean(false)
+    @ConfigurationCategory("display")
+    public static ConfigurationItem<Boolean> disableBitmapSmoothing = null;
+    
+    @ConfigurationDefaultString("")    
+    public static ConfigurationItem<String> pinnedItemsScrollPos = null;
+    
+    @ConfigurationDefaultInt(30)
+    @ConfigurationCategory("ui")    
+    public static ConfigurationItem<Integer> maxRememberedScrollposItems = null;
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationCategory("ui")
+    public static ConfigurationItem<Boolean> rememberScriptsScrollPos = null;
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationCategory("ui")
+    public static ConfigurationItem<Boolean> rememberFoldersScrollPos = null;
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationName("warning.initializers.class")
+    @ConfigurationCategory("script")
+    public static ConfigurationItem<Boolean> warningInitializersClass = null;
+    
+    @ConfigurationDefaultBoolean(true)
+    @ConfigurationName("warning.cannotencrypt")
+    public static ConfigurationItem<Boolean> warningCannotEncrypt = null;
+    
     private enum OSId {
         WINDOWS, OSX, UNIX
     }
@@ -897,6 +1067,26 @@ public final class Configuration {
 
         return swfConf;
     }
+    
+    public static SwfSpecificCustomConfiguration getSwfSpecificCustomConfiguration(String fileName) {
+        HashMap<String, SwfSpecificCustomConfiguration> map = swfSpecificCustomConfigs.get();
+        if (map == null) {
+            map = new HashMap<>();
+            swfSpecificCustomConfigs.set(map);
+        }
+
+        return map.get(fileName);
+    }
+
+    public static SwfSpecificCustomConfiguration getOrCreateSwfSpecificCustomConfiguration(String fileName) {
+        SwfSpecificCustomConfiguration swfConf = getSwfSpecificCustomConfiguration(fileName);
+        if (swfConf == null) {
+            swfConf = new SwfSpecificCustomConfiguration();
+            swfSpecificCustomConfigs.get().put(fileName, swfConf);
+        }
+
+        return swfConf;
+    }
 
     private static String getConfigFile() throws IOException {
         return getFFDecHome() + CONFIG_NAME;
@@ -933,6 +1123,7 @@ public final class Configuration {
             oos.writeObject(config);
         } catch (IOException ex) {
             //TODO: move this to GUI
+            ex.printStackTrace();
             JOptionPane.showMessageDialog(null, "Cannot save configuration.", "Error", JOptionPane.ERROR_MESSAGE);
             Logger.getLogger(Configuration.class.getName()).severe("Configuration directory is read only.");
         }
@@ -1001,6 +1192,12 @@ public final class Configuration {
             File swcFile = getPlayerSwcOld();
             if (swcFile != null) {
                 playerLibLocation.set(swcFile.getAbsolutePath());
+            }
+        }
+        if (airLibLocation.get("").isEmpty()) {
+            File swcFile = getAirSwcOld();
+            if (swcFile != null) {
+                airLibLocation.set(swcFile.getAbsolutePath());
             }
         }
     }
@@ -1129,7 +1326,31 @@ public final class Configuration {
         return getUrlFromDownloadsHtml(".*<a href=\"([^\"]*flashplayer[^\"]*_sa\\.i386\\.tar\\.gz)\".*");
     }
 
-    public static File getPlayerSWC() {
+    private static File getFFDecFlashLib(String name) {
+        try {
+            File ffdecLibJarFile = new File(Configuration.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            File ffdecDirectory = null;
+            if (ffdecLibJarFile.getAbsolutePath().endsWith(".jar")) {
+                ffdecDirectory = ffdecLibJarFile.getParentFile().getParentFile();                
+            } else if (ffdecLibJarFile.getAbsolutePath().replace("\\", "/").endsWith("libsrc/ffdec_lib/build/classes")) {
+                ffdecDirectory = ffdecLibJarFile.getParentFile().getParentFile().getParentFile().getParentFile();
+                ffdecDirectory = new File(Path.combine(ffdecDirectory.getAbsolutePath(), "resources"));
+            } else {
+                return null;
+            }
+            File flashLibDirectory = new File(Path.combine(ffdecDirectory.getAbsolutePath(), "flashlib"));
+            File flashLib = new File(Path.combine(flashLibDirectory.getAbsolutePath(), name));
+            
+            if (!flashLib.exists()) {
+                return null;
+            }
+            return flashLib;
+        } catch (URISyntaxException ex) {
+            return null;
+        }
+    }
+    
+    public static File getPlayerSWC() {        
         String libLocation = playerLibLocation.get("");
         File ret = null;
         if (!libLocation.isEmpty()) {
@@ -1140,10 +1361,42 @@ public final class Configuration {
             if (ret != null) {
                 playerLibLocation.set(ret.getAbsolutePath());
             }
+            if (ret == null) {
+                ret = getFFDecFlashLib("playerglobal32_0.swc");
+            }
+        }
+        return ret;
+    }
+    
+    public static File getAirSWC() {
+        String libLocation = airLibLocation.get("");
+        File ret = null;
+        if (!libLocation.isEmpty()) {
+            ret = new File(libLocation);
+        }
+        if (ret == null || !ret.exists()) {
+            ret = getAirSwcOld();
+            if (ret != null) {
+                airLibLocation.set(ret.getAbsolutePath());
+            }
+            if (ret == null) {
+                ret = getFFDecFlashLib("airglobal.swc");
+            }
         }
         return ret;
     }
 
+    private static File getAirSwcOld() {
+        File libsDir = getFlashLibPath();
+        if (libsDir != null && libsDir.exists()) {
+            File airFile = new File(Path.combine(libsDir.getAbsolutePath(), "airglobal.swc"));
+            if (airFile.exists()) {
+                return airFile;
+            }
+        }
+        return null;
+    }
+    
     private static File getPlayerSwcOld() {
         File libsDir = getFlashLibPath();
         if (libsDir != null && libsDir.exists()) {

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -16,6 +16,7 @@
  */
 package com.jpexs.decompiler.flash.abc.avm2.model;
 
+import com.jpexs.decompiler.flash.abc.avm2.instructions.SetTypeIns;
 import com.jpexs.decompiler.flash.abc.avm2.model.clauses.AssignmentAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.clauses.DeclarationAVM2Item;
 import com.jpexs.decompiler.flash.abc.types.Multiname;
@@ -47,11 +48,16 @@ public class SetSlotAVM2Item extends AVM2Item implements SetTypeAVM2Item, Assign
     public GraphTargetItem compoundValue;
 
     public String compoundOperator;
+    
+    public GraphTargetItem type;
 
     @Override
     public void visit(GraphTargetVisitorInterface visitor) {
         visitor.visit(scope);
         visitor.visit(slotObject);
+        if (value != null) {
+            visitor.visit(value);
+        }
     }
 
     @Override
@@ -64,12 +70,13 @@ public class SetSlotAVM2Item extends AVM2Item implements SetTypeAVM2Item, Assign
         this.declaration = declaration;
     }
 
-    public SetSlotAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, GraphTargetItem scope, GraphTargetItem slotObject, int slotIndex, Multiname slotName, GraphTargetItem value) {
+    public SetSlotAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, GraphTargetItem scope, GraphTargetItem slotObject, int slotIndex, Multiname slotName, GraphTargetItem value, GraphTargetItem type) {
         super(instruction, lineStartIns, PRECEDENCE_ASSIGMENT, value);
         this.slotName = slotName;
         this.scope = scope;
         this.slotObject = slotObject;
         this.slotIndex = slotIndex;
+        this.type = type;
     }
 
     @Override
@@ -93,10 +100,10 @@ public class SetSlotAVM2Item extends AVM2Item implements SetTypeAVM2Item, Assign
             return compoundValue.toString(writer, localData);
         }
         writer.append(" = ");
-        if (declaration != null && !declaration.type.equals(TypeItem.UNBOUNDED) && (value instanceof ConvertAVM2Item)) {
+        /*if (declaration != null && !declaration.type.equals(TypeItem.UNBOUNDED) && (value instanceof ConvertAVM2Item)) {
             return value.value.toString(writer, localData);
-        }
-        return value.toString(writer, localData);
+        }*/
+        return SetTypeIns.handleNumberToInt(value, type).toString(writer, localData);
     }
 
     public String getNameAsStr(LocalData localData) throws InterruptedException {
@@ -112,7 +119,7 @@ public class SetSlotAVM2Item extends AVM2Item implements SetTypeAVM2Item, Assign
 
     @Override
     public GraphTargetItem getObject() {
-        return new GetSlotAVM2Item(getInstruction(), getLineStartIns(), scope, slotObject, slotIndex, slotName);
+        return new GetSlotAVM2Item(getInstruction(), getLineStartIns(), scope, slotObject, slotIndex, slotName, type);
     }
 
     @Override

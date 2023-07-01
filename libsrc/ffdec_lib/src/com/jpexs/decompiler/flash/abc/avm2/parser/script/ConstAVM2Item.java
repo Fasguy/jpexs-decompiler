@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.abc.avm2.parser.script;
 
 import com.jpexs.decompiler.flash.abc.avm2.model.AVM2Item;
@@ -41,12 +42,14 @@ public class ConstAVM2Item extends AVM2Item {
     public int line;
 
     public NamespaceItem pkg;
+    
+    public boolean generatedNs;
 
     public boolean isStatic() {
         return isStatic;
     }
 
-    public ConstAVM2Item(List<Map.Entry<String, Map<String, String>>> metadata, NamespaceItem pkg, String customNamespace, boolean isStatic, String var, GraphTargetItem type, GraphTargetItem value, int line) {
+    public ConstAVM2Item(List<Map.Entry<String, Map<String, String>>> metadata, NamespaceItem pkg, String customNamespace, boolean isStatic, String var, GraphTargetItem type, GraphTargetItem value, int line, boolean generatedNs) {
 
         super(null, null, NOPRECEDENCE, value);
         this.metadata = metadata;
@@ -56,6 +59,7 @@ public class ConstAVM2Item extends AVM2Item {
         this.var = var;
         this.type = type;
         this.customNamespace = customNamespace;
+        this.generatedNs = generatedNs;
     }
 
     @Override

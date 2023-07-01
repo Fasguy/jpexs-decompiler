@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -163,11 +163,9 @@ public class LinkReportExporter {
                 reportTrait(scriptIndex, externalDefs, existingObjects, swf, abc, it);
             }
             List<Dependency> dependencies = new ArrayList<>();
-            List<String> uses = new ArrayList<>();
-
             sb.append(indent(3)).append("<dep id=\"AS3\" />").append(newLineChar); //Automatic
 
-            tc.getDependencies(scriptIndex, -1, false, null, abc, dependencies, uses, new DottedChain(new String[]{"FAKE!PACKAGE"}, ""), new ArrayList<>());
+            tc.getDependencies(swf.getAbcIndex(), scriptIndex, -1, false, null, abc, dependencies, new DottedChain(new String[]{"FAKE!PACKAGE"}), new ArrayList<>());
             for (Dependency dependency : dependencies) {
                 DottedChain dc = dependency.getId();
                 if (!"*".equals(dc.getLast())) {

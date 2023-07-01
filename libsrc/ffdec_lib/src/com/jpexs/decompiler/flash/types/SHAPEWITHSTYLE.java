@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,9 +12,11 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.types;
 
+import com.jpexs.decompiler.flash.SWF;
 import com.jpexs.decompiler.flash.tags.base.NeedsCharacters;
 import com.jpexs.decompiler.flash.types.shaperecords.EndShapeRecord;
 import com.jpexs.decompiler.flash.types.shaperecords.SHAPERECORD;
@@ -34,11 +36,11 @@ public class SHAPEWITHSTYLE extends SHAPE implements NeedsCharacters, Serializab
     public LINESTYLEARRAY lineStyles;
 
     @Override
-    public void getNeededCharacters(Set<Integer> needed) {
-        fillStyles.getNeededCharacters(needed);
-        lineStyles.getNeededCharacters(needed);
+    public void getNeededCharacters(Set<Integer> needed, SWF swf) {
+        fillStyles.getNeededCharacters(needed, swf);
+        lineStyles.getNeededCharacters(needed, swf);
         for (SHAPERECORD r : shapeRecords) {
-            r.getNeededCharacters(needed);
+            r.getNeededCharacters(needed, swf);
         }
     }
 
@@ -91,9 +93,16 @@ public class SHAPEWITHSTYLE extends SHAPE implements NeedsCharacters, Serializab
         if (shapeNum <= 3) {
             ret.lineStyles.lineStyles = new LINESTYLE[0];
         } else {
-            ret.lineStyles.lineStyles = new LINESTYLE2[0];
+            ret.lineStyles.lineStyles2 = new LINESTYLE2[0];
         }
 
         return ret;
     }
+
+    @Override
+    public RECT getBounds(int shapeNum) {
+        return SHAPERECORD.getBounds(shapeRecords, lineStyles, shapeNum, false);
+    }
+    
+    
 }

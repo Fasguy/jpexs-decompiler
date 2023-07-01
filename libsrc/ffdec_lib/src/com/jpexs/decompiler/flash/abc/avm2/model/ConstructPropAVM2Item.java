@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,7 +20,6 @@ import com.jpexs.decompiler.flash.helpers.GraphTextWriter;
 import com.jpexs.decompiler.graph.GraphSourceItem;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.GraphTargetVisitorInterface;
-import com.jpexs.decompiler.graph.TypeItem;
 import com.jpexs.decompiler.graph.model.LocalData;
 import java.util.List;
 import java.util.Objects;
@@ -36,12 +35,15 @@ public class ConstructPropAVM2Item extends AVM2Item {
     public GraphTargetItem propertyName;
 
     public List<GraphTargetItem> args;
+    
+    public GraphTargetItem type;
 
-    public ConstructPropAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, GraphTargetItem object, GraphTargetItem propertyName, List<GraphTargetItem> args) {
+    public ConstructPropAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, GraphTargetItem object, GraphTargetItem propertyName, List<GraphTargetItem> args, GraphTargetItem type) {
         super(instruction, lineStartIns, PRECEDENCE_PRIMARY);
         this.object = object;
         this.propertyName = propertyName;
         this.args = args;
+        this.type = type;
     }
 
     @Override
@@ -71,8 +73,8 @@ public class ConstructPropAVM2Item extends AVM2Item {
     }
 
     @Override
-    public GraphTargetItem returnType() {
-        return TypeItem.UNBOUNDED;
+    public GraphTargetItem returnType() {        
+        return type;
     }
 
     @Override

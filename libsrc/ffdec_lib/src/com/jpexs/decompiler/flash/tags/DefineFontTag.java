@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -29,6 +29,7 @@ import com.jpexs.decompiler.flash.types.annotations.SWFType;
 import com.jpexs.decompiler.flash.types.annotations.SWFVersion;
 import com.jpexs.decompiler.flash.types.shaperecords.SHAPERECORD;
 import com.jpexs.helpers.ByteArrayRange;
+import com.jpexs.helpers.utf8.Utf8Helper;
 import java.awt.Font;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -110,7 +111,7 @@ public class DefineFontTag extends FontTag {
         sos.writeUI16(fontId);
         ByteArrayOutputStream baos2 = new ByteArrayOutputStream();
         List<Integer> offsetTable = new ArrayList<>();
-        SWFOutputStream sos2 = new SWFOutputStream(baos2, getVersion());
+        SWFOutputStream sos2 = new SWFOutputStream(baos2, getVersion(), getCharset());
         for (SHAPE shape : glyphShapeTable) {
             offsetTable.add(glyphShapeTable.size() * 2 + (int) sos2.getPos());
             sos2.writeSHAPE(shape, 1);
@@ -133,7 +134,7 @@ public class DefineFontTag extends FontTag {
 
     @Override
     public int getGlyphWidth(int glyphIndex) {
-        return glyphShapeTable.get(glyphIndex).getBounds().getWidth();
+        return glyphShapeTable.get(glyphIndex).getBounds(1).getWidth();
     }
 
     private void ensureFontInfo() {
@@ -156,7 +157,7 @@ public class DefineFontTag extends FontTag {
     public char glyphToChar(int glyphIndex) {
         ensureFontInfo();
         if (fontInfoTag != null) {
-            return (char) (int) fontInfoTag.getCodeTable().get(glyphIndex);
+            return Utf8Helper.codePointToChar(fontInfoTag.getCodeTable().get(glyphIndex), getCodesCharset());
         } else {
             return '?';
         }
@@ -166,7 +167,7 @@ public class DefineFontTag extends FontTag {
     public int charToGlyph(char c) {
         ensureFontInfo();
         if (fontInfoTag != null) {
-            return fontInfoTag.getCodeTable().indexOf((int) c);
+            return fontInfoTag.getCodeTable().indexOf(Utf8Helper.charToCodePoint(c, getCodesCharset()));
         }
         return -1;
 
@@ -266,10 +267,24 @@ public class DefineFontTag extends FontTag {
     }
 
     @Override
+    public String getCodesCharset() {
+        if (fontInfoTag != null && fontInfoTag.isShiftJIS()) {
+            return "Shift_JIS";
+        }
+        return getCharset();
+    }
+    
+    
+
+    @Override
     public void addCharacter(char character, Font font) {
         SHAPE shp = SHAPERECORD.fontCharacterToSHAPE(font, (int) Math.round(getDivider() * 1024), character);
         ensureFontInfo();
-        int code = (int) character;
+        int code = (int) Utf8Helper.charToCodePoint(character, getCodesCharset());
+        
+        if (code == -1) { //Fixme - throw exception, etc.
+            code = 0;
+        }
         int pos = -1;
         boolean exists = false;
         if (fontInfoTag != null) {
@@ -296,7 +311,7 @@ public class DefineFontTag extends FontTag {
             shiftGlyphIndices(fontId, pos, true);
             glyphShapeTable.add(pos, shp);
             if (fontInfoTag != null) {
-                fontInfoTag.addFontCharacter(pos, (int) character);
+                fontInfoTag.addFontCharacter(pos, code);
             }
         } else {
             glyphShapeTable.set(pos, shp);
@@ -362,8 +377,8 @@ public class DefineFontTag extends FontTag {
         if (fontInfoTag != null) {
             List<Integer> codeTable = fontInfoTag.getCodeTable();
             StringBuilder ret = new StringBuilder(codeTable.size());
-            for (int i : codeTable) {
-                ret.append((char) i);
+            for (int i : codeTable) {               
+                ret.append(Utf8Helper.codePointToChar(i, getCodesCharset()));
             }
             return ret.toString();
         }

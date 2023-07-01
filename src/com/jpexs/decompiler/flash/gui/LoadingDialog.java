@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -45,7 +45,7 @@ public class LoadingDialog extends AppDialog {
 
     private final JProgressBar progressBar = new JProgressBar(0, 100);
 
-    public void setWroker(CancellableWorker<?> worker) {
+    public void setWorker(CancellableWorker<?> worker) {
         this.worker = worker;
     }
 

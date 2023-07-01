@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -36,7 +36,6 @@ import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.SourceGenerator;
 import com.jpexs.decompiler.graph.TypeItem;
 import com.jpexs.decompiler.graph.model.LocalData;
-import com.jpexs.decompiler.graph.model.UnboundedTypeItem;
 import com.jpexs.helpers.Reference;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,6 +48,8 @@ import java.util.Objects;
  */
 public class NameAVM2Item extends AssignableAVM2Item {
 
+    private boolean attribute;
+    
     private String variableName;
 
     private boolean definition;
@@ -74,16 +75,24 @@ public class NameAVM2Item extends AssignableAVM2Item {
     public GraphTargetItem redirect;
 
     private AbcIndexing abcIndex;
+    
+    private String namespaceSuffix;
 
     @Override
     public AssignableAVM2Item copy() {
-        NameAVM2Item c = new NameAVM2Item(type, line, variableName, assignedValue, definition, openedNamespaces, abcIndex);
+        NameAVM2Item c = new NameAVM2Item(type, line, attribute, variableName, namespaceSuffix, assignedValue, definition, openedNamespaces, abcIndex);
         c.setNs(ns);
         c.regNumber = regNumber;
         c.unresolved = unresolved;
         c.nsKind = nsKind;
         return c;
     }
+
+    public boolean isAttribute() {
+        return attribute;
+    }
+    
+    
 
     public void setSlotScope(int slotScope) {
         this.slotScope = slotScope;
@@ -137,9 +146,17 @@ public class NameAVM2Item extends AssignableAVM2Item {
         return variableName;
     }
 
-    public NameAVM2Item(GraphTargetItem type, int line, String variableName, GraphTargetItem storeValue, boolean definition, List<NamespaceItem> openedNamespaces, AbcIndexing abcIndex) {
+    public String getNamespaceSuffix() {
+        return namespaceSuffix;
+    }
+    
+    
+
+    public NameAVM2Item(GraphTargetItem type, int line, boolean attribute, String variableName, String namespaceSuffix, GraphTargetItem storeValue, boolean definition, List<NamespaceItem> openedNamespaces, AbcIndexing abcIndex) {
         super(storeValue);
+        this.attribute = attribute;
         this.variableName = variableName;
+        this.namespaceSuffix = namespaceSuffix;
         this.assignedValue = storeValue;
         this.definition = definition;
         this.line = line;
@@ -166,7 +183,7 @@ public class NameAVM2Item extends AssignableAVM2Item {
             case "*":
                 return new UndefinedAVM2Item(null, null);
             case "int":
-                return new IntegerValueAVM2Item(null, null, 0L);
+                return new IntegerValueAVM2Item(null, null, 0);
             case "Boolean":
                 return new BooleanAVM2Item(null, null, Boolean.FALSE);
             case "Number":
@@ -181,30 +198,29 @@ public class NameAVM2Item extends AssignableAVM2Item {
             ttype = ((UnresolvedAVM2Item) ttype).resolved;
         }
         AVM2Instruction ins;
-        if (ttype instanceof UnboundedTypeItem) {
-            ins = ins(AVM2Instructions.CoerceA);
-        } else {
-            switch (ttype.toString()) {
-                case "int":
-                    ins = ins(AVM2Instructions.ConvertI);
-                    break;
-                case "*":
-                    ins = ins(AVM2Instructions.CoerceA);
-                    break;
-                case "String":
-                    ins = ins(AVM2Instructions.CoerceS);
-                    break;
-                case "Boolean":
-                    ins = ins(AVM2Instructions.ConvertB);
-                    break;
-                case "uint":
-                    ins = ins(AVM2Instructions.ConvertU);
-                    break;
-                default:
-                    int type_index = AVM2SourceGenerator.resolveType(localData, ttype, ((AVM2SourceGenerator) generator).abcIndex);
-                    ins = ins(AVM2Instructions.Coerce, type_index);
-                    break;
-            }
+        switch (ttype.toString()) {
+            case "int":
+                ins = ins(AVM2Instructions.ConvertI);
+                break;
+            case "*":
+                ins = ins(AVM2Instructions.CoerceA);
+                break;
+            case "String":
+                ins = ins(AVM2Instructions.CoerceS);
+                break;
+            case "Boolean":
+                ins = ins(AVM2Instructions.ConvertB);
+                break;
+            case "uint":
+                ins = ins(AVM2Instructions.ConvertU);
+                break;
+            case "Number":
+                ins = ins(AVM2Instructions.ConvertD);
+                break;
+            default:
+                int type_index = AVM2SourceGenerator.resolveType(localData, ttype, ((AVM2SourceGenerator) generator).abcIndex);
+                ins = ins(AVM2Instructions.Coerce, type_index);
+                break;
         }
         return ins;
     }
@@ -241,7 +257,7 @@ public class NameAVM2Item extends AssignableAVM2Item {
                         killTemp(localData, generator, Arrays.asList(ret_temp)));
             } else {
 
-                return toSourceMerge(localData, generator, assignedValue, !(("" + assignedValue.returnType()).equals("" + type) && (basicTypes.contains("" + type))) ? generateCoerce(localData, generator, type) : null, needsReturn
+                return toSourceMerge(localData, generator, assignedValue, generateCoerce(localData, generator, type), needsReturn
                         ? ins(AVM2Instructions.Dup) : null, generateSetLoc(regNumber));
             }
         } else {
@@ -339,7 +355,6 @@ public class NameAVM2Item extends AssignableAVM2Item {
             }
         }
         return toSourceMerge(localData, generator,
-                slotNumber > -1 ? ins(AVM2Instructions.GetScopeObject, slotScope) : null,
                 //Start get original
                 generateGetLoc(regNumber), generateGetSlot(slotScope, slotNumber),
                 //End get original
@@ -350,14 +365,23 @@ public class NameAVM2Item extends AssignableAVM2Item {
                 (post) ? (decrement ? ins(isInteger ? AVM2Instructions.DecrementI : AVM2Instructions.Decrement) : ins(isInteger ? AVM2Instructions.IncrementI : AVM2Instructions.Increment)) : null,
                 generateCoerce(localData, generator, returnType()),
                 generateSetLoc(regNumber),
-                slotNumber > -1 ? ins(AVM2Instructions.SetSlot, slotNumber) : null
+                slotNumber > -1 ? Arrays.asList(
+                        ins(AVM2Instructions.GetScopeObject, slotScope),
+                        ins(AVM2Instructions.Swap),
+                        ins(AVM2Instructions.SetSlot, slotNumber)
+                ) : null
         );
     }
 
     @Override
     public int hashCode() {
-        int hash = 7;
-        hash = 13 * hash + Objects.hashCode(this.variableName);
+        int hash = 3;
+        hash = 29 * hash + (this.attribute ? 1 : 0);
+        hash = 29 * hash + Objects.hashCode(this.variableName);
+        hash = 29 * hash + (this.definition ? 1 : 0);
+        hash = 29 * hash + this.regNumber;
+        hash = 29 * hash + this.slotNumber;
+        hash = 29 * hash + this.slotScope;
         return hash;
     }
 
@@ -373,10 +397,24 @@ public class NameAVM2Item extends AssignableAVM2Item {
             return false;
         }
         final NameAVM2Item other = (NameAVM2Item) obj;
-        if (!Objects.equals(this.variableName, other.variableName)) {
+        if (this.attribute != other.attribute) {
             return false;
         }
-        return true;
+        if (this.definition != other.definition) {
+            return false;
+        }
+        if (this.regNumber != other.regNumber) {
+            return false;
+        }
+        if (this.slotNumber != other.slotNumber) {
+            return false;
+        }
+        if (this.slotScope != other.slotScope) {
+            return false;
+        }
+        return Objects.equals(this.variableName, other.variableName);
     }
+
+    
 
 }

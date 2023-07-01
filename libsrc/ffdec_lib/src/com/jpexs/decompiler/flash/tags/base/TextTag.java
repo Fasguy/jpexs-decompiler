@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -38,6 +38,7 @@ import com.jpexs.decompiler.flash.types.FILLSTYLE;
 import com.jpexs.decompiler.flash.types.FILLSTYLEARRAY;
 import com.jpexs.decompiler.flash.types.GLYPHENTRY;
 import com.jpexs.decompiler.flash.types.LINESTYLE;
+import com.jpexs.decompiler.flash.types.LINESTYLE2;
 import com.jpexs.decompiler.flash.types.LINESTYLEARRAY;
 import com.jpexs.decompiler.flash.types.MATRIX;
 import com.jpexs.decompiler.flash.types.RECT;
@@ -330,7 +331,10 @@ public abstract class TextTag extends DrawableTag {
                 if (e < rec.glyphEntries.size() - 1) {
                     nextEntry = rec.glyphEntries.get(e + 1);
                 }
-                RECT rect = SHAPERECORD.getBounds(glyphs.get(entry.glyphIndex).shapeRecords);
+                LINESTYLEARRAY lsa = new LINESTYLEARRAY();
+                lsa.lineStyles = new LINESTYLE[0];
+                lsa.lineStyles2 = new LINESTYLE2[0];
+                RECT rect = SHAPERECORD.getBounds(glyphs.get(entry.glyphIndex).shapeRecords, lsa, 1, false);
                 rect.Xmax = (int) Math.round(((double) rect.Xmax * textHeight) / (font.getDivider() * 1024));
                 rect.Xmin = (int) Math.round(((double) rect.Xmin * textHeight) / (font.getDivider() * 1024));
                 rect.Ymax = (int) Math.round(((double) rect.Ymax * textHeight) / (font.getDivider() * 1024));
@@ -422,7 +426,7 @@ public abstract class TextTag extends DrawableTag {
         Graphics2D g = (Graphics2D) image.getGraphics();
         Matrix mat = transformation.clone();
         mat = mat.concatenate(new Matrix(textMatrix));
-        BitmapExporter.export(swf, getBorderShape(borderColor, fillColor, rect), null, image, mat, mat, colorTransform, true);
+        BitmapExporter.export(1, swf, getBorderShape(borderColor, fillColor, rect), null, image, 1 /*FIXME??*/, mat, mat, colorTransform, true, false);
     }
 
     public static void drawBorderHtmlCanvas(SWF swf, StringBuilder result, RGB borderColor, RGB fillColor, RECT rect, MATRIX textMatrix, ColorTransform colorTransform, double unitDivisor) {
@@ -430,7 +434,7 @@ public abstract class TextTag extends DrawableTag {
         result.append("\tctx.save();\r\n");
         result.append("\tctx.transform(").append(mat.scaleX).append(",").append(mat.rotateSkew0).append(",").append(mat.rotateSkew1).append(",").append(mat.scaleY).append(",").append(mat.translateX).append(",").append(mat.translateY).append(");\r\n");
         SHAPE shape = getBorderShape(borderColor, fillColor, rect);
-        CanvasShapeExporter cse = new CanvasShapeExporter(null, unitDivisor, swf, shape, colorTransform, 0, 0);
+        CanvasShapeExporter cse = new CanvasShapeExporter(1, null, unitDivisor, swf, shape, colorTransform, 0, 0);
         cse.export();
         result.append(cse.getShapeData());
         result.append("\tctx.restore();\r\n");
@@ -439,7 +443,7 @@ public abstract class TextTag extends DrawableTag {
     public static void drawBorderSVG(SWF swf, SVGExporter exporter, RGB borderColor, RGB fillColor, RECT rect, MATRIX textMatrix, ColorTransform colorTransform, double zoom) {
         exporter.createSubGroup(new Matrix(textMatrix), null);
         SHAPE shape = getBorderShape(borderColor, fillColor, rect);
-        SVGShapeExporter shapeExporter = new SVGShapeExporter(swf, shape, 0, exporter, null, colorTransform, zoom);
+        SVGShapeExporter shapeExporter = new SVGShapeExporter(1, swf, shape, 0, exporter, null, colorTransform, zoom);
         shapeExporter.export();
         exporter.endGroup();
     }
@@ -512,11 +516,11 @@ public abstract class TextTag extends DrawableTag {
                 }
 
                 if (shape != null) {
-                    BitmapExporter.export(swf, shape, textColor2, image, mat, mat, colorTransform, true);
+                    BitmapExporter.export(1, swf, shape, textColor2, image, 1 /*FIXME??*/, mat, mat, colorTransform, true, false);
                     if (SHAPERECORD.DRAW_BOUNDING_BOX) {
                         RGB borderColor = new RGBA(Color.black);
                         RGB fillColor = new RGBA(new Color(255, 255, 255, 0));
-                        RECT bounds = shape.getBounds();
+                        RECT bounds = shape.getBounds(1);
                         mat = Matrix.getTranslateInstance(bounds.Xmin, bounds.Ymin).preConcatenate(mat);
                         TextTag.drawBorder(swf, image, borderColor, fillColor, bounds, new MATRIX(), mat, colorTransform);
                     }
@@ -558,7 +562,7 @@ public abstract class TextTag extends DrawableTag {
                 if (entry.glyphIndex != -1 && glyphs != null) {
                     // shapeNum: 1
                     SHAPE shape = glyphs.get(entry.glyphIndex);
-                    RECT glyphBounds = shape.getBounds();
+                    RECT glyphBounds = shape.getBounds(1);
                     int glyphWidth = glyphBounds.getWidth();
                     int glyphHeight = glyphBounds.getHeight();
                     glyphBounds.Xmin -= glyphWidth / 2;
@@ -756,7 +760,7 @@ public abstract class TextTag extends DrawableTag {
                         if (charId == null) {
                             charId = exporter.getUniqueId(Helper.getValidHtmlId("font_" + font.getFontNameIntag() + "_" + ch));
                             exporter.createDefGroup(null, charId);
-                            SVGShapeExporter shapeExporter = new SVGShapeExporter(swf, shape, 0, exporter, null, colorTransform, zoom);
+                            SVGShapeExporter shapeExporter = new SVGShapeExporter(1, swf, shape, 0, exporter, null, colorTransform, zoom);
                             shapeExporter.export();
                             if (!exporter.endGroup()) {
                                 charId = "";
@@ -783,7 +787,7 @@ public abstract class TextTag extends DrawableTag {
     }
 
     @Override
-    public Shape getOutline(int frame, int time, int ratio, RenderContext renderContext, Matrix transformation, boolean stroked) {
+    public Shape getOutline(boolean fast, int frame, int time, int ratio, RenderContext renderContext, Matrix transformation, boolean stroked, ExportRectangle viewRect, double unzoom) {
         RECT r = getBounds();
         Shape shp = new Rectangle.Double(r.Xmin, r.Ymin, r.getWidth(), r.getHeight());
         return transformation.toTransform().createTransformedShape(shp); //TODO: match character shapes (?)

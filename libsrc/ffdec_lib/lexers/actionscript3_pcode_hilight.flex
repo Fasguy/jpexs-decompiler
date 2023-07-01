@@ -163,6 +163,7 @@ ExceptionTarget = "exceptiontarget "{PositiveNumberLiteral}":"
   "MultinameL"                 |
   "MultinameLA"                |
   "TypeName"                   |
+  "Unknown"                    |
   "null"                       {  return token(TokenType.KEYWORD2);}
   "("                          {  return token(TokenType.OPERATOR,PARAN); }
   ")"                          {  return token(TokenType.OPERATOR,-PARAN); }
@@ -181,8 +182,11 @@ ExceptionTarget = "exceptiontarget "{PositiveNumberLiteral}":"
   ":"                          {  return token(TokenType.OPERATOR); }
 
 
+  /* Flag - old alias for "NATIVE" */
+  "EXPLICIT"                   {  return token(TokenType.KEYWORD2);}
+
   /*Flags*/
-  "EXPLICIT"                   |
+  "NATIVE"                     |
   "HAS_OPTIONAL"               |
   "HAS_PARAM_NAMES"            |
   "IGNORE_REST"                |

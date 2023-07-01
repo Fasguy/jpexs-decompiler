@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -17,6 +17,8 @@
 package com.jpexs.decompiler.flash.gui.tagtree;
 
 import com.jpexs.decompiler.flash.SWF;
+import com.jpexs.decompiler.flash.abc.ABC;
+import com.jpexs.decompiler.flash.configuration.Configuration;
 import com.jpexs.decompiler.flash.gui.AppStrings;
 import com.jpexs.decompiler.flash.gui.TreeNodeType;
 import com.jpexs.decompiler.flash.gui.abc.ClassesListTreeModel;
@@ -24,11 +26,13 @@ import com.jpexs.decompiler.flash.gui.helpers.CollectionChangedAction;
 import com.jpexs.decompiler.flash.gui.helpers.CollectionChangedEvent;
 import com.jpexs.decompiler.flash.tags.DefineBinaryDataTag;
 import com.jpexs.decompiler.flash.tags.DefineSpriteTag;
+import com.jpexs.decompiler.flash.tags.DoInitActionTag;
 import com.jpexs.decompiler.flash.tags.ShowFrameTag;
 import com.jpexs.decompiler.flash.tags.SoundStreamBlockTag;
 import com.jpexs.decompiler.flash.tags.Tag;
 import com.jpexs.decompiler.flash.tags.base.ASMSource;
 import com.jpexs.decompiler.flash.tags.base.ASMSourceContainer;
+import com.jpexs.decompiler.flash.tags.base.ButtonTag;
 import com.jpexs.decompiler.flash.tags.base.CharacterIdTag;
 import com.jpexs.decompiler.flash.tags.base.CharacterTag;
 import com.jpexs.decompiler.flash.tags.base.SoundStreamHeadTypeTag;
@@ -42,22 +46,23 @@ import com.jpexs.decompiler.flash.timeline.Timelined;
 import com.jpexs.decompiler.flash.treeitems.AS3ClassTreeItem;
 import com.jpexs.decompiler.flash.treeitems.FolderItem;
 import com.jpexs.decompiler.flash.treeitems.HeaderItem;
-import com.jpexs.decompiler.flash.treeitems.SWFList;
+import com.jpexs.decompiler.flash.treeitems.Openable;
+import com.jpexs.decompiler.flash.treeitems.OpenableList;
 import com.jpexs.decompiler.flash.treeitems.TreeItem;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.WeakHashMap;
 import javax.swing.event.TreeModelEvent;
 import javax.swing.event.TreeModelListener;
-import javax.swing.tree.TreeModel;
 import javax.swing.tree.TreePath;
 
 /**
  *
  * @author JPEXS
  */
-public class TagTreeModel implements TreeModel {
+public class TagTreeModel extends AbstractTagTreeModel {
 
     public static final String FOLDER_SHAPES = "shapes";
 
@@ -89,13 +94,17 @@ public class TagTreeModel implements TreeModel {
 
     private final TagTreeRoot root = new TagTreeRoot();
 
-    private final List<SWFList> swfs;
+    private final List<OpenableList> swfs;
 
     private final Map<SWF, TagTreeSwfInfo> swfInfos = new HashMap<>();
 
     private final boolean addAllFolders;
 
-    public TagTreeModel(List<SWFList> swfs, boolean addAllFolders) {
+    private final Map<TreeItem, TreePath> pathCache = new HashMap<>();
+
+    private final Map<ABC, ClassesListTreeModel> abcClassesTree = new WeakHashMap<>();
+
+    public TagTreeModel(List<OpenableList> swfs, boolean addAllFolders) {
         this.swfs = swfs;
         this.addAllFolders = addAllFolders;
         //Main.startWork(AppStrings.translate("work.buildingscripttree") + "...");
@@ -107,11 +116,12 @@ public class TagTreeModel implements TreeModel {
     }
 
     public void updateSwfs(CollectionChangedEvent e) {
-        if (e.getAction() != CollectionChangedAction.ADD) {
+        if (e.getAction() != CollectionChangedAction.ADD
+                && e.getAction() != CollectionChangedAction.MOVE) {
             List<SWF> toRemove = new ArrayList<>();
             for (SWF swf : swfInfos.keySet()) {
                 SWF swf2 = swf.getRootSwf();
-                if (swf2 != null && !swfs.contains(swf2.swfList)) {
+                if (swf2 != null && !swfs.contains(swf2.openableList)) {
                     toRemove.add(swf);
                 }
             }
@@ -135,68 +145,33 @@ public class TagTreeModel implements TreeModel {
             default:
                 fireTreeStructureChanged(new TreeModelEvent(this, new TreePath(root)));
         }
+        calculateCollisions();
     }
 
-    public void updateSwf(SWF swf) {
+    @Override
+    public void updateOpenable(Openable openable) {
         swfInfos.clear();
-        TreePath changedPath = getTreePath(swf == null ? root : swf);
+        abcClassesTree.clear();
+        TreePath changedPath = getTreePath(openable == null ? root : openable);
         fireTreeStructureChanged(new TreeModelEvent(this, changedPath));
+        calculateCollisions();
     }
 
-    public void updateNode(TreeItem treeItem) {
-        TreePath changedPath = getTreePath(treeItem);
-        fireTreeStructureChanged(new TreeModelEvent(this, changedPath));
-    }
-
-    public void updateNode(TreePath changedPath) {
-        fireTreeStructureChanged(new TreeModelEvent(this, changedPath.getParentPath()));
-    }
-
-    private void fireTreeNodesRemoved(TreeModelEvent e) {
-        for (TreeModelListener listener : listeners) {
-            listener.treeNodesRemoved(e);
-        }
-    }
-
-    private void fireTreeNodesInserted(TreeModelEvent e) {
-        for (TreeModelListener listener : listeners) {
-            listener.treeNodesInserted(e);
-        }
-    }
-
-    private void fireTreeStructureChanged(TreeModelEvent e) {
-        for (TreeModelListener listener : listeners) {
-            listener.treeStructureChanged(e);
-        }
-    }
-
-    private List<SoundStreamHeadTypeTag> getSoundStreams(DefineSpriteTag sprite) {
-        List<SoundStreamHeadTypeTag> ret = new ArrayList<>();
-        for (Tag t : sprite.getTags()) {
-            if (t instanceof SoundStreamHeadTypeTag) {
-                ret.add((SoundStreamHeadTypeTag) t);
-            }
-        }
-        return ret;
-    }
-
-    private void createTagList(SWF swf) {
-        List<TreeItem> nodeList = new ArrayList<>();
-        List<TreeItem> frames = new ArrayList<>();
-        List<TreeItem> shapes = new ArrayList<>();
-        List<TreeItem> morphShapes = new ArrayList<>();
-        List<TreeItem> sprites = new ArrayList<>();
-        List<TreeItem> buttons = new ArrayList<>();
-        List<TreeItem> images = new ArrayList<>();
-        List<TreeItem> fonts = new ArrayList<>();
-        List<TreeItem> texts = new ArrayList<>();
-        List<TreeItem> movies = new ArrayList<>();
-        List<TreeItem> sounds = new ArrayList<>();
-        List<TreeItem> binaryData = new ArrayList<>();
-        List<TreeItem> others = new ArrayList<>();
-        List<FolderItem> emptyFolders = new ArrayList<>();
-        Map<Integer, List<TreeItem>> mappedTags = new HashMap<>();
-        for (Tag t : swf.getTags()) {
+    private void walkTimelinedTagList(Timelined timelined,
+            Map<Integer, List<TreeItem>> mappedTags,
+            List<TreeItem> shapes,
+            List<TreeItem> morphShapes,
+            List<TreeItem> sprites,
+            List<TreeItem> buttons,
+            List<TreeItem> images,
+            List<TreeItem> fonts,
+            List<TreeItem> texts,
+            List<TreeItem> movies,
+            List<TreeItem> sounds,
+            List<TreeItem> binaryData,
+            List<TreeItem> others
+    ) {
+        for (Tag t : timelined.getTags()) {
             TreeNodeType ttype = TagTree.getTreeNodeType(t);
             switch (ttype) {
                 case SHAPE:
@@ -207,7 +182,7 @@ public class TagTreeModel implements TreeModel {
                     break;
                 case SPRITE:
                     sprites.add(t);
-                    sounds.addAll(getSoundStreams((DefineSpriteTag) t));
+                    walkTimelinedTagList((DefineSpriteTag) t, mappedTags, shapes, morphShapes, sprites, buttons, images, fonts, texts, movies, sounds, binaryData, others);
                     break;
                 case BUTTON:
                     buttons.add(t);
@@ -238,6 +213,12 @@ public class TagTreeModel implements TreeModel {
                         boolean parentFound = false;
                         if ((t instanceof CharacterIdTag) && !(t instanceof CharacterTag)) {
                             CharacterIdTag chit = (CharacterIdTag) t;
+                            SWF swf;
+                            if (timelined instanceof SWF) {
+                                swf = (SWF) timelined;
+                            } else {
+                                swf = ((DefineSpriteTag) timelined).getSwf();
+                            }
                             if (swf.getCharacter(chit.getCharacterId()) != null) {
                                 parentFound = true;
                                 if (!mappedTags.containsKey(chit.getCharacterId())) {
@@ -253,6 +234,25 @@ public class TagTreeModel implements TreeModel {
                     break;
             }
         }
+    }
+
+    private void createTagList(SWF swf) {
+        List<TreeItem> nodeList = new ArrayList<>();
+        List<TreeItem> frames = new ArrayList<>();
+        List<TreeItem> shapes = new ArrayList<>();
+        List<TreeItem> morphShapes = new ArrayList<>();
+        List<TreeItem> sprites = new ArrayList<>();
+        List<TreeItem> buttons = new ArrayList<>();
+        List<TreeItem> images = new ArrayList<>();
+        List<TreeItem> fonts = new ArrayList<>();
+        List<TreeItem> texts = new ArrayList<>();
+        List<TreeItem> movies = new ArrayList<>();
+        List<TreeItem> sounds = new ArrayList<>();
+        List<TreeItem> binaryData = new ArrayList<>();
+        List<TreeItem> others = new ArrayList<>();
+        List<FolderItem> emptyFolders = new ArrayList<>();
+        Map<Integer, List<TreeItem>> mappedTags = new HashMap<>();
+        walkTimelinedTagList(swf, mappedTags, shapes, morphShapes, sprites, buttons, images, fonts, texts, movies, sounds, binaryData, others);
 
         Timeline timeline = swf.getTimeline();
         int frameCount = timeline.getFrameCount();
@@ -264,7 +264,7 @@ public class TagTreeModel implements TreeModel {
             TreeItem sound = sounds.get(i);
             if (sound instanceof SoundStreamHeadTypeTag) {
                 List<SoundStreamBlockTag> blocks = ((SoundStreamHeadTypeTag) sound).getBlocks();
-                if (blocks.isEmpty()) {
+                if (blocks == null || blocks.isEmpty()) {
                     sounds.remove(i);
                 }
             }
@@ -288,7 +288,7 @@ public class TagTreeModel implements TreeModel {
         Map<Tag, TagScript> currentTagScriptCache = new HashMap<>();
         if (swf.isAS3()) {
             if (!swf.getAbcList().isEmpty()) {
-                nodeList.add(new ClassesListTreeModel(swf));
+                nodeList.add(new ClassesListTreeModel(swf, Configuration.flattenASPackages.get()));
             }
         } else {
             List<TreeItem> subNodes = swf.getFirstLevelASMNodes(currentTagScriptCache);
@@ -386,11 +386,13 @@ public class TagTreeModel implements TreeModel {
         return lastVisibleFrame;
     }
 
+    @Override
     public Frame getFrame(SWF swf, Timelined t, int frame) {
         return searchForFrame(swf, swf, t, frame);
     }
 
-    private List<TreeItem> searchTreeItem(TreeItem obj, TreeItem parent, List<TreeItem> path) {
+    @Override
+    protected List<TreeItem> searchTreeItem(TreeItem obj, TreeItem parent, List<TreeItem> path) {
         List<TreeItem> ret = null;
         for (TreeItem n : getAllChildren(parent)) {
             List<TreeItem> newPath = new ArrayList<>();
@@ -399,7 +401,7 @@ public class TagTreeModel implements TreeModel {
 
             if (n instanceof AS3ClassTreeItem) {
                 AS3ClassTreeItem te = (AS3ClassTreeItem) n;
-                if (obj.equals(te)) {
+                if (obj == te) {
                     return newPath;
                 }
             }
@@ -408,18 +410,23 @@ public class TagTreeModel implements TreeModel {
                 // FolderItems are always recreated, so compare them by name and swf
                 FolderItem nds = (FolderItem) n;
                 FolderItem objs = (FolderItem) obj;
-                if (objs.getName().equals(nds.getName()) && objs.swf.equals(nds.swf)) {
+                if (objs.getName().equals(nds.getName()) && objs.swf == nds.swf) {
                     return newPath;
                 }
             } else {
-                if (obj.equals(n)) {
-                    return newPath;
+
+                TreeItem objNoTs = obj;
+                if (obj instanceof TagScript) {
+                    objNoTs = ((TagScript) obj).getTag();
                 }
 
+                TreeItem nNoTs = n;
                 if (n instanceof TagScript) {
-                    if (obj.equals(((TagScript) n).getTag())) {
-                        return newPath;
-                    }
+                    nNoTs = ((TagScript) n).getTag();
+                }
+
+                if (objNoTs == nNoTs) {
+                    return newPath;
                 }
             }
 
@@ -429,20 +436,6 @@ public class TagTreeModel implements TreeModel {
             }
         }
         return ret;
-    }
-
-    public TreePath getTreePath(TreeItem obj) {
-        List<TreeItem> path = new ArrayList<>();
-        path.add(root);
-        if (obj != root) {
-            path = searchTreeItem(obj, root, path);
-        }
-        if (path == null) {
-            return null;
-        }
-
-        TreePath tp = new TreePath(path.toArray(new Object[path.size()]));
-        return tp;
     }
 
     @Override
@@ -471,10 +464,20 @@ public class TagTreeModel implements TreeModel {
     }
 
     private List<TreeItem> getMappedCharacters(SWF swf, CharacterTag tag) {
+        if (swf == null) {
+            return new ArrayList<>();
+        }
         TagTreeSwfInfo swfInfo = getSwfInfo(swf);
         List<TreeItem> mapped = swfInfo.mappedTags.get(tag.getCharacterId());
         if (mapped == null) {
             mapped = new ArrayList<>();
+        }
+        mapped = new ArrayList<>(mapped);
+        for (int i = 0; i < mapped.size(); i++) {
+            if (mapped.get(i) instanceof DoInitActionTag) {
+                mapped.remove(i);
+                i--;
+            }
         }
 
         return mapped;
@@ -485,19 +488,25 @@ public class TagTreeModel implements TreeModel {
         return swfInfo.tagScriptCache;
     }
 
+    @Override
     public List<? extends TreeItem> getAllChildren(Object parent) {
         TreeItem parentNode = (TreeItem) parent;
+        List<TreeItem> result = new ArrayList<>();
+        if (parentNode instanceof CharacterTag) {
+            result = new ArrayList<>(getMappedCharacters(((CharacterTag) parentNode).getSwf(), (CharacterTag) parentNode));
+        }
+
         if (parentNode == root) {
-            List<TreeItem> result = new ArrayList<>(swfs.size());
-            for (SWFList swfList : swfs) {
+            for (OpenableList swfList : swfs) {
                 if (!swfList.isBundle()) {
                     result.add(swfList.get(0));
+                } else {
+                    result.add(swfList);
                 }
-                result.add(swfList);
             }
             return result;
-        } else if (parentNode instanceof SWFList) {
-            return ((SWFList) parentNode).swfs;
+        } else if (parentNode instanceof OpenableList) {
+            return ((OpenableList) parentNode).items;
         } else if (parentNode instanceof SWF) {
             return getSwfFolders((SWF) parentNode);
         } else if (parentNode instanceof FolderItem) {
@@ -505,11 +514,11 @@ public class TagTreeModel implements TreeModel {
         } else if (parentNode instanceof Frame) {
             return ((Frame) parentNode).innerTags;
         } else if (parentNode instanceof DefineSpriteTag) {
-            return ((DefineSpriteTag) parentNode).getTimeline().getFrames();
+            result.addAll(((DefineSpriteTag) parentNode).getTimeline().getFrames());
+            return result;
         } else if (parentNode instanceof DefineBinaryDataTag) {
             DefineBinaryDataTag binaryDataTag = (DefineBinaryDataTag) parentNode;
             if (binaryDataTag.innerSwf != null) {
-                List<SWF> result = new ArrayList<>(1);
                 result.add(((DefineBinaryDataTag) parentNode).innerSwf);
                 return result;
             } else {
@@ -519,14 +528,13 @@ public class TagTreeModel implements TreeModel {
             return ((AS2Package) parentNode).getAllChildren();
         } else if (parentNode instanceof FrameScript) {
             Frame parentFrame = ((FrameScript) parentNode).getFrame();
-            List<TreeItem> result = new ArrayList<>();
             result.addAll(parentFrame.actionContainers);
             result.addAll(parentFrame.actions);
             for (int i = 0; i < result.size(); i++) {
                 TreeItem item = result.get(i);
                 if (item instanceof Tag) {
                     Tag resultTag = (Tag) item;
-                    Map<Tag, TagScript> currentTagScriptCache = getTagScriptCache(item.getSwf());
+                    Map<Tag, TagScript> currentTagScriptCache = getTagScriptCache((SWF) item.getOpenable());
                     TagScript tagScript = currentTagScriptCache.get(resultTag);
                     if (tagScript == null) {
                         List<TreeItem> subNodes = new ArrayList<>();
@@ -535,7 +543,7 @@ public class TagTreeModel implements TreeModel {
                                 subNodes.add(item2);
                             }
                         }
-                        tagScript = new TagScript(item.getSwf(), resultTag, subNodes);
+                        tagScript = new TagScript((SWF) item.getOpenable(), resultTag, subNodes);
                         currentTagScriptCache.put(resultTag, tagScript);
                     }
                     result.set(i, tagScript);
@@ -553,16 +561,19 @@ public class TagTreeModel implements TreeModel {
             } else {
                 return new ArrayList<>();
             }
-        } else if (parentNode instanceof CharacterTag) {
-            return getMappedCharacters(((CharacterTag) parentNode).getSwf(), (CharacterTag) parentNode);
+        } else if (parentNode instanceof ButtonTag) {
+            return ((ButtonTag) parentNode).getRecords();
+        } else if (parentNode instanceof ABC) {
+            ClassesListTreeModel classesTreeModel = getClassesListTreeModel((ABC) parentNode);
+            return classesTreeModel.getAllChildren(classesTreeModel.getRoot());
         }
 
-        return new ArrayList<>();
+        return result;
     }
 
     @Override
     public TreeItem getChild(Object parent, int index) {
-        if(getChildCount(parent) == 0) {
+        if (getChildCount(parent) == 0) {
             return null;
         }
         TreeItem parentNode = (TreeItem) parent;
@@ -576,13 +587,13 @@ public class TagTreeModel implements TreeModel {
         }
 
         if (parentNode == root) {
-            SWFList swfList = swfs.get(index);
-            if (!swfList.isBundle()) {
-                return swfList.get(0);
+            OpenableList openableList = swfs.get(index);
+            if (!openableList.isBundle()) {
+                return openableList.get(0);
             }
-            return swfList;
-        } else if (parentNode instanceof SWFList) {
-            return ((SWFList) parentNode).swfs.get(index);
+            return openableList;
+        } else if (parentNode instanceof OpenableList) {
+            return ((OpenableList) parentNode).items.get(index);
         } else if (parentNode instanceof SWF) {
             return getSwfFolders((SWF) parentNode).get(index);
         } else if (parentNode instanceof FolderItem) {
@@ -606,7 +617,7 @@ public class TagTreeModel implements TreeModel {
             }
             if (result instanceof Tag) {
                 Tag resultTag = (Tag) result;
-                Map<Tag, TagScript> currentTagScriptCache = getTagScriptCache(result.getSwf());
+                Map<Tag, TagScript> currentTagScriptCache = getTagScriptCache((SWF) result.getOpenable());
                 TagScript tagScript = currentTagScriptCache.get(resultTag);
                 if (tagScript == null) {
                     List<TreeItem> subNodes = new ArrayList<>();
@@ -615,7 +626,7 @@ public class TagTreeModel implements TreeModel {
                             subNodes.add(item);
                         }
                     }
-                    tagScript = new TagScript(result.getSwf(), resultTag, subNodes);
+                    tagScript = new TagScript((SWF) result.getOpenable(), resultTag, subNodes);
                     currentTagScriptCache.put(resultTag, tagScript);
                 }
                 result = tagScript;
@@ -628,6 +639,11 @@ public class TagTreeModel implements TreeModel {
             return clt.getChild(clt.getRoot(), index);
         } else if (parentNode instanceof AS3ClassTreeItem) {
             return ((AS3Package) parentNode).getChild(index);
+        } else if (parentNode instanceof ButtonTag) {
+            return ((ButtonTag) parentNode).getRecords().get(index);
+        } else if (parentNode instanceof ABC) {
+            ClassesListTreeModel classesTreeModel = getClassesListTreeModel((ABC) parentNode);
+            return classesTreeModel.getChild(classesTreeModel.getRoot(), index);
         }
 
         throw new Error("Unsupported parent type: " + parentNode.getClass().getName());
@@ -642,8 +658,8 @@ public class TagTreeModel implements TreeModel {
         }
         if (parentNode == root) {
             return mappedSize + swfs.size();
-        } else if (parentNode instanceof SWFList) {
-            return mappedSize + ((SWFList) parentNode).swfs.size();
+        } else if (parentNode instanceof OpenableList) {
+            return mappedSize + ((OpenableList) parentNode).items.size();
         } else if (parentNode instanceof SWF) {
             return mappedSize + getSwfFolders((SWF) parentNode).size();
         } else if (parentNode instanceof HeaderItem) {
@@ -668,8 +684,13 @@ public class TagTreeModel implements TreeModel {
             return mappedSize + clt.getChildCount(clt.getRoot());
         } else if (parentNode instanceof AS3Package) {
             return mappedSize + ((AS3Package) parentNode).getChildCount();
+        } else if (parentNode instanceof ButtonTag) {
+            return mappedSize + ((ButtonTag) parentNode).getRecords().size();
         } else if (parentNode instanceof CharacterTag) {
             return mappedSize;
+        } else if (parentNode instanceof ABC) {
+            ClassesListTreeModel classesTreeModel = getClassesListTreeModel((ABC) parentNode);
+            return classesTreeModel.getChildCount(classesTreeModel.getRoot());
         }
 
         return 0;
@@ -678,10 +699,6 @@ public class TagTreeModel implements TreeModel {
     @Override
     public boolean isLeaf(Object node) {
         return (getChildCount(node) == 0);
-    }
-
-    @Override
-    public void valueForPathChanged(TreePath path, Object newValue) {
     }
 
     private int indexOfAdd(int prevSize, int index) {
@@ -706,12 +723,12 @@ public class TagTreeModel implements TreeModel {
             baseIndex = mapped.size();
         }
         if (parentNode == root) {
-            SWFList swfList = child instanceof SWFList
-                    ? (SWFList) child
-                    : ((SWF) child).swfList;
-            return indexOfAdd(baseIndex, swfs.indexOf(swfList));
-        } else if (parentNode instanceof SWFList) {
-            return indexOfAdd(baseIndex, ((SWFList) parentNode).swfs.indexOf(childNode));
+            OpenableList openableList = child instanceof OpenableList
+                    ? (OpenableList) child
+                    : ((Openable) child).getOpenableList();
+            return indexOfAdd(baseIndex, swfs.indexOf(openableList));
+        } else if (parentNode instanceof OpenableList) {
+            return indexOfAdd(baseIndex, ((OpenableList) parentNode).items.indexOf(childNode));
         } else if (parentNode instanceof SWF) {
             return indexOfAdd(baseIndex, getSwfFolders((SWF) parentNode).indexOf(childNode));
         } else if (parentNode instanceof FolderItem) {
@@ -741,43 +758,25 @@ public class TagTreeModel implements TreeModel {
             return indexOfAdd(baseIndex, clt.getIndexOfChild(clt.getRoot(), childNode));
         } else if (parentNode instanceof AS3ClassTreeItem) {
             return indexOfAdd(baseIndex, ((AS3Package) parentNode).getIndexOfChild((AS3ClassTreeItem) childNode));
+        } else if (parentNode instanceof ButtonTag) {
+            return indexOfAdd(baseIndex, ((ButtonTag) parentNode).getRecords().indexOf(childNode));
         } else if (parentNode instanceof CharacterTag) {
             return indexOfAdd(baseIndex, getMappedCharacters(((CharacterTag) parentNode).getSwf(), (CharacterTag) parentNode).indexOf(childNode));
+        } else if (parentNode instanceof ABC) {
+            ClassesListTreeModel classesTreeModel = getClassesListTreeModel((ABC) parentNode);
+            return indexOfAdd(baseIndex, classesTreeModel.getIndexOfChild(classesTreeModel.getRoot(), childNode));
         }
 
-        throw new Error("Unsupported parent type: " + parentNode.getClass().getName());
+        return -1;
     }
 
-    public boolean treePathExists(TreePath treePath) {
-        TreeItem current = null;
-        for (Object o : treePath.getPath()) {
-            TreeItem item = (TreeItem) o;
-            if (current == null) {
-                if (item != getRoot()) {
-                    return false;
-                }
-
-                current = item;
-            } else {
-                int idx = getIndexOfChild(current, item);
-                if (idx == -1) {
-                    return false;
-                }
-
-                current = item;
-            }
+    private ClassesListTreeModel getClassesListTreeModel(ABC abc) {
+        if (abcClassesTree.containsKey(abc)) {
+            return abcClassesTree.get(abc);
         }
 
-        return true;
-    }
-
-    @Override
-    public void addTreeModelListener(TreeModelListener l) {
-        listeners.add(l);
-    }
-
-    @Override
-    public void removeTreeModelListener(TreeModelListener l) {
-        listeners.remove(l);
+        ClassesListTreeModel model = new ClassesListTreeModel(abc, Configuration.flattenASPackages.get());
+        abcClassesTree.put(abc, model);
+        return model;
     }
 }

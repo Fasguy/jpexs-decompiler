@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -31,6 +31,7 @@ public enum TreeNodeType {
     MORPH_SHAPE,
     SPRITE,
     BUTTON,
+    BUTTON_RECORD,
     AS,
     AS_CLASS,
     AS_INTERFACE,
@@ -59,5 +60,9 @@ public enum TreeNodeType {
     FILE_ATTRIBUTES,
     METADATA,
     PLACE_OBJECT,
-    REMOVE_OBJECT
+    REMOVE_OBJECT,
+    SCALING_GRID,
+    END,
+    ERROR,
+    ABC
 }

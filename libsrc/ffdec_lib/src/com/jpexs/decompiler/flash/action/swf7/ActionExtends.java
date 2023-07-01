@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.action.swf7;
 
 import com.jpexs.decompiler.flash.BaseLocalData;
@@ -35,8 +36,8 @@ import java.util.List;
 @SWFVersion(from = 7)
 public class ActionExtends extends Action {
 
-    public ActionExtends() {
-        super(0x69, 0);
+    public ActionExtends(String charset) {
+        super(0x69, 0, charset);
     }
 
     @Override

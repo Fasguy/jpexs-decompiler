@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -24,7 +24,6 @@ import java.awt.geom.GeneralPath;
 import java.util.EnumSet;
 import java.util.Set;
 import javax.swing.JLabel;
-import javax.swing.UIManager;
 import org.pushingpixels.substance.api.ColorSchemeAssociationKind;
 import org.pushingpixels.substance.api.ComponentState;
 import org.pushingpixels.substance.api.DecorationAreaType;
@@ -71,11 +70,14 @@ public class HeaderLabel extends JLabel {
 
     @Override
     public void paint(Graphics g) {
+        Color foregroundColor;
         if (Configuration.useRibbonInterface.get()) {
             SubstanceSkin skin = SubstanceLookAndFeel.getCurrentSkin();
             g.setColor(skin.getColorScheme(DecorationAreaType.HEADER, ColorSchemeAssociationKind.FILL, ComponentState.ENABLED).getBackgroundFillColor());
+            foregroundColor = skin.getColorScheme(DecorationAreaType.HEADER, ColorSchemeAssociationKind.FILL, ComponentState.ENABLED).getForegroundColor();
         } else {
             g.setColor(SystemColor.control);
+            foregroundColor = SystemColor.controlText;
         }
         g.fillRect(0, 0, getWidth(), getHeight());
         if (Configuration.useRibbonInterface.get()) {
@@ -96,13 +98,11 @@ public class HeaderLabel extends JLabel {
             SubstanceSkin skin = SubstanceLookAndFeel.getCurrentSkin();
             borderPainter.paintBorder(g, this, getWidth(), getHeight() + dy,
                     contour, contourInner, skin.getColorScheme(DecorationAreaType.HEADER, ColorSchemeAssociationKind.BORDER, ComponentState.ENABLED));
-            g.setColor(skin.getColorScheme(DecorationAreaType.HEADER, ColorSchemeAssociationKind.FILL, ComponentState.ENABLED).getForegroundColor());
-        } else {
-            g.setColor(SystemColor.controlText);
         }
 
         JLabel lab = new JLabel(getText(), JLabel.CENTER);
         lab.setSize(getSize());
+        lab.setForeground(foregroundColor);
         lab.paint(g);
     }
 }

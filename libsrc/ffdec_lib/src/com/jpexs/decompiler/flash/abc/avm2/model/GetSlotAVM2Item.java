@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,7 +21,6 @@ import com.jpexs.decompiler.flash.helpers.GraphTextWriter;
 import com.jpexs.decompiler.graph.GraphSourceItem;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.GraphTargetVisitorInterface;
-import com.jpexs.decompiler.graph.TypeItem;
 import com.jpexs.decompiler.graph.model.LocalData;
 import java.util.Objects;
 
@@ -38,13 +37,16 @@ public class GetSlotAVM2Item extends AVM2Item {
     public GraphTargetItem slotObject;
 
     public int slotIndex;
+    
+    public GraphTargetItem slotType;
 
-    public GetSlotAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, GraphTargetItem scope, GraphTargetItem slotObject, int slotIndex, Multiname slotName) {
+    public GetSlotAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, GraphTargetItem scope, GraphTargetItem slotObject, int slotIndex, Multiname slotName, GraphTargetItem slotType) {
         super(instruction, lineStartIns, PRECEDENCE_PRIMARY);
         this.slotName = slotName;
         this.scope = scope;
         this.slotObject = slotObject;
         this.slotIndex = slotIndex;
+        this.slotType = slotType;
     }
 
     @Override
@@ -73,7 +75,7 @@ public class GetSlotAVM2Item extends AVM2Item {
 
     @Override
     public GraphTargetItem returnType() {
-        return TypeItem.UNBOUNDED;
+        return slotType;
     }
 
     @Override

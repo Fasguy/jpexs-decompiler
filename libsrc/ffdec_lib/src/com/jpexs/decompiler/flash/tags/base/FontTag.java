@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -233,7 +233,7 @@ public abstract class FontTag extends DrawableTag implements AloneTag {
         int fontId = getFontId();
         String selectedFont = swf.sourceFontNamesMap.get(fontId);
         if (selectedFont == null) {
-            SwfSpecificConfiguration swfConf = Configuration.getSwfSpecificConfiguration(swf.getShortFileName());
+            SwfSpecificConfiguration swfConf = Configuration.getSwfSpecificConfiguration(swf.getShortPathTitle());
             String key = fontId + "_" + getFontNameIntag();
             if (swfConf != null) {
                 selectedFont = swfConf.fontPairingMap.get(key);
@@ -427,14 +427,14 @@ public abstract class FontTag extends DrawableTag implements AloneTag {
     }
 
     @Override
-    public Shape getOutline(int frame, int time, int ratio, RenderContext renderContext, Matrix transformation, boolean stroked) {
+    public Shape getOutline(boolean fast, int frame, int time, int ratio, RenderContext renderContext, Matrix transformation, boolean stroked, ExportRectangle viewRect, double unzoom) {
         RECT r = getRect();
         return new Area(new Rectangle(r.Xmin, r.Ymin, r.getWidth(), r.getHeight()));
     }
 
     @Override
-    public void toImage(int frame, int time, int ratio, RenderContext renderContext, SerializableImage image, SerializableImage fullImage, boolean isClip, Matrix transformation, Matrix strokeTransformation, Matrix absoluteTransformation, Matrix fullTransformation, ColorTransform colorTransform, double unzoom, boolean sameImage, ExportRectangle viewRect, boolean scaleStrokes, int drawMode) {
-        SHAPERECORD.shapeListToImage(swf, getGlyphShapeTable(), image, frame, Color.black, colorTransform);
+    public void toImage(int frame, int time, int ratio, RenderContext renderContext, SerializableImage image, SerializableImage fullImage, boolean isClip, Matrix transformation, Matrix strokeTransformation, Matrix absoluteTransformation, Matrix fullTransformation, ColorTransform colorTransform, double unzoom, boolean sameImage, ExportRectangle viewRect, boolean scaleStrokes, int drawMode, int blendMode, boolean canUseSmoothing) {
+        SHAPERECORD.shapeListToImage(1, swf, getGlyphShapeTable(), image, frame, Color.black, colorTransform);
     }
 
     @Override
@@ -451,7 +451,7 @@ public abstract class FontTag extends DrawableTag implements AloneTag {
             String cs = "" + c;
             cs = cs.replace("\\", "\\\\").replace("\"", "\\\"");
             result.append("\t\tcase \"").append(cs).append("\":\r\n");
-            CanvasShapeExporter exporter = new CanvasShapeExporter(null, unitDivisor, swf, shapes.get(i), null, 0, 0);
+            CanvasShapeExporter exporter = new CanvasShapeExporter(1, null, unitDivisor, swf, shapes.get(i), null, 0, 0);
             exporter.export();
             result.append("\t\t").append(exporter.getShapeData().replaceAll("\r\n", "\r\n\t\t"));
             result.append("\tbreak;\r\n");
@@ -494,6 +494,9 @@ public abstract class FontTag extends DrawableTag implements AloneTag {
     }
 
     public DefineFontNameTag getFontNameTag() {
+        if (swf == null) {
+            return null;
+        }
         for (Tag t : swf.getTags()) {
             if (t instanceof DefineFontNameTag) {
                 DefineFontNameTag dfn = (DefineFontNameTag) t;
@@ -514,7 +517,7 @@ public abstract class FontTag extends DrawableTag implements AloneTag {
     }
 
     public RECT getGlyphBounds(int glyphIndex) {
-        return getGlyphShapeTable().get(glyphIndex).getBounds();
+        return getGlyphShapeTable().get(glyphIndex).getBounds(1);
     }
 
     public FontTag toClassicFont() {
@@ -531,4 +534,6 @@ public abstract class FontTag extends DrawableTag implements AloneTag {
         return installedFontsByName;
     }
 
+    public abstract String getCodesCharset();
+    
 }

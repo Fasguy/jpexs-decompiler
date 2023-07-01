@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -50,7 +50,7 @@ public class ActionScript2AssemblerTest extends ActionScript2TestBase {
 
     private String recompilePcode(String pcode) {
         try {
-            List<Action> actions = ASMParser.parse(0, true, pcode, swf.version, false);
+            List<Action> actions = ASMParser.parse(0, true, pcode, swf.version, false, swf.getCharset());
 
             DoActionTag doa = getFirstActionTag();
             doa.setActionBytes(Action.actionsToBytes(actions, true, swf.version));
@@ -66,14 +66,14 @@ public class ActionScript2AssemblerTest extends ActionScript2TestBase {
 
     private String decompilePcode(String pcode) {
         try {
-            List<Action> actions = ASMParser.parse(0, true, pcode, swf.version, false);
+            List<Action> actions = ASMParser.parse(0, true, pcode, swf.version, false, swf.getCharset());
 
             DoActionTag doa = getFirstActionTag();
             doa.setActionBytes(Action.actionsToBytes(actions, true, swf.version));
             HighlightedTextWriter writer = new HighlightedTextWriter(new CodeFormatting(), false);
 
             try {
-                Action.actionsToSource(doa, doa.getActions(), "", writer);
+                Action.actionsToSource(doa, doa.getActions(), "", writer, swf.getCharset());
             } catch (InterruptedException ex) {
                 fail();
             }
@@ -88,14 +88,14 @@ public class ActionScript2AssemblerTest extends ActionScript2TestBase {
 
     private String decompileClassPcode(String pcode) {
         try {
-            List<Action> actions = ASMParser.parse(0, true, pcode, swf.version, false);
+            List<Action> actions = ASMParser.parse(0, true, pcode, swf.version, false, swf.getCharset());
 
             DoInitActionTag doi = getFirstInitActionTag();
             doi.setActionBytes(Action.actionsToBytes(actions, true, swf.version));
             HighlightedTextWriter writer = new HighlightedTextWriter(new CodeFormatting(), false);
 
             try {
-                Action.actionsToSource(doi, doi.getActions(), "", writer);
+                Action.actionsToSource(doi, doi.getActions(), "", writer, swf.getCharset());
             } catch (InterruptedException ex) {
                 fail();
             }
@@ -119,12 +119,12 @@ public class ActionScript2AssemblerTest extends ActionScript2TestBase {
                 + "Jump loc000d\n"
                 + "loc002f:";
         try {
-            List<Action> actions = ASMParser.parse(0, true, actionsString, swf.version, false);
+            List<Action> actions = ASMParser.parse(0, true, actionsString, swf.version, false, swf.getCharset());
 
             DoActionTag doa = getFirstActionTag();
             doa.setActionBytes(Action.actionsToBytes(actions, true, swf.version));
             HighlightedTextWriter writer = new HighlightedTextWriter(new CodeFormatting(), false);
-            Action.actionsToSource(doa, doa.getActions(), "", writer);
+            Action.actionsToSource(doa, doa.getActions(), "", writer, swf.getCharset());
             String actualResult = writer.toString();
             writer = new HighlightedTextWriter(new CodeFormatting(), false);
             doa.getASMSource(ScriptExportMode.PCODE, writer, null);
@@ -292,5 +292,40 @@ public class ActionScript2AssemblerTest extends ActionScript2TestBase {
                 + "trace(\"hello\");\n"
                 + "}\n"
                 + "}");
+    }
+
+    @Test
+    public void testNonStandardForIn() {
+        String res = decompileClassPcode("ConstantPool\n"
+                + "Push \"x\" 0 \"Object\"\n"
+                + "NewObject\n"
+                + "StoreRegister 1\n"
+                + "SetVariable\n"
+                + "Push \"_global\"\n"
+                + "GetVariable\n"
+                + "Push \"x\"\n"
+                + "GetMember\n"
+                + "StoreRegister 2\n"
+                + "Enumerate2\n"
+                + "loc003d:StoreRegister 0\n"
+                + "Push null\n"
+                + "Equals2\n"
+                + "If loc0066\n"
+                + "Push register1 register0 register2 register0\n"
+                + "GetMember\n"
+                + "SetMember\n"
+                + "Jump loc003d\n"
+                + "loc0066:Pop\n"
+                + "Push \"after\"\n"
+                + "Trace");
+        res = cleanPCode(res);
+        assertEquals(res, "var _loc1_ = null;\n"
+                + "x = _loc1_ = new Object();\n"
+                + "var _loc2_ = _global.x;\n"
+                + "for(var _loc0_ in _loc2_)\n"
+                + "{\n"
+                + "_loc1_[_loc0_] = _loc2_[_loc0_];\n"
+                + "}\n"
+                + "trace(\"after\");");
     }
 }

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,12 +21,14 @@ import com.jpexs.decompiler.flash.SWF;
 import com.jpexs.decompiler.flash.SWFInputStream;
 import com.jpexs.decompiler.flash.action.Action;
 import com.jpexs.decompiler.flash.action.ActionList;
+import com.jpexs.decompiler.flash.action.ActionTreeOperation;
 import com.jpexs.decompiler.flash.action.ConstantPoolTooBigException;
 import com.jpexs.decompiler.flash.dumpview.DumpInfoSpecialType;
 import com.jpexs.decompiler.flash.exporters.modes.ScriptExportMode;
 import com.jpexs.decompiler.flash.helpers.GraphTextWriter;
 import com.jpexs.decompiler.flash.tags.Tag;
 import com.jpexs.decompiler.flash.tags.base.ASMSource;
+import com.jpexs.decompiler.flash.treeitems.Openable;
 import com.jpexs.decompiler.flash.types.annotations.Conditional;
 import com.jpexs.decompiler.flash.types.annotations.HideInRawEdit;
 import com.jpexs.decompiler.flash.types.annotations.Internal;
@@ -42,7 +44,7 @@ import java.util.List;
  *
  * @author JPEXS
  */
-public class CLIPACTIONRECORD implements ASMSource, Serializable {
+public class CLIPACTIONRECORD implements ASMSource, Serializable, HasSwfAndTag {
 
     private String scriptName = "-";
     private CLIPACTIONS parentClipActions;
@@ -143,6 +145,18 @@ public class CLIPACTIONRECORD implements ASMSource, Serializable {
     public void setParentClipActions(CLIPACTIONS parentClipActions) {
         this.parentClipActions = parentClipActions;
     }
+    
+    @Override
+    public void setSourceTag(Tag tag) {
+        this.swf = tag.getSwf();
+        this.tag = tag;
+    }
+
+    @Override
+    public Tag getTag() {
+        return tag;
+    }            
+    
 
     public CLIPACTIONRECORD(SWF swf, SWFInputStream sis, Tag tag, CLIPACTIONS parentClipActions) throws IOException {
         this.swf = swf;
@@ -161,9 +175,15 @@ public class CLIPACTIONRECORD implements ASMSource, Serializable {
     }
 
     @Override
+    public Openable getOpenable() {
+        return swf;
+    }
+
+    @Override
     public SWF getSwf() {
         return swf;
     }
+    
 
     /**
      * Events to which this handler applies
@@ -229,7 +249,16 @@ public class CLIPACTIONRECORD implements ASMSource, Serializable {
             actions = getActions();
         }
 
-        return Action.actionsToSource(this, actions, getScriptName(), writer);
+        return Action.actionsToSource(this, actions, getScriptName(), writer, actions.getCharset());
+    }
+    
+    @Override
+    public GraphTextWriter getActionScriptSource(GraphTextWriter writer, ActionList actions, List<ActionTreeOperation> treeOperations) throws InterruptedException {
+        if (actions == null) {
+            actions = getActions();
+        }
+
+        return Action.actionsToSource(this, actions, getScriptName(), writer, actions.getCharset(), treeOperations);
     }
 
     /**
@@ -331,11 +360,5 @@ public class CLIPACTIONRECORD implements ASMSource, Serializable {
     @Override
     public Tag getSourceTag() {
         return tag;
-    }
-
-    @Override
-    public void setSourceTag(Tag t) {
-        this.tag = t;
-        this.swf = t.getSwf();
     }
 }

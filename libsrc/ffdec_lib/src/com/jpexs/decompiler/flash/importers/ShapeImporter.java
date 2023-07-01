@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,11 +12,13 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.importers;
 
 import com.jpexs.decompiler.flash.SWF;
 import com.jpexs.decompiler.flash.helpers.ImageHelper;
+import com.jpexs.decompiler.flash.importers.svg.SvgImporter;
 import com.jpexs.decompiler.flash.tags.DefineBitsJPEG2Tag;
 import com.jpexs.decompiler.flash.tags.DefineBitsJPEG3Tag;
 import com.jpexs.decompiler.flash.tags.DefineBitsJPEG4Tag;
@@ -27,15 +29,26 @@ import com.jpexs.decompiler.flash.tags.DefineShape3Tag;
 import com.jpexs.decompiler.flash.tags.DefineShape4Tag;
 import com.jpexs.decompiler.flash.tags.DefineShapeTag;
 import com.jpexs.decompiler.flash.tags.Tag;
+import com.jpexs.decompiler.flash.tags.base.CharacterTag;
 import com.jpexs.decompiler.flash.tags.base.ImageTag;
 import com.jpexs.decompiler.flash.tags.base.ShapeTag;
 import com.jpexs.decompiler.flash.tags.enums.ImageFormat;
 import com.jpexs.decompiler.flash.types.RECT;
 import com.jpexs.decompiler.flash.types.SHAPEWITHSTYLE;
+import com.jpexs.helpers.Helper;
 import java.awt.Dimension;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FilenameFilter;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -58,7 +71,7 @@ public class ShapeImporter {
             rect.Ymax = rect.Ymin + (int) (SWF.unitDivisor * dimension.getHeight());
         }
 
-        SHAPEWITHSTYLE shapes = imageTag.getShape(rect, fill);
+        SHAPEWITHSTYLE shapes = imageTag.getShape(rect, fill, st.getShapeNum());
         st.shapes = shapes;
         return (Tag) st;
     }
@@ -120,7 +133,7 @@ public class ShapeImporter {
                 throw new Error("Unsupported image type tag.");
         }
 
-        swf.addTag(imageTag, st);
+        swf.addTagBefore(imageTag, st);
         swf.updateCharacters();
         return imageTag;
     }
@@ -143,5 +156,76 @@ public class ShapeImporter {
         }
 
         return res;
+    }
+
+    public int bulkImport(File shapesDir, SWF swf, boolean noFill, boolean printOut) {
+        SvgImporter svgImporter = new SvgImporter();
+
+        Map<Integer, CharacterTag> characters = swf.getCharacters();
+        int shapeCount = 0;
+        List<String> extensions = Arrays.asList("svg", "png", "jpg", "jpeg", "gif", "bmp");
+        File allFiles[] = shapesDir.listFiles(new FilenameFilter() {
+            @Override
+            public boolean accept(File dir, String name) {
+                String nameLower = name.toLowerCase();
+                for (String ext : extensions) {
+                    if (nameLower.endsWith("." + ext)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        });
+        for (int characterId : characters.keySet()) {
+            CharacterTag tag = characters.get(characterId);
+            if (tag instanceof ShapeTag) {
+                ShapeTag shapeTag = (ShapeTag) tag;
+                List<File> existingFilesForShapeTag = new ArrayList<>();
+                for (File f : allFiles) {
+                    if (f.getName().startsWith("" + characterId + ".") || f.getName().startsWith("" + characterId + "_")) {
+                        existingFilesForShapeTag.add(f);
+                    }
+                }
+                existingFilesForShapeTag.sort(new Comparator<File>() {
+                    @Override
+                    public int compare(File o1, File o2) {
+                        String ext1 = o1.getName().substring(o1.getName().lastIndexOf(".") + 1);
+                        String ext2 = o2.getName().substring(o2.getName().lastIndexOf(".") + 1);
+                        int ret = extensions.indexOf(ext1) - extensions.indexOf(ext2);
+                        if (ret == 0) {
+                            return o1.getName().compareTo(o2.getName());
+                        }
+                        return ret;
+                    }
+                });
+
+                if (existingFilesForShapeTag.isEmpty()) {
+                    continue;
+                }
+
+                if (existingFilesForShapeTag.size() > 1) {
+                    Logger.getLogger(ShapeImporter.class.getName()).log(Level.WARNING, "Multiple matching files for shape tag {0} exists, {1} selected", new Object[]{characterId, existingFilesForShapeTag.get(0).getName()});
+                }
+                File sourceFile = existingFilesForShapeTag.get(0);
+
+                try {
+                    if (printOut) {
+                        System.out.println("Importing character " + characterId + " from file " + sourceFile.getName());
+                    }
+                    if (sourceFile.getAbsolutePath().toLowerCase().endsWith(".svg")) {
+                        svgImporter.importSvg(shapeTag, Helper.readTextFile(sourceFile.getAbsolutePath()), !noFill);
+                    } else {
+                        importImage(shapeTag, Helper.readFile(sourceFile.getAbsolutePath()), 0, !noFill);
+                    }
+                    shapeCount++;
+                } catch (IOException ex) {
+                    Logger.getLogger(ShapeImporter.class.getName()).log(Level.WARNING, "Cannot import shape " + characterId + " from file " + sourceFile.getName(), ex);
+                }
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
+                }
+            }
+        }
+        return shapeCount;
     }
 }

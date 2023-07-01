@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,11 +12,12 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.iggy.conversion;
 
+import com.jpexs.decompiler.flash.Bundle;
 import com.jpexs.decompiler.flash.SWF;
-import com.jpexs.decompiler.flash.SWFBundle;
 import com.jpexs.decompiler.flash.iggy.IggyFile;
 import com.jpexs.helpers.Helper;
 import com.jpexs.helpers.MemoryInputStream;
@@ -34,7 +35,7 @@ import java.util.TreeSet;
  *
  * @author JPEXS
  */
-public class IggySwfBundle implements SWFBundle {
+public class IggySwfBundle implements Bundle {
 
     private IggyFile iggyFile;
 
@@ -82,7 +83,7 @@ public class IggySwfBundle implements SWFBundle {
     }
 
     @Override
-    public SeekableInputStream getSWF(String key) throws IOException {
+    public SeekableInputStream getOpenable(String key) throws IOException {
         SWF swf = IggyToSwfConvertor.getSwf(iggyFile);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         swf.saveTo(baos);
@@ -94,7 +95,7 @@ public class IggySwfBundle implements SWFBundle {
     public Map<String, SeekableInputStream> getAll() throws IOException {
         Map<String, SeekableInputStream> ret = new HashMap<>();
         for (String key : getKeys()) {
-            ret.put(key, getSWF(key));
+            ret.put(key, getOpenable(key));
         }
         return ret;
     }
@@ -110,7 +111,7 @@ public class IggySwfBundle implements SWFBundle {
     }
 
     @Override
-    public boolean putSWF(String key, InputStream is) throws IOException {
+    public boolean putOpenable(String key, InputStream is) throws IOException {
         try {
             SWF swf = new SWF(is, false, false);
             SwfToIggyConvertor.updateIggy(iggyFile.getSwf(), swf);

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.exporters;
 
 import com.jpexs.decompiler.flash.AbortRetryIgnoreHandler;
@@ -26,6 +27,7 @@ import com.jpexs.decompiler.flash.exporters.modes.MovieExportMode;
 import com.jpexs.decompiler.flash.exporters.settings.MovieExportSettings;
 import com.jpexs.decompiler.flash.flv.FLVOutputStream;
 import com.jpexs.decompiler.flash.flv.FLVTAG;
+import com.jpexs.decompiler.flash.flv.SCRIPTDATA;
 import com.jpexs.decompiler.flash.flv.VIDEODATA;
 import com.jpexs.decompiler.flash.tags.DefineVideoStreamTag;
 import com.jpexs.decompiler.flash.tags.Tag;
@@ -42,6 +44,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  *
@@ -51,6 +54,9 @@ public class MovieExporter {
 
     public List<File> exportMovies(AbortRetryIgnoreHandler handler, String outdir, ReadOnlyTagList tags, final MovieExportSettings settings, EventListener evl) throws IOException, InterruptedException {
         List<File> ret = new ArrayList<>();
+        if (Thread.currentThread().isInterrupted()) {
+            return ret;
+        }
         if (tags.isEmpty()) {
             return ret;
         }
@@ -84,6 +90,9 @@ public class MovieExporter {
                     }
                 }, handler).run();
 
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
+                }
                 if (evl != null) {
                     evl.handleExportedEvent("movie", currentIndex, count, t.getName());
                 }
@@ -95,28 +104,41 @@ public class MovieExporter {
     }
 
     public byte[] exportMovie(DefineVideoStreamTag videoStream, MovieExportMode mode) throws IOException {
+        return exportMovie(videoStream, mode, false);
+    }
+        
+    public byte[] exportMovie(DefineVideoStreamTag videoStream, MovieExportMode mode, boolean ffdecInternal) throws IOException {
         SWF swf = videoStream.getSwf();
-        HashMap<Integer, VideoFrameTag> frames = new HashMap<>();
+        Map<Integer, VideoFrameTag> frames = new HashMap<>();
         SWF.populateVideoFrames(videoStream.characterID, swf.getTags(), frames);
         if (frames.isEmpty()) {
             return SWFInputStream.BYTE_ARRAY_EMPTY;
         }
 
-        //double ms = 1000.0f / ((float) frameRate);
         ByteArrayOutputStream fos = new ByteArrayOutputStream();
-        //CopyOutputStream cos = new CopyOutputStream(fos, new FileInputStream("f:\\trunk\\testdata\\xfl\\xfl\\_obj\\streamvideo 7.flv"));
         OutputStream tos = fos;
         FLVOutputStream flv = new FLVOutputStream(tos);
         flv.writeHeader(false, true);
-        //flv.writeTag(new FLVTAG(0, SCRIPTDATA.onMetaData(ms * frames.size() / 1000.0, videoStream.width, videoStream.height, 0, frameRate, videoStream.codecID, 0, 0, false, 0, fileSize)));
+        int numFrames = videoStream.numFrames;
+        if (ffdecInternal) {
+            numFrames += 2;
+        }
+        int internalFrameDelaySec = 5;
+        flv.writeTag(new FLVTAG(0, SCRIPTDATA.simpleVideOnMetadata(ffdecInternal ? numFrames * internalFrameDelaySec : numFrames / swf.frameRate, videoStream.width, videoStream.height,ffdecInternal? internalFrameDelaySec : swf.frameRate ,videoStream.codecID)));
         int horizontalAdjustment = 0;
         int verticalAdjustment = 0;
         int[] frameNumArray = Helper.toIntArray(frames.keySet());
         Arrays.sort(frameNumArray);
+        FLVTAG lastTag = null;
+        int frameNum = 0;
+        int internalFrameDelay = internalFrameDelaySec * 1000;
+                
         for (int i = 0; i < frameNumArray.length; i++) {
             VideoFrameTag tag = frames.get(frameNumArray[i]);
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
+            frameNum = frameNumArray[i];
+            
             int frameType = 1;
 
             if ((videoStream.codecID == DefineVideoStreamTag.CODEC_VP6)
@@ -150,7 +172,7 @@ public class MovieExporter {
 
                 }
 
-                SWFOutputStream sos = new SWFOutputStream(baos, swf.version);
+                SWFOutputStream sos = new SWFOutputStream(baos, swf.version, swf.getCharset());
                 sos.writeUB(4, horizontalAdjustment);
                 sos.writeUB(4, verticalAdjustment);
             }
@@ -183,7 +205,11 @@ public class MovieExporter {
             }
 
             baos.write(tag.videoData.getRangeData());
-            flv.writeTag(new FLVTAG((int) Math.floor(i * 1000.0 / swf.frameRate), new VIDEODATA(frameType, videoStream.codecID, baos.toByteArray())));
+            flv.writeTag(lastTag = new FLVTAG((long)Math.floor(ffdecInternal ? frameNum * internalFrameDelay : (frameNum * 1000.0 / swf.frameRate)), new VIDEODATA(frameType, videoStream.codecID, baos.toByteArray())));
+        }
+        if (ffdecInternal && lastTag != null) {
+            lastTag.timeStamp = frameNum * internalFrameDelay + 2 * internalFrameDelay;
+            flv.writeTag(lastTag);
         }
         return fos.toByteArray();
     }

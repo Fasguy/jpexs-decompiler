@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash;
 
 import com.jpexs.decompiler.flash.abc.ABCInputStream;
@@ -64,12 +65,10 @@ public class ABCStreamTest {
     @Test
     public void testU30() {
         for (long number : getTestNumbers(0, (1L << 30) - 1)) {
-            try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    ABCOutputStream aos = new ABCOutputStream(baos);) {
+            try ( ByteArrayOutputStream baos = new ByteArrayOutputStream();  ABCOutputStream aos = new ABCOutputStream(baos);) {
                 aos.writeU30(number);
                 aos.close();
-                try (MemoryInputStream mis = new MemoryInputStream(baos.toByteArray());
-                        ABCInputStream ais = new ABCInputStream(mis);) {
+                try ( MemoryInputStream mis = new MemoryInputStream(baos.toByteArray());  ABCInputStream ais = new ABCInputStream(mis);) {
                     assertEquals(number, ais.readU30("test"));
                     assertEquals(0, mis.available());
                 }
@@ -82,12 +81,10 @@ public class ABCStreamTest {
     @Test
     public void testU32() {
         for (long number : getTestNumbers(0, (1L << 32) - 1)) {
-            try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    ABCOutputStream aos = new ABCOutputStream(baos);) {
+            try ( ByteArrayOutputStream baos = new ByteArrayOutputStream();  ABCOutputStream aos = new ABCOutputStream(baos);) {
                 aos.writeU32(number);
                 aos.close();
-                try (MemoryInputStream mis = new MemoryInputStream(baos.toByteArray());
-                        ABCInputStream ais = new ABCInputStream(mis);) {
+                try ( MemoryInputStream mis = new MemoryInputStream(baos.toByteArray());  ABCInputStream ais = new ABCInputStream(mis);) {
                     assertEquals(number, ais.readU32("test"));
                     assertEquals(0, mis.available());
                 }
@@ -100,12 +97,10 @@ public class ABCStreamTest {
     @Test
     public void testS32() {
         for (long number : getTestNumbers(-(1L << 31), (1 << 31) - 1)) {
-            try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    ABCOutputStream aos = new ABCOutputStream(baos);) {
+            try ( ByteArrayOutputStream baos = new ByteArrayOutputStream();  ABCOutputStream aos = new ABCOutputStream(baos);) {
                 aos.writeS32(number);
                 aos.close();
-                try (MemoryInputStream mis = new MemoryInputStream(baos.toByteArray());
-                        ABCInputStream ais = new ABCInputStream(mis);) {
+                try ( MemoryInputStream mis = new MemoryInputStream(baos.toByteArray());  ABCInputStream ais = new ABCInputStream(mis);) {
                     assertEquals(number, ais.readS32("test"));
                     assertEquals(0, mis.available());
                 }

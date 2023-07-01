@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.types;
 
 import com.jpexs.decompiler.flash.SWF;
@@ -46,11 +47,12 @@ public class SHAPE implements NeedsCharacters, Serializable {
     public List<SHAPERECORD> shapeRecords;
 
     private Shape cachedOutline;
+    private Shape fastCachedOutline;
 
     @Override
-    public void getNeededCharacters(Set<Integer> needed) {
+    public void getNeededCharacters(Set<Integer> needed, SWF swf) {
         for (SHAPERECORD r : shapeRecords) {
-            r.getNeededCharacters(needed);
+            r.getNeededCharacters(needed, swf);
         }
     }
 
@@ -72,29 +74,63 @@ public class SHAPE implements NeedsCharacters, Serializable {
         return modified;
     }
 
-    public RECT getBounds() {
-        return SHAPERECORD.getBounds(shapeRecords);
+    public RECT getBounds(int shapeNum) {
+        LINESTYLEARRAY lsa = new LINESTYLEARRAY();
+        lsa.lineStyles = new LINESTYLE[0];
+        lsa.lineStyles2 = new LINESTYLE2[0];
+        return SHAPERECORD.getBounds(shapeRecords, lsa, shapeNum, false);
+    }
+    
+    public RECT getEdgeBounds() {
+        return SHAPERECORD.getBounds(shapeRecords, null, 1, true);
     }
 
-    public Shape getOutline(SWF swf, boolean stroked) {
+    public void clearCachedOutline() {
+        cachedOutline = null;
+        fastCachedOutline = null;
+    }
+    
+    /**
+     * 
+     * @param fast When the shape is large, can approximate to rectangles instead of being slow.
+     * @param shapeNum Version of DefineShape, 2 for DefineShape2 etc.
+     * @param swf
+     * @param stroked
+     * @return 
+     */
+    public Shape getOutline(boolean fast, int shapeNum, SWF swf, boolean stroked) {
         if (cachedOutline != null) {
             return cachedOutline;
         }
+        if (fast && fastCachedOutline != null) {
+            return fastCachedOutline;
+        }
 
         List<GeneralPath> strokes = new ArrayList<>();
-        List<GeneralPath> paths = PathExporter.export(swf, this, strokes);
+        List<GeneralPath> paths = PathExporter.export(shapeNum, swf, this, strokes);
 
-        Area area = new Area();
+        boolean large = shapeRecords.size() > 500;
+        
+        if (!large) {
+            fast = false;
+        }
+        
+        Area area = new Area(); 
         for (GeneralPath path : paths) {
-            area.add(new Area(path));
+            area.add(new Area(fast ? path.getBounds2D() : path));
         }
         if (stroked) {
             for (GeneralPath path : strokes) {
-                area.add(new Area(path));
+                area.add(new Area(fast ? path.getBounds2D() : path));
             }
-        }
+        }        
 
-        cachedOutline = area;
+        if (fast) {
+            fastCachedOutline = area;
+        } else {        
+            fastCachedOutline = null;
+            cachedOutline = area;
+        }
         return area;
     }
 

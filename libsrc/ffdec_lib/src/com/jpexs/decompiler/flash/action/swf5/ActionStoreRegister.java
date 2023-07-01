@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -22,6 +22,7 @@ import com.jpexs.decompiler.flash.SWFOutputStream;
 import com.jpexs.decompiler.flash.action.Action;
 import com.jpexs.decompiler.flash.action.LocalDataArea;
 import com.jpexs.decompiler.flash.action.StoreTypeAction;
+import com.jpexs.decompiler.flash.action.model.CompoundableBinaryOpAs12;
 import com.jpexs.decompiler.flash.action.model.ConstantPool;
 import com.jpexs.decompiler.flash.action.model.DecrementActionItem;
 import com.jpexs.decompiler.flash.action.model.DirectValueActionItem;
@@ -66,18 +67,18 @@ public class ActionStoreRegister extends Action implements StoreTypeAction {
         return true;
     }
 
-    public ActionStoreRegister(int registerNumber) {
-        super(0x87, 1);
+    public ActionStoreRegister(int registerNumber, String charset) {
+        super(0x87, 1, charset);
         this.registerNumber = registerNumber;
     }
 
     public ActionStoreRegister(int actionLength, SWFInputStream sis) throws IOException {
-        super(0x87, actionLength);
+        super(0x87, actionLength, sis.getCharset());
         registerNumber = sis.readUI8("registerNumber");
     }
 
-    public ActionStoreRegister(FlasmLexer lexer) throws IOException, ActionParseException {
-        super(0x87, 0);
+    public ActionStoreRegister(FlasmLexer lexer, String charset) throws IOException, ActionParseException {
+        super(0x87, 0, charset);
         registerNumber = (int) lexLong(lexer);
     }
 
@@ -161,10 +162,12 @@ public class ActionStoreRegister extends Action implements StoreTypeAction {
         }
 
         if ((value instanceof EnumeratedValueActionItem)) {
-            variables.put("__register" + registerNumber, new TemporaryRegister(registerNumber, new EnumerationAssignmentValueActionItem()));
+            //variables.put("__register" + registerNumber, new TemporaryRegister(registerNumber, new EnumerationAssignmentValueActionItem()));
+            //variables.put("__register" + registerNumber, null);
+            variables.remove("__register" + registerNumber);
         }
         StoreRegisterActionItem ret = new StoreRegisterActionItem(this, lineStartAction, rn, value, define);
-        if (value.getNotCoercedNoDup() instanceof CompoundableBinaryOp) {
+        if (value.getNotCoercedNoDup() instanceof CompoundableBinaryOpAs12) {
             CompoundableBinaryOp binaryOp = (CompoundableBinaryOp) value.getNotCoercedNoDup();
             if (binaryOp.getLeftSide() instanceof DirectValueActionItem) {
                 DirectValueActionItem directValue = (DirectValueActionItem) binaryOp.getLeftSide();

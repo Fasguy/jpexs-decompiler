@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,11 +12,22 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.types;
 
+import com.jpexs.decompiler.flash.SWF;
 import com.jpexs.decompiler.flash.tags.DefineButton2Tag;
+import com.jpexs.decompiler.flash.tags.DefineButtonCxformTag;
+import com.jpexs.decompiler.flash.tags.DefineButtonTag;
+import com.jpexs.decompiler.flash.tags.PlaceObject3Tag;
+import com.jpexs.decompiler.flash.tags.Tag;
+import com.jpexs.decompiler.flash.tags.base.ButtonTag;
+import com.jpexs.decompiler.flash.treeitems.Openable;
+import com.jpexs.decompiler.flash.treeitems.TreeItem;
 import com.jpexs.decompiler.flash.types.annotations.Conditional;
+import com.jpexs.decompiler.flash.types.annotations.EnumValue;
+import com.jpexs.decompiler.flash.types.annotations.Internal;
 import com.jpexs.decompiler.flash.types.annotations.Reserved;
 import com.jpexs.decompiler.flash.types.annotations.SWFArray;
 import com.jpexs.decompiler.flash.types.annotations.SWFType;
@@ -29,7 +40,7 @@ import java.util.List;
  *
  * @author JPEXS
  */
-public class BUTTONRECORD implements Serializable {
+public class BUTTONRECORD implements Serializable, TreeItem, HasSwfAndTag, HasCharacterId {
 
     @Reserved
     @SWFType(value = BasicType.UB, count = 2)
@@ -85,6 +96,7 @@ public class BUTTONRECORD implements Serializable {
     /**
      * If within DefineButton2Tag: Character color transform
      */
+    @Conditional(tags = {DefineButton2Tag.ID})
     public CXFORMWITHALPHA colorTransform;
 
     /**
@@ -92,6 +104,7 @@ public class BUTTONRECORD implements Serializable {
      * this button
      */
     @SWFArray("filter")
+    @Conditional(value = "buttonHasFilterList", tags = {DefineButton2Tag.ID})
     public List<FILTER> filterList;
 
     /**
@@ -99,10 +112,118 @@ public class BUTTONRECORD implements Serializable {
      */
     @SWFType(BasicType.UI8)
     @Conditional(value = {"buttonHasBlendMode"}, tags = {DefineButton2Tag.ID})
+    @EnumValue(value = 0, text = "normal")
+    @EnumValue(value = BlendMode.NORMAL, text = "normal")
+    @EnumValue(value = BlendMode.LAYER, text = "layer")
+    @EnumValue(value = BlendMode.MULTIPLY, text = "multiply")
+    @EnumValue(value = BlendMode.SCREEN, text = "screen")
+    @EnumValue(value = BlendMode.LIGHTEN, text = "lighten")
+    @EnumValue(value = BlendMode.DARKEN, text = "darken")
+    @EnumValue(value = BlendMode.DIFFERENCE, text = "difference")
+    @EnumValue(value = BlendMode.ADD, text = "add")
+    @EnumValue(value = BlendMode.SUBTRACT, text = "subtract")
+    @EnumValue(value = BlendMode.INVERT, text = "invert")
+    @EnumValue(value = BlendMode.ALPHA, text = "alpha")
+    @EnumValue(value = BlendMode.ERASE, text = "erase")
+    @EnumValue(value = BlendMode.OVERLAY, text = "overlay")
+    @EnumValue(value = BlendMode.HARDLIGHT, text = "hardlight")                             
     public int blendMode;
 
+    @Internal
+    private SWF swf;
+
+    @Internal
+    private ButtonTag tag;
+    
+    @Internal
+    private boolean modified;
+
+    public BUTTONRECORD(SWF swf, ButtonTag tag) {
+        this.swf = swf;
+        this.tag = tag;
+    }
+
+    public BUTTONRECORD() {
+        swf = null;
+        tag = null;
+    }                
+    
     @Override
     public String toString() {
-        return "[BUTTONRECORD character:" + characterId + ", depth:" + placeDepth + ", state:" + ((buttonStateDown ? "down " : "") + (buttonStateHitTest ? "hit " : "") + (buttonStateOver ? "over " : "") + (buttonStateUp ? "up " : "")) + "]";
+        return "BUTTONRECORD (" + characterId + ") Depth:" + placeDepth + " State:" + ((buttonStateDown ? "down " : "") + (buttonStateHitTest ? "hit " : "") + (buttonStateOver ? "over " : "") + (buttonStateUp ? "up " : ""));
+    }
+
+    @Override
+    public SWF getSwf() {
+        return swf;
+    }
+    
+    @Override
+    public Openable getOpenable() {
+        return swf;
+    }
+
+    public void setModified(boolean value) {
+        modified = value;
+    }
+    
+    @Override
+    public boolean isModified() {
+        return modified;
+    }
+
+    @Override
+    public ButtonTag getTag() {
+        return tag;
+    }        
+
+    @Override
+    public void setSourceTag(Tag tag) {
+        this.swf = tag.getSwf();
+        this.tag = (ButtonTag) tag;
+    }
+
+    @Override
+    public int getCharacterId() {
+        return characterId;
+    }
+
+    @Override
+    public void setCharacterId(int characterId) {
+        this.characterId = characterId;
+    }
+    
+    public PlaceObject3Tag toPlaceObject() {
+        PlaceObject3Tag placeTag = new PlaceObject3Tag(swf);
+        placeTag.depth = placeDepth;
+        placeTag.characterId = characterId;
+        placeTag.placeFlagHasCharacter = true;
+        if (colorTransform != null) {
+            placeTag.colorTransform = colorTransform;
+            placeTag.placeFlagHasColorTransform = true;
+        }
+
+        ButtonTag buttonTag = getTag();
+        if (buttonTag instanceof DefineButtonTag) {
+            DefineButtonTag button1Tag = (DefineButtonTag) buttonTag;
+            DefineButtonCxformTag cxformTag = (DefineButtonCxformTag) button1Tag.getSwf().getCharacterIdTag(button1Tag.getCharacterId(), DefineButtonCxformTag.ID);
+            if (cxformTag != null) {
+                placeTag.colorTransform = new CXFORMWITHALPHA(cxformTag.buttonColorTransform);
+                placeTag.placeFlagHasColorTransform = true;
+            }
+        }
+
+        placeTag.matrix = new MATRIX(placeMatrix);
+        placeTag.placeFlagHasMatrix = true;
+        
+        if (buttonHasBlendMode) {
+            placeTag.blendMode = blendMode;
+            placeTag.placeFlagHasBlendMode = true;
+        }
+        if (buttonHasFilterList) {
+            placeTag.surfaceFilterList = filterList;
+            placeTag.placeFlagHasFilterList = true;
+        }
+        return placeTag;
     }
 }

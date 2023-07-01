@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.action.model.operations;
 
 import com.jpexs.decompiler.flash.SourceGeneratorLocalData;
@@ -44,7 +45,7 @@ import java.util.List;
 public class PreDecrementActionItem extends UnaryOpItem {
 
     public PreDecrementActionItem(GraphSourceItem instruction, GraphSourceItem lineStartIns, GraphTargetItem object) {
-        super(instruction, lineStartIns, PRECEDENCE_UNARY, object, "--", "Number");
+        super(instruction, lineStartIns, PRECEDENCE_UNARY, object, "--", "" /*"Number" Causes unneccessary ++Number(xx) when xx not number*/);
     }
 
     @Override
@@ -55,6 +56,7 @@ public class PreDecrementActionItem extends UnaryOpItem {
     @Override
     public List<GraphSourceItem> toSource(SourceGeneratorLocalData localData, SourceGenerator generator) throws CompilationException {
         ActionSourceGenerator asGenerator = (ActionSourceGenerator) generator;
+        String charset = asGenerator.getCharset();
         List<GraphSourceItem> ret = new ArrayList<>();
         GraphTargetItem val = value;
         if (val instanceof VariableActionItem) {
@@ -67,9 +69,9 @@ public class PreDecrementActionItem extends UnaryOpItem {
             ret.addAll(gv.toSource(localData, generator));
             ret.add(new ActionDecrement());
             int tmpReg = asGenerator.getTempRegister(localData);
-            ret.add(new ActionStoreRegister(tmpReg));
+            ret.add(new ActionStoreRegister(tmpReg, charset));
             ret.add(new ActionSetVariable());
-            ret.add(new ActionPush(new RegisterNumber(tmpReg)));
+            ret.add(new ActionPush(new RegisterNumber(tmpReg), charset));
             asGenerator.releaseTempRegister(localData, tmpReg);
         } else if (val instanceof GetMemberActionItem) {
             GetMemberActionItem mem = (GetMemberActionItem) val;
@@ -78,15 +80,15 @@ public class PreDecrementActionItem extends UnaryOpItem {
             ret.addAll(mem.toSource(localData, generator));
             ret.add(new ActionDecrement());
             int tmpReg = asGenerator.getTempRegister(localData);
-            ret.add(new ActionStoreRegister(tmpReg));
+            ret.add(new ActionStoreRegister(tmpReg, charset));
             ret.add(new ActionSetMember());
-            ret.add(new ActionPush(new RegisterNumber(tmpReg)));
+            ret.add(new ActionPush(new RegisterNumber(tmpReg), charset));
             asGenerator.releaseTempRegister(localData, tmpReg);
         } else if ((val instanceof DirectValueActionItem) && ((DirectValueActionItem) val).value instanceof RegisterNumber) {
             RegisterNumber rn = (RegisterNumber) ((DirectValueActionItem) val).value;
-            ret.add(new ActionPush(new RegisterNumber(rn.number)));
+            ret.add(new ActionPush(new RegisterNumber(rn.number), charset));
             ret.add(new ActionDecrement());
-            ret.add(new ActionStoreRegister(rn.number));
+            ret.add(new ActionStoreRegister(rn.number, charset));
         } else if (val instanceof GetPropertyActionItem) {
             GetPropertyActionItem gp = (GetPropertyActionItem) val;
             ret.addAll(gp.toSource(localData, generator)); // old value

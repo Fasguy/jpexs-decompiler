@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,13 +12,14 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.dumpview;
 
-import com.jpexs.decompiler.flash.SWF;
 import com.jpexs.decompiler.flash.SWFInputStream;
 import com.jpexs.decompiler.flash.tags.Tag;
 import com.jpexs.decompiler.flash.tags.TagStub;
+import com.jpexs.decompiler.flash.treeitems.Openable;
 import com.jpexs.decompiler.flash.treeitems.TreeItem;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -132,7 +133,7 @@ public class DumpInfo implements TreeItem {
                 SWFInputStream sis = tagStub.getDataStream();
                 sis.seek(tagStub.getDataPos());
                 sis.dumpInfo = this;
-                resolvedTag = SWFInputStream.resolveTag(tagStub, 0, false, true, false);
+                resolvedTag = SWFInputStream.resolveTag(tagStub, 0, false, true, false, false);
             } catch (InterruptedException | IOException ex) {
                 Logger.getLogger(DumpInfo.class.getName()).log(Level.SEVERE, null, ex);
             }
@@ -146,13 +147,13 @@ public class DumpInfo implements TreeItem {
     }
 
     @Override
-    public SWF getSwf() {
+    public Openable getOpenable() {
         Tag tag = tagToResolve != null ? tagToResolve : resolvedTag;
         if (tag != null) {
-            return tag.getSwf();
+            return tag.getOpenable();
         }
 
-        return DumpInfoSwfNode.getSwfNode(this).getSwf();
+        return DumpInfoSwfNode.getSwfNode(this).getOpenable();
     }
 
     @Override

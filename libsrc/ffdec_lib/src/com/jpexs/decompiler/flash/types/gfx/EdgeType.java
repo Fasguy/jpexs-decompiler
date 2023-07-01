@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.types.gfx;
 
 import com.jpexs.decompiler.flash.types.shaperecords.CurvedEdgeRecord;
@@ -70,6 +71,10 @@ public class EdgeType implements Serializable {
     private static final int Edge_Quad = 3;
 
     public int[] data;
+    
+    public EdgeType() {
+        data = new int[] {Edge_Line, 0, 0};
+    }
 
     public EdgeType(boolean vertical, int v) {
         data = new int[]{vertical ? Edge_VLine : Edge_HLine, v};

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.abc.avm2.instructions.other;
 
 import com.jpexs.decompiler.flash.abc.ABC;
@@ -24,6 +25,7 @@ import com.jpexs.decompiler.flash.abc.avm2.model.HasNextAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.LocalRegAVM2Item;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.TranslateStack;
+import com.jpexs.decompiler.graph.TypeItem;
 import java.util.List;
 
 /**
@@ -42,8 +44,8 @@ public class HasNext2Ins extends InstructionDefinition {
         int indexReg = ins.operands[1];
         //stack.push("_loc_" + objectReg + ".hasNext(cnt=_loc_" + indexReg + ")");
         stack.push(new HasNextAVM2Item(ins, localData.lineStartInstruction,
-                new LocalRegAVM2Item(ins, localData.lineStartInstruction, indexReg, localData.localRegs.get(indexReg)),
-                new LocalRegAVM2Item(ins, localData.lineStartInstruction, objectReg, localData.localRegs.get(objectReg))
+                new LocalRegAVM2Item(ins, localData.lineStartInstruction, indexReg, localData.localRegs.get(indexReg), TypeItem.UNBOUNDED /*?*/),
+                new LocalRegAVM2Item(ins, localData.lineStartInstruction, objectReg, localData.localRegs.get(objectReg), TypeItem.UNBOUNDED /*?*/)
         ));
     }
 

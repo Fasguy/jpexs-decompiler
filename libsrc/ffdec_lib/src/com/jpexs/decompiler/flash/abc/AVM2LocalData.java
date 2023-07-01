@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,6 +20,7 @@ import com.jpexs.decompiler.flash.BaseLocalData;
 import com.jpexs.decompiler.flash.abc.avm2.AVM2Code;
 import com.jpexs.decompiler.flash.abc.avm2.AVM2ConstantPool;
 import com.jpexs.decompiler.flash.abc.avm2.CodeStats;
+import com.jpexs.decompiler.flash.abc.avm2.parser.script.AbcIndexing;
 import com.jpexs.decompiler.flash.abc.types.ABCException;
 import com.jpexs.decompiler.flash.abc.types.InstanceInfo;
 import com.jpexs.decompiler.flash.abc.types.MethodBody;
@@ -49,12 +50,20 @@ public class AVM2LocalData extends BaseLocalData {
     public HashMap<Integer, GraphTargetItem> localRegs;
 
     public ScopeStack scopeStack;
+    
+    public ScopeStack localScopeStack;
 
     public MethodBody methodBody;
+    
+    public List<MethodBody> callStack;
 
     public ABC abc;
+    
+    public AbcIndexing abcIndex;
 
     public HashMap<Integer, String> localRegNames;
+    
+    public HashMap<Integer, GraphTargetItem> localRegTypes;
 
     public List<DottedChain> fullyQualifiedNames;
 
@@ -103,9 +112,7 @@ public class AVM2LocalData extends BaseLocalData {
     public HashMap<Integer, Integer> localRegAssignmentIps;
 
     public Integer ip;
-
-    public HashMap<Integer, List<Integer>> refs;
-
+    
     public AVM2Code code;
 
     public boolean thisHasDefaultToPrimitive;
@@ -119,7 +126,7 @@ public class AVM2LocalData extends BaseLocalData {
     public boolean inGetLoops = false;
 
     public Set<Integer> seenMethods = new HashSet<>();
-
+        
     public AVM2LocalData() {
 
     }
@@ -135,13 +142,18 @@ public class AVM2LocalData extends BaseLocalData {
     }
 
     public AVM2LocalData(AVM2LocalData localData) {
+        allSwitchParts = localData.allSwitchParts;
         isStatic = localData.isStatic;
         classIndex = localData.classIndex;
         localRegs = localData.localRegs;
         scopeStack = localData.scopeStack;
+        localScopeStack = localData.localScopeStack;
         methodBody = localData.methodBody;
+        callStack = localData.callStack;
         abc = localData.abc;
+        abcIndex = localData.abcIndex;
         localRegNames = localData.localRegNames;
+        localRegTypes = localData.localRegTypes;
         fullyQualifiedNames = localData.fullyQualifiedNames;
         parsedExceptions = localData.parsedExceptions;
         finallyJumps = localData.finallyJumps;
@@ -150,7 +162,6 @@ public class AVM2LocalData extends BaseLocalData {
         scriptIndex = localData.scriptIndex;
         localRegAssignmentIps = localData.localRegAssignmentIps;
         ip = localData.ip;
-        refs = localData.refs;
         code = localData.code;
         thisHasDefaultToPrimitive = localData.thisHasDefaultToPrimitive;
         setLocalPosToGetLocalPos = localData.setLocalPosToGetLocalPos;

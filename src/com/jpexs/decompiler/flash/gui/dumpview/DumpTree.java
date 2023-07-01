@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -49,6 +49,7 @@ import com.jpexs.decompiler.flash.tags.DefineFont4Tag;
 import com.jpexs.decompiler.flash.tags.DefineFontTag;
 import com.jpexs.decompiler.flash.tags.DefineMorphShape2Tag;
 import com.jpexs.decompiler.flash.tags.DefineMorphShapeTag;
+import com.jpexs.decompiler.flash.tags.DefineScalingGridTag;
 import com.jpexs.decompiler.flash.tags.DefineShape2Tag;
 import com.jpexs.decompiler.flash.tags.DefineShape3Tag;
 import com.jpexs.decompiler.flash.tags.DefineShape4Tag;
@@ -72,10 +73,21 @@ import com.jpexs.decompiler.flash.tags.RemoveObject2Tag;
 import com.jpexs.decompiler.flash.tags.RemoveObjectTag;
 import com.jpexs.decompiler.flash.tags.SetBackgroundColorTag;
 import com.jpexs.decompiler.flash.tags.ShowFrameTag;
+import com.jpexs.decompiler.flash.tags.SoundStreamBlockTag;
 import com.jpexs.decompiler.flash.tags.SoundStreamHead2Tag;
 import com.jpexs.decompiler.flash.tags.SoundStreamHeadTag;
 import com.jpexs.decompiler.flash.tags.Tag;
+import com.jpexs.decompiler.flash.tags.base.ButtonTag;
+import com.jpexs.decompiler.flash.tags.base.PlaceObjectTypeTag;
 import com.jpexs.decompiler.flash.tags.gfx.DefineCompactedFont;
+import com.jpexs.decompiler.flash.timeline.Timelined;
+import com.jpexs.decompiler.flash.treeitems.TreeItem;
+import com.jpexs.decompiler.flash.types.BUTTONCONDACTION;
+import com.jpexs.decompiler.flash.types.BUTTONRECORD;
+import com.jpexs.decompiler.flash.types.CLIPACTIONRECORD;
+import com.jpexs.decompiler.flash.types.CLIPACTIONS;
+import com.jpexs.decompiler.flash.types.HasSwfAndTag;
+import com.jpexs.helpers.ByteArrayRange;
 import com.jpexs.helpers.Helper;
 import com.jpexs.helpers.MemoryInputStream;
 import java.awt.Color;
@@ -92,7 +104,6 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JFileChooser;
-import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
@@ -184,6 +195,7 @@ public class DumpTree extends JTree {
                             case DefineSoundTag.NAME:
                             case SoundStreamHeadTag.NAME:
                             case SoundStreamHead2Tag.NAME:
+                            case SoundStreamBlockTag.NAME:
                                 nodeType = TreeNodeType.SOUND;
                                 break;
                             case DefineBinaryDataTag.NAME:
@@ -216,6 +228,9 @@ public class DumpTree extends JTree {
                             case RemoveObjectTag.NAME:
                             case RemoveObject2Tag.NAME:
                                 nodeType = TreeNodeType.REMOVE_OBJECT;
+                                break;
+                            case DefineScalingGridTag.NAME:
+                                nodeType = TreeNodeType.SCALING_GRID;
                                 break;
                             default:
                                 nodeType = TreeNodeType.OTHER_TAG;
@@ -251,42 +266,57 @@ public class DumpTree extends JTree {
 
         final JMenuItem expandRecursiveMenuItem = new JMenuItem(mainPanel.translate("contextmenu.expandAll"));
         expandRecursiveMenuItem.addActionListener(this::expandRecursiveButtonActionPerformed);
+        expandRecursiveMenuItem.setIcon(View.getIcon("expand16"));
         contextPopupMenu.add(expandRecursiveMenuItem);
 
         final JMenuItem saveToFileMenuItem = new JMenuItem(mainPanel.translate("contextmenu.saveToFile"));
         saveToFileMenuItem.addActionListener(this::saveToFileButtonActionPerformed);
+        saveToFileMenuItem.setIcon(View.getIcon("saveas16"));
         contextPopupMenu.add(saveToFileMenuItem);
 
         final JMenuItem saveUncompressedToFileMenuItem = new JMenuItem(mainPanel.translate("contextmenu.saveUncompressedToFile"));
         saveUncompressedToFileMenuItem.addActionListener(this::saveUncompressedToFileButtonActionPerformed);
+        saveUncompressedToFileMenuItem.setIcon(View.getIcon("saveas16"));
         contextPopupMenu.add(saveUncompressedToFileMenuItem);
 
         final JMenuItem closeSelectionMenuItem = new JMenuItem(mainPanel.translate("contextmenu.closeSwf"));
         closeSelectionMenuItem.addActionListener(this::closeSwfButtonActionPerformed);
+        closeSelectionMenuItem.setIcon(View.getIcon("close16"));
         contextPopupMenu.add(closeSelectionMenuItem);
 
         final JMenuItem parseActionsMenuItem = new JMenuItem(mainPanel.translate("contextmenu.parseActions"));
         parseActionsMenuItem.addActionListener(this::parseActionsButtonActionPerformed);
+        parseActionsMenuItem.setIcon(View.getIcon("parse16"));
         contextPopupMenu.add(parseActionsMenuItem);
 
         final JMenuItem parseAbcMenuItem = new JMenuItem(mainPanel.translate("contextmenu.parseABC"));
         parseAbcMenuItem.addActionListener(this::parseAbcButtonActionPerformed);
+        parseAbcMenuItem.setIcon(View.getIcon("parse16"));
         contextPopupMenu.add(parseAbcMenuItem);
 
         final JMenuItem parseInstructionsMenuItem = new JMenuItem(mainPanel.translate("contextmenu.parseInstructions"));
         parseInstructionsMenuItem.addActionListener(this::parseInstructionsButtonActionPerformed);
+        parseInstructionsMenuItem.setIcon(View.getIcon("parse16"));
         contextPopupMenu.add(parseInstructionsMenuItem);
 
-        final JMenuItem gotoTagMenuItem = new JMenuItem(mainPanel.translate("contextmenu.showInResources"));
-        gotoTagMenuItem.addActionListener(this::gotoTagButtonActionPerformed);
-        contextPopupMenu.add(gotoTagMenuItem);
+        final JMenuItem showInResourcesTagMenuItem = new JMenuItem(mainPanel.translate("contextmenu.showInResources"));
+        showInResourcesTagMenuItem.addActionListener(this::showInResourcesTagButtonActionPerformed);
+        showInResourcesTagMenuItem.setIcon(View.getIcon("folder16"));
+        contextPopupMenu.add(showInResourcesTagMenuItem);
+
+        final JMenuItem showInTagListTagMenuItem = new JMenuItem(mainPanel.translate("contextmenu.showInTagList"));
+        showInTagListTagMenuItem.addActionListener(this::showInTagListTagButtonActionPerformed);
+        showInTagListTagMenuItem.setIcon(View.getIcon("taglist16"));
+        contextPopupMenu.add(showInTagListTagMenuItem);
 
         final JMenuItem gotoActionListMenuItem = new JMenuItem(mainPanel.translate("contextmenu.showInResources"));
         gotoActionListMenuItem.addActionListener(this::gotoActionListButtonActionPerformed);
+        gotoActionListMenuItem.setIcon(View.getIcon("folder16"));
         contextPopupMenu.add(gotoActionListMenuItem);
 
         final JMenuItem gotoMethodMenuItem = new JMenuItem(mainPanel.translate("contextmenu.showInResources"));
         gotoMethodMenuItem.addActionListener(this::gotoMethodButtonActionPerformed);
+        gotoMethodMenuItem.setIcon(View.getIcon("folder16"));
         contextPopupMenu.add(gotoMethodMenuItem);
 
         addMouseListener(new MouseAdapter() {
@@ -312,7 +342,8 @@ public class DumpTree extends JTree {
                     parseActionsMenuItem.setVisible(false);
                     parseAbcMenuItem.setVisible(false);
                     parseInstructionsMenuItem.setVisible(false);
-                    gotoTagMenuItem.setVisible(false);
+                    showInResourcesTagMenuItem.setVisible(false);
+                    showInTagListTagMenuItem.setVisible(false);
                     gotoActionListMenuItem.setVisible(false);
                     gotoMethodMenuItem.setVisible(false);
 
@@ -349,7 +380,8 @@ public class DumpTree extends JTree {
 
                         switch (specialType) {
                             case TAG:
-                                gotoTagMenuItem.setVisible(true);
+                                showInResourcesTagMenuItem.setVisible(true);
+                                showInTagListTagMenuItem.setVisible(true);
                                 break;
                             case ACTION_BYTES:
                                 gotoActionListMenuItem.setVisible(true);
@@ -401,7 +433,7 @@ public class DumpTree extends JTree {
         fc.setCurrentDirectory(new File(selDir));
         if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
             File sf = Helper.fixDialogFile(fc.getSelectedFile());
-            try (OutputStream fos = new BufferedOutputStream(new FileOutputStream(sf))) {
+            try ( OutputStream fos = new BufferedOutputStream(new FileOutputStream(sf))) {
                 byte[] data = DumpInfoSwfNode.getSwfNode(dumpInfo).getSwf().originalUncompressedData;
                 if (decompress) {
                     fos.write(SWFInputStream.uncompressByteArray(data, (int) dumpInfo.startByte, (int) (dumpInfo.getEndByte() - dumpInfo.startByte + 1)));
@@ -474,23 +506,48 @@ public class DumpTree extends JTree {
         repaint();
     }
 
-    private void gotoTagButtonActionPerformed(ActionEvent evt) {
+    private Tag searchTimelinedForTag(Timelined timelined, long address) {
+        for (Tag tag : timelined.getTags()) {
+            if (tag.getOriginalRange().getPos() == address) {
+                return tag;
+            }
+            if (tag instanceof DefineSpriteTag) {
+                Tag subSpriteFound = searchTimelinedForTag(((DefineSpriteTag) tag), address);
+                if (subSpriteFound != null) {
+                    return subSpriteFound;
+                }
+            }
+        }
+        return null;
+    }
+
+    private void showInTagListTagButtonActionPerformed(ActionEvent evt) {
         TreePath[] paths = getSelectionPaths();
         DumpInfoSpecial dumpInfo = (DumpInfoSpecial) paths[0].getLastPathComponent();
 
         SWF swf = DumpInfoSwfNode.getSwfNode(dumpInfo).getSwf();
         long address = (long) (Long) dumpInfo.specialValue;
-        Tag foundTag = null;
-        for (Tag tag : swf.getTags()) {
-            if (tag.getOriginalRange().getPos() == address) {
-                foundTag = tag;
-                break;
-            }
+
+        Tag foundTag = searchTimelinedForTag(swf, address);
+
+        if (foundTag != null) {
+            mainPanel.getMainFrame().getMenu().showTagListView();
+            mainPanel.setTagTreeSelectedNode(mainPanel.getCurrentTree(), foundTag);
         }
+    }
+
+    private void showInResourcesTagButtonActionPerformed(ActionEvent evt) {
+        TreePath[] paths = getSelectionPaths();
+        DumpInfoSpecial dumpInfo = (DumpInfoSpecial) paths[0].getLastPathComponent();
+
+        SWF swf = DumpInfoSwfNode.getSwfNode(dumpInfo).getSwf();
+        long address = (long) (Long) dumpInfo.specialValue;
+
+        Tag foundTag = searchTimelinedForTag(swf, address);
 
         if (foundTag != null) {
             mainPanel.getMainFrame().getMenu().showResourcesView();
-            mainPanel.setTagTreeSelectedNode(foundTag);
+            mainPanel.setTagTreeSelectedNode(mainPanel.getCurrentTree(), foundTag);
         }
     }
 
@@ -538,6 +595,171 @@ public class DumpTree extends JTree {
         expandPath(new TreePath(new Object[]{root}));
         for (int i = 0; i < childCount; i++) {
             expandPath(new TreePath(new Object[]{root, dtm.getChild(root, i)}));
+        }
+    }
+    
+    public void expandSwfNode(SWF swf) {
+        DumpTreeModel dtm = getModel();
+        DumpInfo root = dtm.getRoot();
+        int childCount = dtm.getChildCount(root);
+        expandPath(new TreePath(new Object[]{root}));
+        for (int i = 0; i < childCount; i++) {
+            DumpInfoSwfNode swfNode = (DumpInfoSwfNode) dtm.getChild(root, i);
+            if (swfNode.getSwf() == swf) {
+                expandPath(new TreePath(new Object[]{root, dtm.getChild(root, i)}));            
+                break;
+            }
+        }
+    }
+    
+    public Tag getOriginalTag(TreeItem item) {
+        Tag tag;
+        if (item instanceof Tag) {
+            tag = (Tag) item;
+        } else if (item instanceof HasSwfAndTag) {
+            tag = ((HasSwfAndTag) item).getTag();
+        } else {
+            return null;
+        }
+        ByteArrayRange range = tag.getOriginalRange();
+        if (range == null) {
+            return null;
+        }
+        long address = range.getPos();
+        return searchTimelinedForTag((SWF) item.getOpenable(), address);
+    }
+    
+    public Timelined getTimelinedForItem(TreeItem item) {
+        Tag original = getOriginalTag(item);
+        if (original == null) {
+            return null;
+        }
+        return original.getTimelined();
+    }
+    
+    public int getFrameForItem(TreeItem item) {
+        
+        Tag originalTag = getOriginalTag(item);
+        if (originalTag == null) {
+            return -1;
+        }
+        int frame = 0;
+        for (Tag t : originalTag.getTimelined().getTags()) {
+            if (t == originalTag) {
+                return frame;
+            }
+            if (t instanceof ShowFrameTag) {
+                frame++;
+            }
+        }
+        return -1;
+    }
+    
+    public void setSelectedItem(TreeItem item) {
+        Tag tag;
+        if (item instanceof Tag) {
+            tag = (Tag) item;
+        } else if (item instanceof HasSwfAndTag) {
+            tag = ((HasSwfAndTag) item).getTag();
+        } else {
+            return;
+        }
+        ByteArrayRange range = tag.getOriginalRange();
+        if (range == null) {
+            return;
+        }
+        long address = range.getPos();
+        DumpTreeModel model = getModel();
+        DumpInfo d = model.getRoot();
+        for (DumpInfo sd : d.getChildInfos()) {
+            if (sd instanceof DumpInfoSwfNode) {
+                DumpInfoSwfNode si = (DumpInfoSwfNode) sd;
+                if (si.getSwf() == item.getOpenable()) {                    
+                    DumpInfo di = si;
+                    while (model.getChildCount(di) > 0) {
+                        boolean found = false;
+                        for (DumpInfo child : di.getChildInfos()) {
+                            if (child.startByte > address) {
+                                break;
+                            }
+                            if (child.getEndByte() >= address) {
+                                di = child;
+                                found = true;
+                            }
+                        }
+                        if (!found) {
+                            break;
+                        }
+                    }
+                    di = di.parent; // tagId is selected, lets select the tag instead
+                    TreePath selPath = model.getDumpInfoPath(di);
+                    
+                    if (item instanceof CLIPACTIONRECORD) {
+                        CLIPACTIONS clipActions = ((PlaceObjectTypeTag) tag).getClipActions();
+                        int index = clipActions.clipActionRecords.indexOf(item);
+                        for (DumpInfo sdi : di.getChildInfos()) {
+                            if ("clipActions".equals(sdi.name)) {
+                                int i = 0;
+                                for (DumpInfo sdi2 : sdi.getChildInfos()) {
+                                    if (sdi2.name.equals("record")) {
+                                        if (i == index) {
+                                            selPath = model.getDumpInfoPath(sdi2);
+                                            break;
+                                        }
+                                        i++;
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    if (item instanceof BUTTONCONDACTION) {
+                        DefineButton2Tag button = (DefineButton2Tag) tag;
+                        int index = button.actions.indexOf(item);
+                        for (DumpInfo sdi : di.getChildInfos()) {
+                            if ("actions".equals(sdi.name)) {
+                                int i = 0;
+                                for (DumpInfo sdi2 : sdi.getChildInfos()) {
+                                    if (sdi2.name.equals("action")) {
+                                        if (i == index) {
+                                            selPath = model.getDumpInfoPath(sdi2);
+                                            break;
+                                        }
+                                        i++;
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (item instanceof BUTTONRECORD) {
+                        ButtonTag button = (ButtonTag) tag;
+                        int index = button.getRecords().indexOf(item);
+                        for (DumpInfo sdi : di.getChildInfos()) {
+                            if ("characters".equals(sdi.name)) {
+                                int i = 0;
+                                for (DumpInfo sdi2 : sdi.getChildInfos()) {
+                                    if (sdi2.name.equals("record")) {
+                                        if (i == index) {
+                                            selPath = model.getDumpInfoPath(sdi2);
+                                            break;
+                                        }
+                                        i++;
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (selPath != null) {
+                        setSelectionPath(selPath);
+                        scrollPathToVisible(selPath);
+                    }
+                    break;
+                }
+            }
         }
     }
 }

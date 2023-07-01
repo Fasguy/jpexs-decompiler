@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -62,6 +62,29 @@ public class ScriptInfo {
 
     public void clearPacksCache() {
         cachedPacks = null;
+    }
+    
+    /**
+     * 
+     * @param abc
+     * @return Simple pack name - Can be null!
+     */
+    public DottedChain getSimplePackName(ABC abc) {
+        List<Integer> packageTraits = new ArrayList<>();
+        
+        for (int j = 0; j < traits.traits.size(); j++) {
+            Trait t = traits.traits.get(j);
+            Multiname name = t.getName(abc);
+            Namespace ns = name.getNamespace(abc.constants);
+            if ((ns.kind == Namespace.KIND_PACKAGE_INTERNAL)
+                    || (ns.kind == Namespace.KIND_PACKAGE)) {
+                packageTraits.add(j);
+            }
+        }
+        if (packageTraits.isEmpty() || packageTraits.size() > 1) {
+            return null;
+        }
+        return traits.traits.get(packageTraits.get(0)).getName(abc).getNameWithNamespace(abc.constants, true);
     }
 
     public List<ScriptPack> getPacks(ABC abc, int scriptIndex, String packagePrefix, List<ABC> allAbcs) {

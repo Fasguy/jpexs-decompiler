@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,9 +12,13 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.types;
 
+import com.jpexs.decompiler.flash.tags.DefineMorphShape2Tag;
+import com.jpexs.decompiler.flash.tags.DefineMorphShapeTag;
+import com.jpexs.decompiler.flash.types.annotations.Conditional;
 import java.io.Serializable;
 
 /**
@@ -23,8 +27,10 @@ import java.io.Serializable;
  */
 public class MORPHLINESTYLEARRAY implements Serializable {
 
+    @Conditional(tags = {DefineMorphShapeTag.ID})
     public MORPHLINESTYLE[] lineStyles;
 
+    @Conditional(tags = {DefineMorphShape2Tag.ID})
     public MORPHLINESTYLE2[] lineStyles2;
 
     public LINESTYLEARRAY getLineStylesAt(int shapeNum, int ratio) {
@@ -36,9 +42,9 @@ public class MORPHLINESTYLEARRAY implements Serializable {
             }
         }
         if (shapeNum == 2) {
-            ret.lineStyles = new LINESTYLE2[lineStyles2.length];
+            ret.lineStyles2 = new LINESTYLE2[lineStyles2.length];
             for (int m = 0; m < lineStyles2.length; m++) {
-                ret.lineStyles[m] = lineStyles2[m].getLineStyle2At(ratio);
+                ret.lineStyles2[m] = lineStyles2[m].getLineStyle2At(ratio);
             }
         }
         return ret;
@@ -53,9 +59,9 @@ public class MORPHLINESTYLEARRAY implements Serializable {
             }
         }
         if (shapeNum == 2) {
-            ret.lineStyles = new LINESTYLE2[lineStyles2.length];
+            ret.lineStyles2 = new LINESTYLE2[lineStyles2.length];
             for (int m = 0; m < lineStyles2.length; m++) {
-                ret.lineStyles[m] = lineStyles2[m].getStartLineStyle2();
+                ret.lineStyles2[m] = lineStyles2[m].getStartLineStyle2();
             }
         }
         return ret;
@@ -70,9 +76,9 @@ public class MORPHLINESTYLEARRAY implements Serializable {
             }
         }
         if (shapeNum == 2) {
-            ret.lineStyles = new LINESTYLE2[lineStyles2.length];
+            ret.lineStyles2 = new LINESTYLE2[lineStyles2.length];
             for (int m = 0; m < lineStyles2.length; m++) {
-                ret.lineStyles[m] = lineStyles2[m].getEndLineStyle2();
+                ret.lineStyles2[m] = lineStyles2[m].getEndLineStyle2();
             }
         }
         return ret;

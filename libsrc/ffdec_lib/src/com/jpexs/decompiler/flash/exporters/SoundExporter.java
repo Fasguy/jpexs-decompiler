@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -30,6 +30,8 @@ import com.jpexs.decompiler.flash.tags.SoundStreamBlockTag;
 import com.jpexs.decompiler.flash.tags.Tag;
 import com.jpexs.decompiler.flash.tags.base.SoundStreamHeadTypeTag;
 import com.jpexs.decompiler.flash.tags.base.SoundTag;
+import com.jpexs.decompiler.flash.tags.gfx.DefineExternalSound;
+import com.jpexs.decompiler.flash.tags.gfx.DefineExternalStreamSound;
 import com.jpexs.decompiler.flash.types.sound.SoundExportFormat;
 import com.jpexs.decompiler.flash.types.sound.SoundFormat;
 import com.jpexs.helpers.ByteArrayRange;
@@ -53,6 +55,10 @@ public class SoundExporter {
 
     public List<File> exportSounds(AbortRetryIgnoreHandler handler, String outdir, ReadOnlyTagList tags, final SoundExportSettings settings, EventListener evl) throws IOException, InterruptedException {
         List<File> ret = new ArrayList<>();
+        if (Thread.currentThread().isInterrupted()) {
+            return ret;
+        }
+        
         if (tags.isEmpty()) {
             return ret;
         }
@@ -107,6 +113,10 @@ public class SoundExporter {
 
                 ret.add(file);
 
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
+                }
+
                 if (evl != null) {
                     evl.handleExportedEvent("sound", currentIndex, count, t.getName());
                 }
@@ -133,7 +143,7 @@ public class SoundExporter {
                 fos.write(data.getRangeData());
             }
         } else if ((nativeFormat == SoundExportFormat.FLV && mode.hasFlv()) || mode == SoundExportMode.FLV) {
-            if (st instanceof DefineSoundTag) {
+            if ((st instanceof DefineSoundTag)||(st instanceof DefineExternalSound)||(st instanceof DefineExternalStreamSound)){
                 FLVOutputStream flv = new FLVOutputStream(fos);
                 flv.writeHeader(true, false);
                 List<ByteArrayRange> datas = st.getRawSoundData();

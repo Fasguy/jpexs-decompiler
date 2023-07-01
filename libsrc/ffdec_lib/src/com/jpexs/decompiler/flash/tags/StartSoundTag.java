@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,12 +12,14 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.tags;
 
 import com.jpexs.decompiler.flash.SWF;
 import com.jpexs.decompiler.flash.SWFInputStream;
 import com.jpexs.decompiler.flash.SWFOutputStream;
+import com.jpexs.decompiler.flash.tags.base.CharacterIdTag;
 import com.jpexs.decompiler.flash.types.BasicType;
 import com.jpexs.decompiler.flash.types.SOUNDINFO;
 import com.jpexs.decompiler.flash.types.annotations.SWFType;
@@ -30,7 +32,7 @@ import java.io.IOException;
  * @author JPEXS
  */
 @SWFVersion(from = 1)
-public class StartSoundTag extends Tag {
+public class StartSoundTag extends Tag implements CharacterIdTag {
 
     public static final int ID = 15;
 
@@ -79,5 +81,15 @@ public class StartSoundTag extends Tag {
     public void getData(SWFOutputStream sos) throws IOException {
         sos.writeUI16(soundId);
         sos.writeSOUNDINFO(soundInfo);
+    }   
+
+    @Override
+    public int getCharacterId() {
+        return soundId;
     }
+
+    @Override
+    public void setCharacterId(int characterId) {
+        soundId = characterId;
+    }        
 }

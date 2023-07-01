@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -36,6 +36,8 @@ public abstract class AppDialog extends JDialog {
 
     private ResourceBundle resourceBundle = ResourceBundle.getBundle(AppStrings.getResourcePath(getClass()));
 
+    protected Window owner;
+    
     /*public AppDialog() {
         View.installEscapeCloseOperation(this);
         if (Configuration.useRibbonInterface.get()) {
@@ -45,6 +47,7 @@ public abstract class AppDialog extends JDialog {
 
     public AppDialog(Window owner) {
         super(owner);
+        this.owner = owner;
         View.installEscapeCloseOperation(this);
         if (Configuration.useRibbonInterface.get()) {
             getRootPane().setWindowDecorationStyle(JRootPane.FRAME);

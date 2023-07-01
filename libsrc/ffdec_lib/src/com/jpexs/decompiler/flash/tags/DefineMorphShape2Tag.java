@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.tags;
 
 import com.jpexs.decompiler.flash.SWF;
@@ -29,6 +30,7 @@ import com.jpexs.decompiler.flash.types.SHAPE;
 import com.jpexs.decompiler.flash.types.annotations.Reserved;
 import com.jpexs.decompiler.flash.types.annotations.SWFType;
 import com.jpexs.decompiler.flash.types.annotations.SWFVersion;
+import com.jpexs.decompiler.flash.types.shaperecords.SHAPERECORD;
 import com.jpexs.helpers.ByteArrayRange;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -122,7 +124,7 @@ public class DefineMorphShape2Tag extends MorphShapeTag {
         sos.writeUB(1, usesNonScalingStrokes ? 1 : 0);
         sos.writeUB(1, usesScalingStrokes ? 1 : 0);
         ByteArrayOutputStream baos2 = new ByteArrayOutputStream();
-        SWFOutputStream sos2 = new SWFOutputStream(baos2, getVersion());
+        SWFOutputStream sos2 = new SWFOutputStream(baos2, getVersion(), getCharset());
         sos2.writeMORPHFILLSTYLEARRAY(morphFillStyles, 2);
         sos2.writeMORPHLINESTYLEARRAY(morphLineStyles, 2);
         sos2.writeSHAPE(startEdges, 2);
@@ -136,4 +138,17 @@ public class DefineMorphShape2Tag extends MorphShapeTag {
     public int getShapeNum() {
         return 2;
     }
+    
+    @Override
+    public void updateStartBounds() {
+        super.updateStartBounds();
+        startEdgeBounds = SHAPERECORD.getBounds(startEdges.shapeRecords, null, 4, true);
+    }
+    
+    @Override
+    public void updateEndBounds() {
+        super.updateEndBounds();
+        endEdgeBounds = SHAPERECORD.getBounds(endEdges.shapeRecords, null, 4, true);
+    }
+        
 }

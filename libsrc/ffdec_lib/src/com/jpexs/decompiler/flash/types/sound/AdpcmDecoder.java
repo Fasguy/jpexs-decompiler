@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.types.sound;
 
 import com.jpexs.decompiler.flash.EndOfStreamException;
@@ -208,7 +209,7 @@ public class AdpcmDecoder extends SoundDecoder {
     @Override
     public void decode(SWFInputStream sis, OutputStream os) throws IOException {
         int adpcm_code_size;
-        SWFOutputStream sos = new SWFOutputStream(os, SWF.DEFAULT_VERSION);
+        SWFOutputStream sos = new SWFOutputStream(os, SWF.DEFAULT_VERSION, sis.getCharset());
         adpcm_code_size = (int) sis.readUB(2, "adpcm_code_size");
         int bits_per_code = adpcm_code_size + 2;
         try {

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,7 @@ import com.jpexs.decompiler.flash.helpers.HighlightedTextWriter;
 import com.jpexs.decompiler.flash.tags.DoActionTag;
 import com.jpexs.decompiler.flash.tags.ShowFrameTag;
 import com.jpexs.decompiler.flash.tags.Tag;
+import com.jpexs.helpers.utf8.Utf8Helper;
 import java.io.BufferedInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -53,7 +54,7 @@ public class ActionScript2Test extends ActionScript2TestBase {
         assertNotNull(doa);
         HighlightedTextWriter writer = new HighlightedTextWriter(new CodeFormatting(), false);
         try {
-            Action.actionsToSource(doa, doa.getActions(), "", writer);
+            Action.actionsToSource(doa, doa.getActions(), "", writer, Utf8Helper.charsetName);
         } catch (InterruptedException ex) {
             fail();
         }
@@ -495,10 +496,7 @@ public class ActionScript2Test extends ActionScript2TestBase {
                 + "{\r\n"
                 + "throw new Error();\r\n"
                 + "}\r\n"
-                + "else\r\n"
-                + "{\r\n"
                 + "_loc1_ = 7;\r\n"
-                + "}\r\n"
                 + "}\r\n"
                 + "catch(e)\r\n"
                 + "{\r\n"
@@ -1889,10 +1887,7 @@ public class ActionScript2Test extends ActionScript2TestBase {
                 + "{\r\n"
                 + "throw e;\r\n"
                 + "}\r\n"
-                + "else\r\n"
-                + "{\r\n"
                 + "trace(\"err:\" + e);\r\n"
-                + "}\r\n"
                 + "}\r\n"
                 + "try\r\n"
                 + "{\r\n"
@@ -2391,6 +2386,23 @@ public class ActionScript2Test extends ActionScript2TestBase {
         compareSrc(85, "trace(\"numbersCallTest\");\r\n"
                 + "var a = (5).toString();\r\n"
                 + "var b = 5.2.toString();\r\n"
+        );
+    }
+
+    @Test
+    public void frame86_tryInsideForInTest() {
+        compareSrc(86, "trace(\"tryInsideForInTest\");\r\n"
+                + "var obj = {};\r\n"
+                + "for(var thing in obj)\r\n"
+                + "{\r\n"
+                + "try\r\n"
+                + "{\r\n"
+                + "trace(\"a\");\r\n"
+                + "}\r\n"
+                + "catch(error:Object)\r\n"
+                + "{\r\n"
+                + "}\r\n"
+                + "}\r\n"
         );
     }
 }

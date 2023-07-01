@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.action.fastactionlist;
 
 import com.jpexs.decompiler.flash.action.Action;
@@ -44,6 +45,8 @@ public class FastActionList implements Collection<ActionItem> {
     private final Map<Action, ActionItem> actionItemMap;
 
     private final Set<ActionItem> actionItemSet;
+    
+    private String charset;
 
     public FastActionList(ActionList actions) {
         actionItemMap = new HashMap<>(actions.size());
@@ -55,8 +58,15 @@ public class FastActionList implements Collection<ActionItem> {
         size = actions.size();
         getContainerLastActions(actions, actionItemMap);
         getJumps(actions, actionItemMap);
+        charset = actions.getCharset();
     }
 
+    public String getCharset() {
+        return charset;
+    }
+
+    
+    
     public final ActionItem insertItemBefore(ActionItem item, Action action) {
         ActionItem newItem = new ActionItem(action);
         return insertItemBefore(item, newItem);
@@ -386,7 +396,7 @@ public class FastActionList implements Collection<ActionItem> {
                 if (push.values.size() > 1) {
                     for (int i = 1; i < push.values.size(); i++) {
                         Object value = push.values.get(i);
-                        ActionPush newPush = new ActionPush(value);
+                        ActionPush newPush = new ActionPush(value, charset);
                         newPush.constantPool = push.constantPool;
                         insertItemAfter(item, newPush);
                         item = item.next;
@@ -587,7 +597,7 @@ public class FastActionList implements Collection<ActionItem> {
         List<Action> resultList = new ArrayList<>(size);
         ActionItem item = firstItem;
         if (item == null) {
-            return new ActionList(resultList);
+            return new ActionList(resultList, charset);
         }
 
         do {
@@ -595,7 +605,7 @@ public class FastActionList implements Collection<ActionItem> {
             item = item.next;
         } while (item != firstItem);
 
-        ActionList result = new ActionList(resultList);
+        ActionList result = new ActionList(resultList, charset);
         updateActionAddressesAndLengths();
         updateJumps();
         updateActionStores();

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -45,7 +45,7 @@ public class Namespace {
 
     public static final String[] nameSpaceKindNames = new String[]{"Namespace", "PrivateNamespace", "PackageNamespace", "PackageInternalNs", "ProtectedNamespace", "ExplicitNamespace", "StaticProtectedNs"};
 
-    public static final String[] namePrefixes = new String[]{"", "private", "public", "", "protected", "explicit", "protected"};
+    public static final String[] namePrefixes = new String[]{"", "private", "public", "internal", "protected", "explicit", "protected"};
 
     public int kind;
 

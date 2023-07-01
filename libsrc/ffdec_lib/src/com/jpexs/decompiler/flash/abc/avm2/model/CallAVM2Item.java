@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -206,7 +206,7 @@ public class CallAVM2Item extends AVM2Item {
          if (receiver instanceof ThisAVM2Item) {
          recPart = "";
          }*/
-        if (function.getPrecedence() > precedence) {
+        if (function.getPrecedence() > precedence || (function instanceof NewFunctionAVM2Item)) {
             writer.append("(");
             function.toString(writer, localData);
             writer.append(")");
@@ -226,6 +226,12 @@ public class CallAVM2Item extends AVM2Item {
 
     @Override
     public GraphTargetItem returnType() {
+        if (function instanceof GetPropertyAVM2Item) {
+            return ((GetPropertyAVM2Item)function).callType;
+        }
+        if (function instanceof GetLexAVM2Item) {
+            return ((GetLexAVM2Item)function).callType;
+        }
         return TypeItem.UNBOUNDED;
     }
 

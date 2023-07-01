@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,9 +12,11 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.tags.base;
 
+import com.jpexs.decompiler.flash.SWF;
 import java.util.Set;
 
 /**
@@ -23,7 +25,7 @@ import java.util.Set;
  */
 public interface NeedsCharacters {
 
-    public void getNeededCharacters(Set<Integer> needed);
+    public void getNeededCharacters(Set<Integer> needed, SWF swf);
 
     public boolean replaceCharacter(int oldCharacterId, int newCharacterId);
 

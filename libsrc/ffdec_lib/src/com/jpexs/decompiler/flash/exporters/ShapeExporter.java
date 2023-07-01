@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -65,6 +65,10 @@ public class ShapeExporter {
 
     public List<File> exportShapes(AbortRetryIgnoreHandler handler, final String outdir, final SWF swf, ReadOnlyTagList tags, final ShapeExportSettings settings, EventListener evl, double unzoom) throws IOException, InterruptedException {
         List<File> ret = new ArrayList<>();
+        if (Thread.currentThread().isInterrupted()) {
+            return ret;
+        }
+        
         if (tags.isEmpty()) {
             return ret;
         }
@@ -96,16 +100,16 @@ public class ShapeExporter {
                     switch (settings.mode) {
                         case SVG:
                             try (OutputStream fos = new BufferedOutputStream(new FileOutputStream(file))) {
-                                ExportRectangle rect = new ExportRectangle(st.getRect());
-                                rect.xMax *= settings.zoom;
-                                rect.yMax *= settings.zoom;
-                                rect.xMin *= settings.zoom;
-                                rect.yMin *= settings.zoom;
-                                SVGExporter exporter = new SVGExporter(rect, settings.zoom);
-                                st.toSVG(exporter, -2, new CXFORMWITHALPHA(), 0);
-                                fos.write(Utf8Helper.getBytes(exporter.getSVG()));
-                            }
-                            break;
+                            ExportRectangle rect = new ExportRectangle(st.getRect());
+                            rect.xMax *= settings.zoom;
+                            rect.yMax *= settings.zoom;
+                            rect.xMin *= settings.zoom;
+                            rect.yMin *= settings.zoom;
+                            SVGExporter exporter = new SVGExporter(rect, settings.zoom);
+                            st.toSVG(exporter, -2, new CXFORMWITHALPHA(), 0);
+                            fos.write(Utf8Helper.getBytes(exporter.getSVG()));
+                        }
+                        break;
                         case PNG:
                         case BMP:
                             RECT rect = st.getRect();
@@ -123,7 +127,7 @@ public class ShapeExporter {
                             }
                             Matrix m = Matrix.getScaleInstance(settings.zoom);
                             m.translate(-rect.Xmin, -rect.Ymin);
-                            st.toImage(0, 0, 0, new RenderContext(), img, img, false, m, m, m, m, new CXFORMWITHALPHA(), unzoom, false, new ExportRectangle(rect), true, Timeline.DRAW_MODE_ALL);
+                            st.toImage(0, 0, 0, new RenderContext(), img, img, false, m, m, m, m, new CXFORMWITHALPHA(), unzoom, false, new ExportRectangle(rect), true, Timeline.DRAW_MODE_ALL, 0, true);
                             if (settings.mode == ShapeExportMode.PNG) {
                                 ImageHelper.write(img.getBufferedImage(), ImageFormat.PNG, file);
                             } else {
@@ -132,33 +136,36 @@ public class ShapeExporter {
                             break;
                         case CANVAS:
                             try (OutputStream fos = new BufferedOutputStream(new FileOutputStream(file))) {
-                                SHAPE shp = st.getShapes();
-                                int deltaX = -shp.getBounds().Xmin;
-                                int deltaY = -shp.getBounds().Ymin;
-                                CanvasShapeExporter cse = new CanvasShapeExporter(null, SWF.unitDivisor / settings.zoom, ((Tag) st).getSwf(), shp, new CXFORMWITHALPHA(), deltaX, deltaY);
-                                cse.export();
-                                Set<Integer> needed = new HashSet<>();
-                                needed.add(st.getCharacterId());
-                                st.getNeededCharactersDeep(needed);
-                                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                                SWF.libraryToHtmlCanvas(st.getSwf(), needed, baos);
-                                fos.write(Utf8Helper.getBytes(cse.getHtml(new String(baos.toByteArray(), Utf8Helper.charset), SWF.getTypePrefix(st) + st.getCharacterId(), st.getRect())));
-                            }
-                            break;
+                            SHAPE shp = st.getShapes();
+                            int deltaX = -shp.getBounds(1).Xmin;
+                            int deltaY = -shp.getBounds(1).Ymin;
+                            CanvasShapeExporter cse = new CanvasShapeExporter(st.getShapeNum(), null, SWF.unitDivisor / settings.zoom, ((Tag) st).getSwf(), shp, new CXFORMWITHALPHA(), deltaX, deltaY);
+                            cse.export();
+                            Set<Integer> needed = new HashSet<>();
+                            needed.add(st.getCharacterId());
+                            st.getNeededCharactersDeep(needed);
+                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                            SWF.libraryToHtmlCanvas(st.getSwf(), needed, baos);
+                            fos.write(Utf8Helper.getBytes(cse.getHtml(new String(baos.toByteArray(), Utf8Helper.charset), SWF.getTypePrefix(st) + st.getCharacterId(), st.getRect())));
+                        }
+                        break;
                         case SWF:
                             try (OutputStream fos = new BufferedOutputStream(new FileOutputStream(file))) {
-                                try {
-                                    new PreviewExporter().exportSwf(fos, st, null, 0, false);
-                                } catch (ActionParseException ex) {
-                                    Logger.getLogger(MorphShapeExporter.class.getName()).log(Level.SEVERE, null, ex);
-                                }
+                            try {
+                                new PreviewExporter().exportSwf(fos, st, null, 0, false);
+                            } catch (ActionParseException ex) {
+                                Logger.getLogger(MorphShapeExporter.class.getName()).log(Level.SEVERE, null, ex);
                             }
+                        }
 
-                            break;
+                        break;
                     }
                 }, handler).run();
                 ret.add(file);
 
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
+                }
                 if (evl != null) {
                     evl.handleExportedEvent("shape", currentIndex, count, t.getName());
                 }

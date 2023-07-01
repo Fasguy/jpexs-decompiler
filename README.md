@@ -1,4 +1,5 @@
 # JPEXS Free Flash Decompiler
+![Build passing badge](https://github.com/jindrapetrik/jpexs-decompiler/actions/workflows/main.yml/badge.svg?branch=dev)
 
 Open Source Flash SWF decompiler and editor. Extract resources, convert SWF to FLA, edit ActionScript, replace images, sounds, texts and fonts. Various output formats available. Works with Java on Windows, Linux and macOS.
 
@@ -6,7 +7,7 @@ Open Source Flash SWF decompiler and editor. Extract resources, convert SWF to F
 For information about using the software, list of features, etc., visit [FFDec Wiki](https://github.com/jindrapetrik/jpexs-decompiler/wiki).
 
 ## Free-Decompiler.com website
-In the past (before 2018), we were using *free-decompiler.com* domain as homepage and GitHub for the source code, We've now moved all information to GitHub.
+In the past (before 2018), we were using *free-decompiler.com* domain as homepage and GitHub for the source code, We've now moved all information (except the issue tracker) to GitHub.
 
 ## Download application
 For downloading the app, see [latest release](https://github.com/jindrapetrik/jpexs-decompiler/releases/latest).
@@ -82,7 +83,7 @@ All notable changes are listed in the file [CHANGELOG.md](CHANGELOG.md)
 ## Deployment
 
 ### Nightly builds
-When a commit is pushed/merged into `dev` branch, a new prerelease version is created automatically by the Travis CI.
+When a commit is pushed/merged into `dev` branch, a new prerelease version is created automatically by Github actions CI.
 These prerelease versions are called nightly builds. On releasing a new nightly build, the previous nightly build is removed.
 
 ### Stable versions
@@ -120,20 +121,19 @@ The application was made in Czech Republic.
 * **kalip** - italian translation
 * **Krock** - german translation
 * **Laurent LOUVET** - french translation
-* **MaGiC** - portugese translation
+* **MaGiC** - portuguese translation
 * **martinkoza** - polish translation
 * **Osman ÖZ** - turkish translation
 * **pepka** - ukrainian and dutch translation
 * **poxyran** - spanish translation
-* **realmaster42** - portugese-brasil translation
+* **realmaster42** - portuguese-brasil translation
 * **Rtsjx** - chinese translation
 * **koiru** - japanese translation
 
 ## Contact
-You can use our Issue tracker to report bugs, but our support is VERY limited.
-[https://www.free-decompiler.com/flash/issues](https://www.free-decompiler.com/flash/issues)
+If you want to report a problem or request new feature, use our issue tracker at [https://www.free-decompiler.com/flash/issues](https://www.free-decompiler.com/flash/issues)
 
-See [Frequently Asked Questions (FAQ) in wiki](https://github.com/jindrapetrik/jpexs-decompiler/wiki/FAQ) before you try to contact me.
+You should see [Frequently Asked Questions (FAQ) in wiki](https://github.com/jindrapetrik/jpexs-decompiler/wiki/FAQ) before.
 
 ### Email contact
 Emergency contact to JPEXS developer is `jindra.petrik@gmail.com`.
@@ -156,27 +156,10 @@ And links also these libraries:
 * [flashdebugger library] (Debugging ActionScript) - LGPLv3
 * FFDec Library (LGPLv3) - see below
 
-Application uses also some icons of the [Silk icons pack], [Silk companion 1] and [FatCow icons pack].
-### Library
+Application uses also some icons of the [Silk icons pack], [Silk companion 1], [FatCow icons pack] and [Aha-Soft icons pack].
 
-FFDec Library is licensed under GNU LGPL v3 (LGPL-3.0-or-later), see [license.txt](libsrc/ffdec_lib/license.txt) for details.
-It uses modified code of these libraries:
-
-* [sfntly] (WOFF font export) - Apache License 2.0
-* [JLayer] (Decoding MP3) - LGPL
-* UAB "DKD" NellyMoser ASAO codec (Decoding Nelly Moser sound format) - LGPL
-* [Animated GIF Writer] (Frames to GIF export) - Creative Commons Attribution 3.0 Unported
-* [Animated GIF Encoder] (Frames to GIF export)
-
-And also links to these libraries:
-
-* [LZMA SDK] (SWF de/compress) - public domain
-* [Monte Media Library] (Frames to AVI export) - LGPL
-* [Fontastic] (Font TTF export) - LGPL
-* [DoubleType] (Font TTF export) - GPLv2
-* [jPacker] (Canvas scripts compression) - MIT License
-* [gnujpdf] (PDF export) - LGPL License
-* [DDSReader] (DDS reading) - MIT License
+## Library
+See [library README](libsrc/ffdec_lib/README.md) for more info about FFDec library.
 
 [GIT]: http://git-scm.com/downloads
 [Netbeans IDE]: http://www.netbeans.org/
@@ -192,14 +175,4 @@ And also links to these libraries:
 [Silk icons pack]: http://www.famfamfam.com/lab/icons/silk/
 [Silk companion 1]: http://damieng.com/creative/icons/silk-companion-1-icons
 [FatCow icons pack]: http://www.fatcow.com/free-icons
-[sfntly]: https://code.google.com/p/sfntly/
-[JLayer]: http://www.javazoom.net/javalayer/javalayer.html
-[Animated GIF Writer]: http://elliot.kroo.net/software/java/GifSequenceWriter/
-[Animated GIF Encoder]: http://www.fmsware.com/stuff/gif.html
-[LZMA SDK]: http://www.7-zip.org/sdk.html
-[Monte Media Library]: http://www.randelshofer.ch/monte/
-[Fontastic]: http://code.andreaskoller.com/libraries/fontastic/
-[DoubleType]: http://sourceforge.net/projects/doubletype/
-[jPacker]: https://code.google.com/p/jpacker/
-[gnujpdf]: http://gnujpdf.sourceforge.net/
-[DDSReader]: https://github.com/npedotnet/DDSReader/
+[Aha-Soft icons pack]: http://www.aha-soft.com

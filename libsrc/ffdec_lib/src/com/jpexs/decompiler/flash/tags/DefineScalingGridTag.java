@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -37,6 +37,7 @@ import java.awt.geom.AffineTransform;
 import java.awt.geom.GeneralPath;
 import java.awt.geom.PathIterator;
 import java.io.IOException;
+import java.util.Set;
 
 /**
  *
@@ -115,7 +116,7 @@ public class DefineScalingGridTag extends Tag implements CharacterIdTag {
     }
 
     public RECT getRect() {
-        Shape s = getOutline(0, 0, 0, new RenderContext(), new Matrix(), new Matrix(), true);
+        Shape s = getOutline(true, 0, 0, 0, new RenderContext(), new Matrix(), new Matrix(), true, new ExportRectangle(0, 0, 1, 1)/*?*/, 1);
         if (s == null) {
             return null;
         }
@@ -123,7 +124,7 @@ public class DefineScalingGridTag extends Tag implements CharacterIdTag {
         return new RECT(r.x, r.x + r.width, r.y, r.y + r.height);
     }
 
-    public Shape getOutline(int frame, int time, int ratio, RenderContext renderContext, Matrix transformation, Matrix prevTransform, boolean stroked) {
+    public Shape getOutline(boolean fast, int frame, int time, int ratio, RenderContext renderContext, Matrix transformation, Matrix prevTransform, boolean stroked, ExportRectangle viewRect, double unzoom) {
         CharacterTag ct = swf.getCharacter(characterId);
         if (ct == null) {
             return null;
@@ -134,7 +135,7 @@ public class DefineScalingGridTag extends Tag implements CharacterIdTag {
         double[] coords = new double[6];
 
         DrawableTag dt = (DrawableTag) ct;
-        Shape path = dt.getOutline(frame, time, ratio, renderContext, transformation, stroked);
+        Shape path = dt.getOutline(fast, frame, time, ratio, renderContext, transformation, stroked, viewRect, unzoom);
         PathIterator iterator = path.getPathIterator(new AffineTransform());
         GeneralPath gp = new GeneralPath(GeneralPath.WIND_EVEN_ODD);
         ExportRectangle boundsRect = new ExportRectangle(dt.getRect());
@@ -213,6 +214,11 @@ public class DefineScalingGridTag extends Tag implements CharacterIdTag {
     @Override
     public String toString() {
         return super.toString() + " (" + characterId + ")";
+    }
+    
+    @Override
+    public void getNeededCharacters(Set<Integer> needed, SWF swf) {
+        needed.add(characterId);
     }
 
 }

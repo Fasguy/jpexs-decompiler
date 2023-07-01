@@ -1,6 +1,23 @@
+/*
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3.0 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.as3decompile;
 
 import com.jpexs.decompiler.flash.ActionScript3DecompileTestBase;
+import com.jpexs.decompiler.flash.SWF;
 import com.jpexs.decompiler.flash.abc.ABC;
 import com.jpexs.decompiler.flash.abc.ScriptPack;
 import com.jpexs.decompiler.flash.abc.types.ConvertData;
@@ -27,6 +44,7 @@ public class ActionScript3ClassTest extends ActionScript3DecompileTestBase {
     public void init() throws IOException, InterruptedException {
         addSwf("standard", "testdata/as3_new/bin/as3_new.flex.swf");
         addSwf("assembled", "testdata/as3_assembled/bin/as3_assembled.swf");
+        addSwf("getouterscope", "testdata/getouterscope/getouterscope.swf");
     }
 
     private void decompileScriptPack(String swfId, String path, String expectedResult) {
@@ -34,7 +52,8 @@ public class ActionScript3ClassTest extends ActionScript3DecompileTestBase {
         DoABC2Tag tag = null;
         ABC abc = null;
         ScriptPack scriptPack = null;
-        for (Tag t : getSwf(swfId).getTags()) {
+        SWF swf = getSwf(swfId);
+        for (Tag t : swf.getTags()) {
             if (t instanceof DoABC2Tag) {
                 tag = (DoABC2Tag) t;
                 abc = tag.getABC();
@@ -49,7 +68,7 @@ public class ActionScript3ClassTest extends ActionScript3DecompileTestBase {
         HighlightedTextWriter writer = null;
         try {
             writer = new HighlightedTextWriter(new CodeFormatting(), false);
-            scriptPack.toSource(writer, abc.script_info.get(scriptPack.scriptIndex).traits.traits, new ConvertData(), ScriptExportMode.AS, false, false);
+            scriptPack.toSource(swf.getAbcIndex(), writer, abc.script_info.get(scriptPack.scriptIndex).traits.traits, new ConvertData(), ScriptExportMode.AS, false, false);
         } catch (InterruptedException ex) {
             fail();
         }
@@ -68,6 +87,7 @@ public class ActionScript3ClassTest extends ActionScript3DecompileTestBase {
                 + "   public class TestClass implements tests_classes.mypackage1.TestInterface\n"
                 + "   {\n"
                 + "       \n"
+                + "      \n"
                 + "      public function TestClass()\n"
                 + "      {\n"
                 + "         super();\n"
@@ -93,6 +113,15 @@ public class ActionScript3ClassTest extends ActionScript3DecompileTestBase {
                 + "         a.testMethod1();\n"
                 + "         var b:tests_classes.mypackage2.TestInterface = this;\n"
                 + "         b = new tests_classes.mypackage2.TestClass();\n"
+                + "      }\n"
+                + "      \n"
+                + "      public function testParam(p1:tests_classes.mypackage1.TestInterface, p2:tests_classes.mypackage2.TestInterface) : void\n"
+                + "      {\n"
+                + "         var m:Function = function(m1:tests_classes.mypackage1.TestInterface, m2:tests_classes.mypackage2.TestInterface):void\n"
+                + "         {\n"
+                + "            var v1:tests_classes.mypackage1.TestInterface = null;\n"
+                + "            var v2:tests_classes.mypackage2.TestInterface = null;\n"
+                + "         };\n"
                 + "      }\n"
                 + "   }\n"
                 + "}");
@@ -356,6 +385,147 @@ public class ActionScript3ClassTest extends ActionScript3DecompileTestBase {
                 + "         this.i_regs = [this.i_email,this.i_link];\n"
                 + "         super();\n"
                 + "         trace(s_regs[1]);\n"
+                + "      }\n"
+                + "   }\n"
+                + "}");
+    }
+
+    @Test
+    public void testModifiers() {
+        decompileScriptPack("standard", "tests_classes.TestModifiers", "package tests_classes\n"
+                + "{\n"
+                + "   import tests_other.myInternal;\n"
+                + "   import tests_other.myInternal2;\n"
+                + "   \n"
+                + "   public class TestModifiers\n"
+                + "   {\n"
+                + "      \n"
+                + "      private static var attr_stat_private:int = 1;\n"
+                + "      \n"
+                + "      public static var attr_stat_public:int = 2;\n"
+                + "      \n"
+                + "      internal static var attr_stat_internal:int = 3;\n"
+                + "      \n"
+                + "      protected static var attr_stat_protected:int = 4;\n"
+                + "      \n"
+                + "      myInternal static var attr_stat_namespace_explicit:int = 5;\n"
+                + "      \n"
+                + "      myInternal2 static var attr_stat_namespace_implicit:int = 6;\n"
+                + "       \n"
+                + "      \n"
+                + "      private var attr_inst_private:int = 7;\n"
+                + "      \n"
+                + "      public var attr_inst_public:int = 8;\n"
+                + "      \n"
+                + "      internal var attr_inst_internal:int = 9;\n"
+                + "      \n"
+                + "      protected var attr_inst_protected:int = 10;\n"
+                + "      \n"
+                + "      myInternal var attr_inst_namespace_explicit:int = 11;\n"
+                + "      \n"
+                + "      myInternal2 var attr_inst_namespace_implicit:int = 12;\n"
+                + "      \n"
+                + "      public function TestModifiers()\n"
+                + "      {\n"
+                + "         super();\n"
+                + "      }\n"
+                + "      \n"
+                + "      private static function func_stat_private() : int\n"
+                + "      {\n"
+                + "         return 1;\n"
+                + "      }\n"
+                + "      \n"
+                + "      public static function func_stat_public() : int\n"
+                + "      {\n"
+                + "         return 2;\n"
+                + "      }\n"
+                + "      \n"
+                + "      internal static function func_stat_internal() : int\n"
+                + "      {\n"
+                + "         return 3;\n"
+                + "      }\n"
+                + "      \n"
+                + "      protected static function func_stat_protected() : int\n"
+                + "      {\n"
+                + "         return 4;\n"
+                + "      }\n"
+                + "      \n"
+                + "      myInternal static function func_stat_namespace_explicit() : int\n"
+                + "      {\n"
+                + "         return 5;\n"
+                + "      }\n"
+                + "      \n"
+                + "      myInternal2 static function func_stat_namespace_implicit() : int\n"
+                + "      {\n"
+                + "         return 6;\n"
+                + "      }\n"
+                + "      \n"
+                + "      private function func_inst_private() : int\n"
+                + "      {\n"
+                + "         return 7;\n"
+                + "      }\n"
+                + "      \n"
+                + "      public function func_inst_public() : int\n"
+                + "      {\n"
+                + "         return 8;\n"
+                + "      }\n"
+                + "      \n"
+                + "      internal function func_inst_internal() : int\n"
+                + "      {\n"
+                + "         return 9;\n"
+                + "      }\n"
+                + "      \n"
+                + "      protected function func_inst_protected() : int\n"
+                + "      {\n"
+                + "         return 10;\n"
+                + "      }\n"
+                + "      \n"
+                + "      myInternal function func_inst_namespace_explicit() : int\n"
+                + "      {\n"
+                + "         return 11;\n"
+                + "      }\n"
+                + "      \n"
+                + "      myInternal2 function func_inst_namespace_implicit() : int\n"
+                + "      {\n"
+                + "         return 12;\n"
+                + "      }\n"
+                + "   }\n"
+                + "}");
+    }
+
+    @Test
+    public void testGetOuterScope() {
+        decompileScriptPack("getouterscope", "mypkg.MainClass", "package mypkg\n"
+                + "{\n"
+                + "   import flash.display.DisplayObject;\n"
+                + "   import flash.display.DisplayObjectContainer;\n"
+                + "   import flash.display.InteractiveObject;\n"
+                + "   import flash.display.MovieClip;\n"
+                + "   import flash.display.Sprite;\n"
+                + "   import flash.events.EventDispatcher;\n"
+                + "   import flash.text.TextField;\n"
+                + "   \n"
+                + "   public class MainClass extends MovieClip\n"
+                + "   {\n"
+                + "       \n"
+                + "      \n"
+                + "      private var myTextBox:TextField;\n"
+                + "      \n"
+                + "      public function MainClass()\n"
+                + "      {\n"
+                + "         super();\n"
+                + "         this.myTextBox = new TextField();\n"
+                + "         this.myTextBox.text = \"\";\n"
+                + "         this.myTextBox.width = 1024;\n"
+                + "         this.myTextBox.height = 1024;\n"
+                + "         this.myTextBox.multiline = true;\n"
+                + "         addChild(this.myTextBox);\n"
+                + "         this.test();\n"
+                + "      }\n"
+                + "      \n"
+                + "      internal function test() : void\n"
+                + "      {\n"
+                + "         this.myTextBox.text = \"scopes:\\n\" + global + \"\\n\" + Object + \"\\n\" + EventDispatcher + \"\\n\" + DisplayObject + \"\\n\" + InteractiveObject + \"\\n\" + DisplayObjectContainer + \"\\n\" + Sprite + \"\\n\" + MovieClip + \"\\n\" + MainClass + \"\\n\";\n"
                 + "      }\n"
                 + "   }\n"
                 + "}");

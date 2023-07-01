@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,6 +18,7 @@ package com.jpexs.decompiler.flash.timeline;
 
 import com.jpexs.decompiler.flash.SWF;
 import com.jpexs.decompiler.flash.tags.base.ASMSource;
+import com.jpexs.decompiler.flash.treeitems.Openable;
 import com.jpexs.decompiler.flash.treeitems.TreeItem;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,15 +40,27 @@ public class AS2Package implements TreeItem {
     public Map<String, AS2Package> subPackages = new TreeMap<>();
 
     public Map<String, ASMSource> scripts = new TreeMap<>();
+    
+    private boolean flat;
+    
+    private boolean defaultPackage;
 
-    public AS2Package(String name, AS2Package parent, SWF swf) {
+    public AS2Package(String name, AS2Package parent, SWF swf, boolean flat, boolean defaultPackage) {
         this.name = name;
         this.parent = parent;
         this.swf = swf;
+        this.flat = flat;
+        this.defaultPackage = defaultPackage;
     }
 
+    public boolean isDefaultPackage() {
+        return defaultPackage;
+    }
+    
+    
+
     @Override
-    public SWF getSwf() {
+    public Openable getOpenable() {
         return swf;
     }
 
@@ -133,4 +146,8 @@ public class AS2Package implements TreeItem {
         }
         return false;
     }
+
+    public boolean isFlat() {
+        return flat;
+    }        
 }

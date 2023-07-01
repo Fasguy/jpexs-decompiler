@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.action;
 
 import com.jpexs.decompiler.flash.SWF;
@@ -50,12 +51,21 @@ public class ActionList extends ArrayList<Action> {
     public int deobfuscationMode;
 
     public byte[] fileData;
+    
+    private String charset;
 
-    public ActionList() {
+    public ActionList(String charset) {
+        this.charset = charset;
     }
 
-    public ActionList(Collection<Action> actions) {
+    public String getCharset() {
+        return charset;
+    }    
+    
+
+    public ActionList(Collection<Action> actions, String charset) {
         super(actions);
+        this.charset = charset;
     }
 
     public void setActions(List<Action> list) {
@@ -500,7 +510,7 @@ public class ActionList extends ArrayList<Action> {
                     ActionPush push = (ActionPush) action;
                     ActionPush push2 = (ActionPush) action2;
                     if (!(push.constantPool != null && push2.constantPool != null && push.constantPool != push2.constantPool)) {
-                        ActionPush newPush = new ActionPush(0);
+                        ActionPush newPush = new ActionPush(0, charset);
                         newPush.constantPool = push.constantPool == null ? push2.constantPool : push.constantPool;
                         newPush.values.clear();
                         newPush.values.addAll(push.values);
@@ -524,7 +534,7 @@ public class ActionList extends ArrayList<Action> {
                     int j = 0;
                     for (Object value : push.values) {
                         j++;
-                        ActionPush newPush = new ActionPush(value);
+                        ActionPush newPush = new ActionPush(value, charset);
                         newPush.constantPool = push.constantPool;
                         addAction(i + j, newPush);
                     }
@@ -555,7 +565,7 @@ public class ActionList extends ArrayList<Action> {
     public String toSource() {
         try {
             HighlightedTextWriter writer = new HighlightedTextWriter(new CodeFormatting(), false);
-            actionsToSource(null, this, "", writer);
+            actionsToSource(null, this, "", writer, charset);
             return writer.toString();
         } catch (InterruptedException ex) {
             Logger.getLogger(ActionList.class.getName()).log(Level.SEVERE, null, ex);

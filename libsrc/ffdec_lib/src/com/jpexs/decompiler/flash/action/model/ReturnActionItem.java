@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -71,20 +71,20 @@ public class ReturnActionItem extends ActionItem implements ExitItem {
     @Override
     public List<GraphSourceItem> toSource(SourceGeneratorLocalData localData, SourceGenerator generator) throws CompilationException {
         ActionSourceGenerator asGenerator = (ActionSourceGenerator) generator;
-        List<GraphSourceItem> ret = new ArrayList<>();
+        String charset = asGenerator.getCharset();  List<GraphSourceItem> ret = new ArrayList<>();
         int forinlevel = asGenerator.getForInLevel(localData);
         for (int i = 0; i < forinlevel; i++) { //Must POP all remaining values from enumerations (for..in)
             List<Action> forinret = new ArrayList<>();
-            forinret.add(new ActionPush(Null.INSTANCE));
+            forinret.add(new ActionPush(Null.INSTANCE, charset));
             forinret.add(new ActionEquals2());
             forinret.add(new ActionNot());
-            ActionIf aforinif = new ActionIf(0);
+            ActionIf aforinif = new ActionIf(0, charset);
             forinret.add(aforinif);
             aforinif.setJumpOffset(-Action.actionsToBytes(forinret, false, SWF.DEFAULT_VERSION).length);
             ret.addAll(forinret);
         }
         if (value == null) {
-            ret.add(new ActionPush(Undefined.INSTANCE));
+            ret.add(new ActionPush(Undefined.INSTANCE, charset));
         } else {
             ret.addAll(value.toSource(localData, generator));
         }

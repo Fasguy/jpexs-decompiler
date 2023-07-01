@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,8 +19,10 @@ package com.jpexs.decompiler.flash.abc.types.traits;
 import com.jpexs.decompiler.flash.abc.ABC;
 import com.jpexs.decompiler.flash.abc.avm2.AVM2ConstantPool;
 import com.jpexs.decompiler.flash.abc.avm2.model.NewFunctionAVM2Item;
+import com.jpexs.decompiler.flash.abc.avm2.parser.script.AbcIndexing;
 import com.jpexs.decompiler.flash.abc.types.AssignedValue;
 import com.jpexs.decompiler.flash.abc.types.ConvertData;
+import com.jpexs.decompiler.flash.abc.types.MethodBody;
 import com.jpexs.decompiler.flash.abc.types.Multiname;
 import com.jpexs.decompiler.flash.abc.types.Namespace;
 import com.jpexs.decompiler.flash.abc.types.ValueKind;
@@ -35,6 +37,7 @@ import com.jpexs.decompiler.flash.helpers.hilight.HighlightSpecialType;
 import com.jpexs.decompiler.flash.search.MethodId;
 import com.jpexs.decompiler.graph.DottedChain;
 import com.jpexs.decompiler.graph.GraphTargetItem;
+import com.jpexs.decompiler.graph.ScopeStack;
 import com.jpexs.decompiler.graph.model.LocalData;
 import com.jpexs.helpers.Helper;
 import java.util.ArrayList;
@@ -108,7 +111,19 @@ public class TraitSlotConst extends Trait implements TraitWithSlot {
         return writer;
     }
 
-    public void getValueStr(ScriptExportMode exportMode, Trait parent, ConvertData convertData, GraphTextWriter writer, ABC abc, List<DottedChain> fullyQualifiedNames) throws InterruptedException {
+    private boolean hasValueStr(ABC abc, ConvertData convertData) {
+        if (convertData.assignedValues.containsKey(this)) {
+            return true;
+        }
+        if (value_kind == ValueKind.CONSTANT_Namespace) {
+                if (abc.constants.getNamespace(value_index).kind == Namespace.KIND_PACKAGE_INTERNAL) {
+                    return false;
+                }
+            }
+        return value_kind != 0;
+    }
+    
+    public void getValueStr(AbcIndexing abcIndex, ScriptExportMode exportMode, Trait parent, ConvertData convertData, GraphTextWriter writer, ABC abc, List<DottedChain> fullyQualifiedNames) throws InterruptedException {
         if (convertData.assignedValues.containsKey(this)) {
 
             AssignedValue assignment = convertData.assignedValues.get(this);
@@ -122,14 +137,16 @@ public class TraitSlotConst extends Trait implements TraitWithSlot {
                 writer.newLine();
             }
             if (exportMode != ScriptExportMode.AS_METHOD_STUBS) {
-                assignment.value.toString(writer, LocalData.create(abc, new HashMap<>(), fullyQualifiedNames, new HashSet<>()));
+                List<MethodBody> callStack = new ArrayList<>();
+                callStack.add(abc.bodies.get(abc.findBodyIndex(assignment.method)));
+                assignment.value.toString(writer, LocalData.create(callStack, abcIndex, abc, new HashMap<>(), fullyQualifiedNames, new HashSet<>()));
             }
             writer.endMethod();
             writer.endTrait();
             return;
         }
 
-        if (value_kind != 0) {
+        if (value_kind != 0) {            
             ValueKind val = new ValueKind(value_index, value_kind);
             writer.hilightSpecial(val.toString(abc.constants), HighlightSpecialType.TRAIT_VALUE);
         }
@@ -144,7 +161,7 @@ public class TraitSlotConst extends Trait implements TraitWithSlot {
     }
 
     @Override
-    public GraphTextWriter toString(Trait parent, ConvertData convertData, String path, ABC abc, boolean isStatic, ScriptExportMode exportMode, int scriptIndex, int classIndex, GraphTextWriter writer, List<DottedChain> fullyQualifiedNames, boolean parallel) throws InterruptedException {
+    public GraphTextWriter toString(AbcIndexing abcIndex, Trait parent, ConvertData convertData, String path, ABC abc, boolean isStatic, ScriptExportMode exportMode, int scriptIndex, int classIndex, GraphTextWriter writer, List<DottedChain> fullyQualifiedNames, boolean parallel, boolean insideInterface) throws InterruptedException {
         getMetaData(parent, convertData, abc, writer);
         Multiname n = getName(abc);
         boolean showModifier = true;
@@ -157,27 +174,30 @@ public class TraitSlotConst extends Trait implements TraitWithSlot {
             }
         }
         if (showModifier) {
-            getModifiers(abc, isStatic, writer);
+            getModifiers(abc, isStatic, insideInterface, writer);
         }
         if (convertData.assignedValues.containsKey(this)) {
             GraphTargetItem val = convertData.assignedValues.get(this).value;
             if (val instanceof NewFunctionAVM2Item) {
-                return val.toString(writer, LocalData.create(abc, new HashMap<>(), fullyQualifiedNames, new HashSet<>()));
+                List<MethodBody> callStack = new ArrayList<>();
+                AssignedValue assignment = convertData.assignedValues.get(this);
+                callStack.add(abc.bodies.get(abc.findBodyIndex(assignment.method)));
+                return val.toString(writer, LocalData.create(callStack, abcIndex, abc, new HashMap<>(), fullyQualifiedNames, new HashSet<>()));
             }
         }
         getNameStr(writer, abc, fullyQualifiedNames);
-        if (value_kind != 0 || convertData.assignedValues.containsKey(this)) {
+        if (hasValueStr(abc, convertData)) {
             writer.appendNoHilight(" = ");
-            getValueStr(exportMode, parent, convertData, writer, abc, fullyQualifiedNames);
+            getValueStr(abcIndex, exportMode, parent, convertData, writer, abc, fullyQualifiedNames);
         }
         return writer.appendNoHilight(";").newLine();
     }
 
     @Override
-    public void convert(Trait parent, ConvertData convertData, String path, ABC abc, boolean isStatic, ScriptExportMode exportMode, int scriptIndex, int classIndex, NulWriter writer, List<DottedChain> fullyQualifiedNames, boolean parallel) throws InterruptedException {
+    public void convert(AbcIndexing abcIndex, Trait parent, ConvertData convertData, String path, ABC abc, boolean isStatic, ScriptExportMode exportMode, int scriptIndex, int classIndex, NulWriter writer, List<DottedChain> fullyQualifiedNames, boolean parallel, ScopeStack scopeStack) throws InterruptedException {
         getNameStr(writer, abc, fullyQualifiedNames);
-        if (value_kind != 0 || convertData.assignedValues.containsKey(this)) {
-            getValueStr(exportMode, parent, convertData, writer, abc, fullyQualifiedNames);
+        if (hasValueStr(abc, convertData)) {
+            getValueStr(abcIndex,exportMode, parent, convertData, writer, abc, fullyQualifiedNames);
         }
     }
 
@@ -202,12 +222,12 @@ public class TraitSlotConst extends Trait implements TraitWithSlot {
     }
 
     @Override
-    public void getDependencies(int scriptIndex, int classIndex, boolean isStatic, String customNs, ABC abc, List<Dependency> dependencies, List<String> uses, DottedChain ignorePackage, List<DottedChain> fullyQualifiedNames) throws InterruptedException {
+    public void getDependencies(AbcIndexing abcIndex, int scriptIndex, int classIndex, boolean isStatic, String customNs, ABC abc, List<Dependency> dependencies, DottedChain ignorePackage, List<DottedChain> fullyQualifiedNames) throws InterruptedException {
         if (ignorePackage == null) {
             ignorePackage = getPackage(abc);
         }
-        super.getDependencies(scriptIndex, classIndex, isStatic, customNs, abc, dependencies, uses, ignorePackage, fullyQualifiedNames);
-        DependencyParser.parseDependenciesFromMultiname(customNs, abc, dependencies, uses, abc.constants.getMultiname(type_index), getPackage(abc), fullyQualifiedNames, DependencyType.SIGNATURE);
+        super.getDependencies(abcIndex, scriptIndex, classIndex, isStatic, customNs, abc, dependencies, ignorePackage, fullyQualifiedNames);
+        DependencyParser.parseDependenciesFromMultiname(abcIndex, customNs, abc, dependencies, abc.constants.getMultiname(type_index), getPackage(abc), fullyQualifiedNames, DependencyType.SIGNATURE);
     }
 
     @Override

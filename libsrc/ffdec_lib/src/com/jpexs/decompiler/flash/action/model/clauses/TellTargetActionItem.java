@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -22,7 +22,6 @@ import com.jpexs.decompiler.flash.action.model.DirectValueActionItem;
 import com.jpexs.decompiler.flash.action.parser.script.ActionSourceGenerator;
 import com.jpexs.decompiler.flash.action.swf3.ActionSetTarget;
 import com.jpexs.decompiler.flash.action.swf4.ActionGetProperty;
-import com.jpexs.decompiler.flash.action.swf4.ActionPop;
 import com.jpexs.decompiler.flash.action.swf4.ActionPush;
 import com.jpexs.decompiler.flash.action.swf4.ActionSetTarget2;
 import com.jpexs.decompiler.flash.action.swf4.ConstantIndex;
@@ -83,22 +82,23 @@ public class TellTargetActionItem extends ActionItem implements Block {
     public List<GraphSourceItem> toSource(SourceGeneratorLocalData localData, SourceGenerator generator) throws CompilationException {
         List<GraphSourceItem> ret = new ArrayList<>();
         ActionSourceGenerator actionGenerator = (ActionSourceGenerator) generator;
+        String charset = actionGenerator.getCharset();
         if (nested) {
-            ret.add(new ActionPush(""));
-            ret.add(new ActionPush(11)); //_target
+            ret.add(new ActionPush("", charset));
+            ret.add(new ActionPush(11, charset)); //_target
             ret.add(new ActionGetProperty());
         }
         if ((target instanceof DirectValueActionItem) && ((((DirectValueActionItem) target).value instanceof String) || (((DirectValueActionItem) target).value instanceof ConstantIndex))) {
-            ret.add(new ActionSetTarget((String) target.getResult()));
+            ret.add(new ActionSetTarget((String) target.getResult(), charset));
         } else {
             ret.addAll(target.toSource(localData, generator));
-            ret.add(new ActionSetTarget2());
+            ret.add(new ActionSetTarget2(charset));
         }
         ret.addAll(generator.generate(localData, commands));
-        ret.add(new ActionSetTarget(""));
+        ret.add(new ActionSetTarget("", charset));
 
         if (nested) {
-            ret.add(new ActionSetTarget2());
+            ret.add(new ActionSetTarget2(charset));
         }
         return ret;
     }

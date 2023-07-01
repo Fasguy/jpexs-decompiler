@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -47,6 +47,8 @@ public class MethodCodePanel extends JPanel {
 
     private final ASMSourceEditorPane sourceTextArea;
 
+    private final FasterScrollPane sourceScrollPane;
+    
     public JPanel buttonsPanel;
 
     private final JToggleButton hexButton;
@@ -55,6 +57,14 @@ public class MethodCodePanel extends JPanel {
 
     private final DocsPanel docsPanel;
 
+    public ABC getABC() {
+        return sourceTextArea.abc;
+    }
+
+    public FasterScrollPane getSourceScrollPane() {
+        return sourceScrollPane;
+    }        
+    
     public void refreshMarkers() {
         sourceTextArea.refreshMarkers();
     }
@@ -91,16 +101,20 @@ public class MethodCodePanel extends JPanel {
         sourceTextArea.hilighSpecial(type, specialValue);
     }
 
-    public void setBodyIndex(String scriptPathName, int bodyIndex, ABC abc, Trait trait, int scriptIndex) {
-        sourceTextArea.setBodyIndex(scriptPathName, bodyIndex, abc, sourceTextArea.getName(), trait, scriptIndex);
+    public void setMethod(String scriptPathName, int methodIndex, int bodyIndex, ABC abc, Trait trait, int scriptIndex) {
+        sourceTextArea.setMethod(scriptPathName, methodIndex, bodyIndex, abc, sourceTextArea.getName(), trait, scriptIndex);
     }
 
-    public void setBodyIndex(String scriptPathName, int bodyIndex, ABC abc, String name, Trait trait, int scriptIndex) {
-        sourceTextArea.setBodyIndex(scriptPathName, bodyIndex, abc, name, trait, scriptIndex);
+    public void setMethod(String scriptPathName, int methodIndex, int bodyIndex, ABC abc, String name, Trait trait, int scriptIndex) {
+        sourceTextArea.setMethod(scriptPathName, methodIndex, bodyIndex, abc, name, trait, scriptIndex);
     }
 
     public int getBodyIndex() {
         return sourceTextArea.bodyIndex;
+    }
+    
+    public int getMethodIndex() {
+        return sourceTextArea.methodIndex;
     }
 
     public void clear() {
@@ -119,9 +133,9 @@ public class MethodCodePanel extends JPanel {
         docsPanel = new DocsPanel();
         sourceTextArea.addDocsListener(docsPanel);
         if (Configuration.displayAs3PCodeDocsPanel.get()) {
-            add(new JPersistentSplitPane(JSplitPane.VERTICAL_SPLIT, new FasterScrollPane(sourceTextArea), new FasterScrollPane(docsPanel), Configuration.guiAvm2DocsSplitPaneDividerLocationPercent));
+            add(new JPersistentSplitPane(JSplitPane.VERTICAL_SPLIT, sourceScrollPane = new FasterScrollPane(sourceTextArea), new FasterScrollPane(docsPanel), Configuration.guiAvm2DocsSplitPaneDividerLocationPercent));
         } else {
-            add(new FasterScrollPane(sourceTextArea));
+            add(sourceScrollPane = new FasterScrollPane(sourceTextArea));
         }
         sourceTextArea.changeContentType("text/flasm3");
         sourceTextArea.setFont(Configuration.getSourceFont());

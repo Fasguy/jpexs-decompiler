@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -27,6 +27,7 @@ import com.jpexs.decompiler.flash.abc.avm2.instructions.stack.PushShortIns;
 import com.jpexs.decompiler.flash.abc.avm2.parser.AVM2ParseException;
 import com.jpexs.decompiler.flash.abc.types.ABCException;
 import com.jpexs.decompiler.flash.abc.types.Float4;
+import com.jpexs.decompiler.flash.abc.types.InstanceInfo;
 import com.jpexs.decompiler.flash.abc.types.MetadataInfo;
 import com.jpexs.decompiler.flash.abc.types.MethodBody;
 import com.jpexs.decompiler.flash.abc.types.MethodInfo;
@@ -35,6 +36,7 @@ import com.jpexs.decompiler.flash.abc.types.Namespace;
 import com.jpexs.decompiler.flash.abc.types.NamespaceSet;
 import com.jpexs.decompiler.flash.abc.types.ValueKind;
 import com.jpexs.decompiler.flash.abc.types.traits.Trait;
+import com.jpexs.decompiler.flash.abc.types.traits.TraitClass;
 import com.jpexs.decompiler.flash.abc.types.traits.TraitFunction;
 import com.jpexs.decompiler.flash.abc.types.traits.TraitMethodGetterSetter;
 import com.jpexs.decompiler.flash.abc.types.traits.TraitSlotConst;
@@ -111,6 +113,14 @@ public class ASM3Parser {
         }
         return index;
     }
+    
+    private static void expectEnd(Flasm3Lexer lexer) throws IOException, AVM2ParseException {
+        expected(ParsedSymbol.TYPE_KEYWORD_END, "end", lexer);
+        ParsedSymbol symb = lexer.lex();
+        if (symb.type != ParsedSymbol.TYPE_COMMENT) {
+            lexer.pushback(symb);
+        }
+    }
 
     private static void expected(int type, String expStr, Flasm3Lexer lexer) throws IOException, AVM2ParseException {
         ParsedSymbol s = lexer.lex();
@@ -119,9 +129,9 @@ public class ASM3Parser {
         }
     }
 
-    private static void expected(ParsedSymbol s, int type, String expStr) throws IOException, AVM2ParseException {
+    private static void expected(ParsedSymbol s, int type, String expStr, int line) throws IOException, AVM2ParseException {
         if (s.type != type) {
-            throw new AVM2ParseException(expStr + " expected", 0);
+            throw new AVM2ParseException(expStr + " expected", line);
         }
     }
 
@@ -150,21 +160,23 @@ public class ASM3Parser {
                 }
             } else if (symb.type == ParsedSymbol.TYPE_KEYWORD_METADATA_BLOCK) {
                 symb = lexer.lex();
-                expected(symb, ParsedSymbol.TYPE_STRING, "string metadata");
+                expected(symb, ParsedSymbol.TYPE_STRING, "string metadata", lexer.yyline());
                 String mkey = (String) symb.value;
                 symb = lexer.lex();
                 Map<String, String> items = new HashMap<>();
                 while (symb.type == ParsedSymbol.TYPE_KEYWORD_ITEM) {
                     symb = lexer.lex();
-                    expected(symb, ParsedSymbol.TYPE_STRING, "string key");
-                    String key = (String) symb.value;
+                    if (symb.type != ParsedSymbol.TYPE_KEYWORD_NULL && symb.type != ParsedSymbol.TYPE_STRING) {
+                        throw new AVM2ParseException("string/null value expected", lexer.yyline());
+                    }
+                    String key = symb.type == ParsedSymbol.TYPE_KEYWORD_NULL ? null : (String) symb.value;
                     symb = lexer.lex();
-                    expected(symb, ParsedSymbol.TYPE_STRING, "string value");
+                    expected(symb, ParsedSymbol.TYPE_STRING, "string value", lexer.yyline());
                     String val = (String) symb.value;
                     items.put(key, val);
                     symb = lexer.lex();
                 }
-                expected(symb, ParsedSymbol.TYPE_KEYWORD_END, "end");
+                expected(symb, ParsedSymbol.TYPE_KEYWORD_END, "end", lexer.yyline());
                 symb = lexer.lex();
                 if (symb.type != ParsedSymbol.TYPE_COMMENT) {
                     lexer.pushback(symb);
@@ -217,8 +229,8 @@ public class ASM3Parser {
 
         expected(ParsedSymbol.TYPE_KEYWORD_SLOTID, "slotid", lexer);
         symb = lexer.lex();
-        expected(symb, ParsedSymbol.TYPE_INTEGER, "Integer");
-        int slotid = (int) (long) (Long) symb.value;
+        expected(symb, ParsedSymbol.TYPE_INTEGER, "Integer", lexer.yyline());
+        int slotid = (int) (Integer) symb.value;
         expected(ParsedSymbol.TYPE_KEYWORD_TYPE, "type", lexer);
         int type = parseMultiName(constants, lexer);
         symb = lexer.lex();
@@ -236,6 +248,86 @@ public class ASM3Parser {
         return true;
     }
 
+    public static boolean parseClass(ABC abc, Reader reader, AVM2ConstantPool constants, TraitClass tc) throws IOException, AVM2ParseException {
+        Flasm3Lexer lexer = new Flasm3Lexer(reader);
+        return parseClass(abc, lexer, constants, tc);
+    }
+
+    private static boolean parseClass(ABC abc, Flasm3Lexer lexer, AVM2ConstantPool constants, TraitClass tc) throws IOException, AVM2ParseException {
+        expected(ParsedSymbol.TYPE_KEYWORD_TRAIT, "trait", lexer);
+        expected(ParsedSymbol.TYPE_KEYWORD_CLASS, "class", lexer);
+        int name_index = parseMultiName(constants, lexer);
+        parseTraitParams(abc, lexer, tc);
+        expected(ParsedSymbol.TYPE_KEYWORD_SLOTID, "slotid", lexer);
+        ParsedSymbol symb;
+        symb = lexer.lex();
+        expected(symb, ParsedSymbol.TYPE_INTEGER, "Integer", lexer.yyline());
+        int slotid = (int) (Integer) symb.value;
+
+        expected(ParsedSymbol.TYPE_KEYWORD_CLASS, "class", lexer);
+        expected(ParsedSymbol.TYPE_KEYWORD_INSTANCE, "instance", lexer);
+
+        int instance_name_index = parseMultiName(constants, lexer);
+        expected(ParsedSymbol.TYPE_KEYWORD_EXTENDS, "extends", lexer);
+        int super_index = parseMultiName(constants, lexer);
+        symb = lexer.lex();
+        List<Integer> ifacesList = new ArrayList<>();
+        while (symb.type == ParsedSymbol.TYPE_KEYWORD_IMPLEMENTS) {
+            ifacesList.add(parseMultiName(constants, lexer));
+            symb = lexer.lex();
+        }
+        int interfaces[] = new int[ifacesList.size()];
+        for(int i = 0; i < ifacesList.size(); i++) {
+            interfaces[i] = ifacesList.get(i);
+        }
+        int instanceFlags = 0;
+        while (symb.type == ParsedSymbol.TYPE_KEYWORD_FLAG) {
+            symb = lexer.lex();
+            switch (symb.type) {
+                case ParsedSymbol.TYPE_KEYWORD_SEALED:
+                    instanceFlags |= InstanceInfo.CLASS_SEALED;
+                    break;
+                case ParsedSymbol.TYPE_KEYWORD_FINAL:
+                    instanceFlags |= InstanceInfo.CLASS_FINAL;
+                    break;
+                case ParsedSymbol.TYPE_KEYWORD_INTERFACE:
+                    instanceFlags |= InstanceInfo.CLASS_INTERFACE;
+                    break;
+                case ParsedSymbol.TYPE_KEYWORD_PROTECTEDNS:
+                    instanceFlags |= InstanceInfo.CLASS_PROTECTEDNS;
+                    break;
+                case ParsedSymbol.TYPE_KEYWORD_NON_NULLABLE:
+                    instanceFlags |= InstanceInfo.CLASS_NON_NULLABLE;
+                    break;
+                default:
+                    throw new AVM2ParseException("SEALED,FINAL,INTERFACE,PROTECTEDNS or NON_NULLABLE expected", lexer.yyline());
+            }
+            symb = lexer.lex();
+        }
+        int protectedns = 0;
+        if (symb.type == ParsedSymbol.TYPE_KEYWORD_PROTECTEDNS_BLOCK && ((instanceFlags & InstanceInfo.CLASS_PROTECTEDNS)==InstanceInfo.CLASS_PROTECTEDNS)) {
+            protectedns = parseNamespace(constants, lexer);
+        } else {
+            lexer.pushback(symb);
+        }        
+        expectEnd(lexer); //instance
+        expectEnd(lexer); //class
+        expectEnd(lexer); //trait
+        
+        InstanceInfo ii = abc.instance_info.get(tc.class_info);
+        ii.name_index = instance_name_index;
+        ii.super_index = super_index;
+        ii.interfaces = interfaces;
+        ii.flags = instanceFlags;                
+        if ((instanceFlags & InstanceInfo.CLASS_PROTECTEDNS)==InstanceInfo.CLASS_PROTECTEDNS) {
+            ii.protectedNS = protectedns;
+        }        
+        
+        tc.slot_id = slotid;
+        
+        return true;
+    }
+
     public static boolean parseSlotConst(ABC abc, Reader reader, AVM2ConstantPool constants, TraitSlotConst tsc) throws IOException, AVM2ParseException {
         Flasm3Lexer lexer = new Flasm3Lexer(reader);
         return parseSlotConst(abc, lexer, constants, tsc);
@@ -244,10 +336,19 @@ public class ASM3Parser {
     private static int parseNamespaceSet(AVM2ConstantPool constants, Flasm3Lexer lexer) throws AVM2ParseException, IOException {
         List<Integer> namespaceList = new ArrayList<>();
         ParsedSymbol s = lexer.lex();
+
+        if (s.type == ParsedSymbol.TYPE_KEYWORD_UNKNOWN) {
+            expected(ParsedSymbol.TYPE_PARENT_OPEN, "(", lexer);
+            s = lexer.lex();
+            expected(s, ParsedSymbol.TYPE_INTEGER, "integer", lexer.yyline());
+            expected(ParsedSymbol.TYPE_PARENT_CLOSE, ")", lexer);
+            return (int) (Integer) s.value;
+        }
+
         if (s.type == ParsedSymbol.TYPE_KEYWORD_NULL) {
             return 0;
         }
-        expected(s, ParsedSymbol.TYPE_BRACKET_OPEN, "[");
+        expected(s, ParsedSymbol.TYPE_BRACKET_OPEN, "[", lexer.yyline());
         s = lexer.lex();
         if (s.type != ParsedSymbol.TYPE_BRACKET_CLOSE) {
             lexer.pushback(s);
@@ -255,7 +356,7 @@ public class ASM3Parser {
                 namespaceList.add(parseNamespace(constants, lexer));
                 s = lexer.lex();
             } while (s.type == ParsedSymbol.TYPE_COMMA);
-            expected(s, ParsedSymbol.TYPE_BRACKET_CLOSE, "]");
+            expected(s, ParsedSymbol.TYPE_BRACKET_CLOSE, "]", lexer.yyline());
         }
         loopn:
         for (int n = 1; n < constants.getNamespaceSetCount(); n++) {
@@ -282,6 +383,12 @@ public class ASM3Parser {
         ParsedSymbol type = lexer.lex();
         int kind = 0;
         switch (type.type) {
+            case ParsedSymbol.TYPE_KEYWORD_UNKNOWN:
+                expected(ParsedSymbol.TYPE_PARENT_OPEN, "(", lexer);
+                ParsedSymbol s = lexer.lex();
+                expected(s, ParsedSymbol.TYPE_INTEGER, "integer", lexer.yyline());
+                expected(ParsedSymbol.TYPE_PARENT_CLOSE, ")", lexer);
+                return (int) (Integer) s.value;
             case ParsedSymbol.TYPE_KEYWORD_NULL:
                 return 0;
             case ParsedSymbol.TYPE_KEYWORD_NAMESPACE:
@@ -322,7 +429,7 @@ public class ASM3Parser {
         int index = 0;
         if (c.type == ParsedSymbol.TYPE_COMMA) {
             ParsedSymbol extra = lexer.lex();
-            expected(extra, ParsedSymbol.TYPE_STRING, "String");
+            expected(extra, ParsedSymbol.TYPE_STRING, "String", lexer.yyline());
             try {
                 index = Integer.parseInt((String) extra.value);
             } catch (NumberFormatException nfe) {
@@ -341,6 +448,12 @@ public class ASM3Parser {
         int kind = 0;
 
         switch (s.type) {
+            case ParsedSymbol.TYPE_KEYWORD_UNKNOWN:
+                expected(ParsedSymbol.TYPE_PARENT_OPEN, "(", lexer);
+                s = lexer.lex();
+                expected(s, ParsedSymbol.TYPE_INTEGER, "integer", lexer.yyline());
+                expected(ParsedSymbol.TYPE_PARENT_CLOSE, ")", lexer);
+                return (int) (Integer) s.value;
             case ParsedSymbol.TYPE_KEYWORD_NULL:
                 return 0;
             case ParsedSymbol.TYPE_KEYWORD_QNAME:
@@ -392,7 +505,7 @@ public class ASM3Parser {
                 if (name.type == ParsedSymbol.TYPE_KEYWORD_NULL) {
                     name_index = 0;
                 } else {
-                    expected(name, ParsedSymbol.TYPE_STRING, "String");
+                    expected(name, ParsedSymbol.TYPE_STRING, "String", lexer.yyline());
                     name_index = constants.getStringId((String) name.value, true);
                 }
                 expected(ParsedSymbol.TYPE_PARENT_CLOSE, ")", lexer);
@@ -407,7 +520,7 @@ public class ASM3Parser {
                 if (rtqName.type == ParsedSymbol.TYPE_KEYWORD_NULL) {
                     name_index = 0;
                 } else {
-                    expected(rtqName, ParsedSymbol.TYPE_STRING, "String");
+                    expected(rtqName, ParsedSymbol.TYPE_STRING, "String", lexer.yyline());
                     name_index = constants.getStringId((String) rtqName.value, true);
                 }
                 expected(ParsedSymbol.TYPE_PARENT_CLOSE, ")", lexer);
@@ -429,7 +542,7 @@ public class ASM3Parser {
                 if (mName.type == ParsedSymbol.TYPE_KEYWORD_NULL) {
                     name_index = 0;
                 } else {
-                    expected(mName, ParsedSymbol.TYPE_STRING, "String");
+                    expected(mName, ParsedSymbol.TYPE_STRING, "String", lexer.yyline());
                     name_index = constants.getStringId((String) mName.value, true);
                 }
                 expected(ParsedSymbol.TYPE_COMMA, ",", lexer);
@@ -458,7 +571,7 @@ public class ASM3Parser {
                     nt = lexer.lex();
                 }
                 int[] params = Helper.toIntArray(paramsList);
-                expected(nt, ParsedSymbol.TYPE_GREATERTHAN, ">");
+                expected(nt, ParsedSymbol.TYPE_GREATERTHAN, ">", lexer.yyline());
                 expected(ParsedSymbol.TYPE_PARENT_CLOSE, ")", lexer);
                 multiname = Multiname.createTypeName(qname_index, params);
                 break;
@@ -482,8 +595,8 @@ public class ASM3Parser {
                 if (value.type == ParsedSymbol.TYPE_KEYWORD_NULL) {
                     value_index = 0;
                 } else {
-                    expected(value, ParsedSymbol.TYPE_INTEGER, "Integer or null");
-                    value_index = constants.getIntId((Long) value.value, true);
+                    expected(value, ParsedSymbol.TYPE_INTEGER, "Integer or null", lexer.yyline());
+                    value_index = constants.getIntId((Integer) value.value, true);
                 }
                 expected(ParsedSymbol.TYPE_PARENT_CLOSE, ")", lexer);
                 break;
@@ -494,8 +607,8 @@ public class ASM3Parser {
                 if (value.type == ParsedSymbol.TYPE_KEYWORD_NULL) {
                     value_index = 0;
                 } else {
-                    expected(value, ParsedSymbol.TYPE_INTEGER, "UInteger");
-                    value_index = constants.getUIntId((Long) value.value, true);
+                    expected(value, ParsedSymbol.TYPE_INTEGER, "UInteger", lexer.yyline());
+                    value_index = constants.getUIntId((Integer) value.value, true);
                 }
 
                 expected(ParsedSymbol.TYPE_PARENT_CLOSE, ")", lexer);
@@ -506,8 +619,10 @@ public class ASM3Parser {
                 value = lexer.lex();
                 if (value.type == ParsedSymbol.TYPE_KEYWORD_NULL) {
                     value_index = 0;
+                } else if (value.type == ParsedSymbol.TYPE_INTEGER) {
+                    value_index = constants.getDoubleId((Integer) value.value, true);
                 } else {
-                    expected(value, ParsedSymbol.TYPE_FLOAT, "Double or null");
+                    expected(value, ParsedSymbol.TYPE_FLOAT, "Integer, double or null", lexer.yyline());
                     value_index = constants.getDoubleId((Double) value.value, true);
                 }
                 expected(ParsedSymbol.TYPE_PARENT_CLOSE, ")", lexer);
@@ -517,7 +632,7 @@ public class ASM3Parser {
              break;*/
             case ParsedSymbol.TYPE_INTEGER:
                 value_kind = ValueKind.CONSTANT_Int;
-                value_index = constants.getIntId((Long) type.value, true);
+                value_index = constants.getIntId((Integer) type.value, true);
                 break;
             case ParsedSymbol.TYPE_FLOAT:
                 value_kind = ValueKind.CONSTANT_Double;
@@ -534,7 +649,7 @@ public class ASM3Parser {
                 if (value.type == ParsedSymbol.TYPE_KEYWORD_NULL) {
                     value_index = 0;
                 } else {
-                    expected(value, ParsedSymbol.TYPE_STRING, "String or null");
+                    expected(value, ParsedSymbol.TYPE_STRING, "String or null", lexer.yyline());
                     expected(ParsedSymbol.TYPE_PARENT_CLOSE, ")", lexer);
                     value_index = constants.getStringId((String) value.value, true);
                 }
@@ -610,8 +725,9 @@ public class ASM3Parser {
                         value_kind = ValueKind.CONSTANT_PackageNamespace;
                         break;
                 }
-                lexer.pushback(type);
+                expected(ParsedSymbol.TYPE_PARENT_OPEN, "(", lexer);
                 value_index = parseNamespace(constants, lexer);
+                expected(ParsedSymbol.TYPE_PARENT_CLOSE, ")", lexer);
                 break;
             default:
                 if (Configuration._debugMode.get()) {
@@ -645,10 +761,15 @@ public class ASM3Parser {
         List<Integer> paramNames = new ArrayList<>();
         List<ValueKind> optional = new ArrayList<>();
         Stack<Integer> blockStack = new Stack<>();
-        body.traits = new Traits();
+        if (body != null) {
+            body.traits = new Traits();
+        }
         do {
             symb = lexer.lex();
             if (Arrays.asList(ParsedSymbol.TYPE_KEYWORD_BODY, ParsedSymbol.TYPE_KEYWORD_CODE, ParsedSymbol.TYPE_KEYWORD_METHOD).contains(symb.type)) {
+                if (body == null && symb.type == ParsedSymbol.TYPE_KEYWORD_BODY) {
+                    throw new AVM2ParseException("This method cannot have a body.", lexer.yyline());
+                }
                 blockStack.push(symb.type);
                 continue;
             }
@@ -687,8 +808,8 @@ public class ASM3Parser {
                             parseTraitParams(abc, lexer, trait);
                             expected(ParsedSymbol.TYPE_KEYWORD_DISPID, "dispid", lexer);
                             symb = lexer.lex();
-                            expected(symb, ParsedSymbol.TYPE_INTEGER, "Integer");
-                            tm.disp_id = (int) (long) (Long) symb.value;
+                            expected(symb, ParsedSymbol.TYPE_INTEGER, "Integer", lexer.yyline());
+                            tm.disp_id = (int) (Integer) symb.value;
 
                             break;
                         case ParsedSymbol.TYPE_KEYWORD_FUNCTION:
@@ -708,7 +829,7 @@ public class ASM3Parser {
                 if (symb.type == ParsedSymbol.TYPE_KEYWORD_NULL) {
                     info.name_index = 0;
                 } else {
-                    expected(symb, ParsedSymbol.TYPE_STRING, "String or null");
+                    expected(symb, ParsedSymbol.TYPE_STRING, "String or null", lexer.yyline());
                     info.name_index = constants.getStringId((String) symb.value, true);
                 }
                 continue;
@@ -722,7 +843,7 @@ public class ASM3Parser {
                 if (symb.type == ParsedSymbol.TYPE_KEYWORD_NULL) {
                     paramNames.add(0);
                 } else {
-                    expected(symb, ParsedSymbol.TYPE_STRING, "String or null");
+                    expected(symb, ParsedSymbol.TYPE_STRING, "String or null", lexer.yyline());
                     paramNames.add(constants.getStringId((String) symb.value, true));
                 }
                 continue;
@@ -735,29 +856,29 @@ public class ASM3Parser {
 
             if (symb.type == ParsedSymbol.TYPE_KEYWORD_MAXSTACK) {
                 symb = lexer.lex();
-                expected(symb, ParsedSymbol.TYPE_INTEGER, "Integer");
-                body.max_stack = (int) (long) (Long) symb.value;
+                expected(symb, ParsedSymbol.TYPE_INTEGER, "Integer", lexer.yyline());
+                body.max_stack = (int) (Integer) symb.value;
                 continue;
             }
 
             if (symb.type == ParsedSymbol.TYPE_KEYWORD_LOCALCOUNT) {
                 symb = lexer.lex();
-                expected(symb, ParsedSymbol.TYPE_INTEGER, "Integer");
-                body.max_regs = (int) (long) (Long) symb.value;
+                expected(symb, ParsedSymbol.TYPE_INTEGER, "Integer", lexer.yyline());
+                body.max_regs = (int) (Integer) symb.value;
                 continue;
             }
 
             if (symb.type == ParsedSymbol.TYPE_KEYWORD_INITSCOPEDEPTH) {
                 symb = lexer.lex();
-                expected(symb, ParsedSymbol.TYPE_INTEGER, "Integer");
-                body.init_scope_depth = (int) (long) (Long) symb.value;
+                expected(symb, ParsedSymbol.TYPE_INTEGER, "Integer", lexer.yyline());
+                body.init_scope_depth = (int) (Integer) symb.value;
                 continue;
             }
 
             if (symb.type == ParsedSymbol.TYPE_KEYWORD_MAXSCOPEDEPTH) {
                 symb = lexer.lex();
-                expected(symb, ParsedSymbol.TYPE_INTEGER, "Integer");
-                body.max_scope_depth = (int) (long) (Long) symb.value;
+                expected(symb, ParsedSymbol.TYPE_INTEGER, "Integer", lexer.yyline());
+                body.max_scope_depth = (int) (Integer) symb.value;
                 continue;
             }
 
@@ -769,8 +890,8 @@ public class ASM3Parser {
             if (symb.type == ParsedSymbol.TYPE_KEYWORD_FLAG) {
                 symb = lexer.lex();
                 switch (symb.type) {
-                    case ParsedSymbol.TYPE_KEYWORD_EXPLICIT:
-                        info.setFlagExplicit();
+                    case ParsedSymbol.TYPE_KEYWORD_NATIVE:
+                        info.setFlagNative();
                         break;
                     case ParsedSymbol.TYPE_KEYWORD_HAS_OPTIONAL:
                         info.setFlagHas_optional();
@@ -800,15 +921,15 @@ public class ASM3Parser {
                 exceptionLines.add(lexer.yyline());
                 expected(ParsedSymbol.TYPE_KEYWORD_FROM, "From", lexer);
                 symb = lexer.lex();
-                expected(symb, ParsedSymbol.TYPE_IDENTIFIER, "Identifier");
+                expected(symb, ParsedSymbol.TYPE_IDENTIFIER, "Identifier", lexer.yyline());
                 exceptionsFrom.add((String) symb.value);
                 expected(ParsedSymbol.TYPE_KEYWORD_TO, "To", lexer);
                 symb = lexer.lex();
-                expected(symb, ParsedSymbol.TYPE_IDENTIFIER, "Identifier");
+                expected(symb, ParsedSymbol.TYPE_IDENTIFIER, "Identifier", lexer.yyline());
                 exceptionsTo.add((String) symb.value);
                 expected(ParsedSymbol.TYPE_KEYWORD_TARGET, "Target", lexer);
                 symb = lexer.lex();
-                expected(symb, ParsedSymbol.TYPE_IDENTIFIER, "Identifier");
+                expected(symb, ParsedSymbol.TYPE_IDENTIFIER, "Identifier", lexer.yyline());
                 exceptionsTargets.add((String) symb.value);
                 expected(ParsedSymbol.TYPE_KEYWORD_TYPE, "Type", lexer);
                 ABCException ex = new ABCException();
@@ -884,7 +1005,7 @@ public class ASM3Parser {
                     ex.name_index = checkMultinameIndex(constants, (int) (long) (Long) exName.value, lexer.yyline());
                     ex.type_index = checkMultinameIndex(constants, (int) (long) (Long) exType.value, lexer.yyline());
                     exceptions.add(ex);
-                    exceptionIndices.add((int) (long) (Long) exIndex.value);
+                    exceptionIndices.add((int) (Integer) exIndex.value);
                     continue;
                 }
                 String insName = (String) symb.value;
@@ -903,6 +1024,25 @@ public class ASM3Parser {
                                 if (parsedOperand.type == ParsedSymbol.TYPE_COMMA) {
                                     parsedOperand = lexer.lex();
                                 }
+                            }
+                            switch (def.operands[i]) {
+                                case AVM2Code.DAT_MULTINAME_INDEX:
+                                case AVM2Code.DAT_NAMESPACE_INDEX:
+                                case AVM2Code.DAT_STRING_INDEX:
+                                case AVM2Code.DAT_INT_INDEX:
+                                case AVM2Code.DAT_UINT_INDEX:
+                                case AVM2Code.DAT_DOUBLE_INDEX:
+                                case AVM2Code.DAT_FLOAT_INDEX:
+                                case AVM2Code.DAT_FLOAT4_INDEX:
+                                    if (parsedOperand.type == ParsedSymbol.TYPE_KEYWORD_UNKNOWN) {
+                                        expected(ParsedSymbol.TYPE_PARENT_OPEN, "(", lexer);
+                                        ParsedSymbol indexSymb = lexer.lex();
+                                        expected(indexSymb, ParsedSymbol.TYPE_INTEGER, "integer", lexer.yyline());
+                                        expected(ParsedSymbol.TYPE_PARENT_CLOSE, ")", lexer);
+                                        operandsList.add((int) (Integer) indexSymb.value);
+                                        continue;
+                                    }
+                                    break;
                             }
                             switch (def.operands[i]) {
                                 case AVM2Code.DAT_MULTINAME_INDEX:
@@ -935,7 +1075,7 @@ public class ASM3Parser {
                                     if (parsedOperand.type == ParsedSymbol.TYPE_KEYWORD_NULL) {
                                         operandsList.add(0);
                                     } else if (parsedOperand.type == ParsedSymbol.TYPE_INTEGER) {
-                                        long intVal = (Long) parsedOperand.value;
+                                        int intVal = (Integer) parsedOperand.value;
                                         int iid = constants.getIntId(intVal, false);
                                         if (iid == -1) {
                                             if ((missingHandler != null) && (missingHandler.missingInt(intVal))) {
@@ -953,7 +1093,7 @@ public class ASM3Parser {
                                     if (parsedOperand.type == ParsedSymbol.TYPE_KEYWORD_NULL) {
                                         operandsList.add(0);
                                     } else if (parsedOperand.type == ParsedSymbol.TYPE_INTEGER) {
-                                        long intVal = (Long) parsedOperand.value;
+                                        long intVal = (Integer) parsedOperand.value;
                                         int iid = constants.getUIntId(intVal, false);
                                         if (iid == -1) {
                                             if ((missingHandler != null) && (missingHandler.missingUInt(intVal))) {
@@ -974,7 +1114,7 @@ public class ASM3Parser {
 
                                         double doubleVal = 0;
                                         if (parsedOperand.type == ParsedSymbol.TYPE_INTEGER) {
-                                            doubleVal = (Long) parsedOperand.value;
+                                            doubleVal = (Integer) parsedOperand.value;
                                         }
                                         if (parsedOperand.type == ParsedSymbol.TYPE_FLOAT) {
                                             doubleVal = (Double) parsedOperand.value;
@@ -999,7 +1139,7 @@ public class ASM3Parser {
 
                                         float floatVal = 0;
                                         if (parsedOperand.type == ParsedSymbol.TYPE_INTEGER) {
-                                            floatVal = (Long) parsedOperand.value;
+                                            floatVal = (Integer) parsedOperand.value;
                                         }
                                         if (parsedOperand.type == ParsedSymbol.TYPE_FLOAT) {
                                             floatVal = (float) (double) (Double) parsedOperand.value;
@@ -1026,7 +1166,7 @@ public class ASM3Parser {
                                             if ((parsedOperand.type == ParsedSymbol.TYPE_INTEGER) || (parsedOperand.type == ParsedSymbol.TYPE_FLOAT)) {
                                                 float floatVal = 0;
                                                 if (parsedOperand.type == ParsedSymbol.TYPE_INTEGER) {
-                                                    floatVal = (Long) parsedOperand.value;
+                                                    floatVal = (Integer) parsedOperand.value;
                                                 }
                                                 if (parsedOperand.type == ParsedSymbol.TYPE_FLOAT) {
                                                     floatVal = (float) (double) (Double) parsedOperand.value;
@@ -1096,7 +1236,7 @@ public class ASM3Parser {
                                             operandsList.add(0);
                                         }
                                     } else if (parsedOperand.type == ParsedSymbol.TYPE_INTEGER) { //old syntax
-                                        int patCount = (int) (long) (Long) parsedOperand.value;
+                                        int patCount = (int) (Integer) parsedOperand.value;
                                         operandsList.add(patCount);
 
                                         for (int c = 0; c <= patCount; c++) {
@@ -1117,7 +1257,7 @@ public class ASM3Parser {
                                     break;
                                 case AVM2Code.OPT_S8:
                                     if (parsedOperand.type == ParsedSymbol.TYPE_INTEGER) {
-                                        long val = (long) (Long) parsedOperand.value;
+                                        int val = (Integer) parsedOperand.value;
                                         if (val < Byte.MIN_VALUE || val > Byte.MAX_VALUE) {
                                             throw new AVM2ParseException("Byte value expected (" + Byte.MIN_VALUE + " to " + Byte.MAX_VALUE + "). Use pushshort or pushint to push larger values", lexer.yyline());
                                         }
@@ -1128,13 +1268,13 @@ public class ASM3Parser {
                                     break;
                                 default:
                                     if (parsedOperand.type == ParsedSymbol.TYPE_INTEGER) {
-                                        long val = (long) (Long) parsedOperand.value;
+                                        int val = (int) (Integer) parsedOperand.value;
                                         if (def instanceof PushShortIns) {
                                             if (val < Short.MIN_VALUE || val > Short.MAX_VALUE) {
                                                 throw new AVM2ParseException("Short value expected (" + Short.MIN_VALUE + " to " + Short.MAX_VALUE + "). Use pushint to push larger values", lexer.yyline());
                                             }
                                         }
-                                        operandsList.add((int) val);
+                                        operandsList.add(val);
                                     } else {
                                         throw new AVM2ParseException("Integer expected", lexer.yyline());
                                     }
@@ -1208,9 +1348,11 @@ public class ASM3Parser {
             }
             ins.operands[oi.insOperandIndex] = relOffset;
         }
-        body.exceptions = new ABCException[exceptions.size()];
-        for (int e = 0; e < exceptions.size(); e++) {
-            body.exceptions[e] = exceptions.get(e);
+        if (body != null) {
+            body.exceptions = new ABCException[exceptions.size()];
+            for (int e = 0; e < exceptions.size(); e++) {
+                body.exceptions[e] = exceptions.get(e);
+            }
         }
 
         info.param_types = new int[paramTypes.size()];
@@ -1230,6 +1372,8 @@ public class ASM3Parser {
             for (int i = 0; i < optional.size(); i++) {
                 info.optional[i] = optional.get(i);
             }
+        } else {
+            info.optional = new ValueKind[0];
         }
         abc.refreshMultinameNamespaceSuffixes();
         return code;

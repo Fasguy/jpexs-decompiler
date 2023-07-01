@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -32,6 +32,7 @@ import com.jpexs.decompiler.flash.types.ColorTransform;
 import com.jpexs.decompiler.flash.types.FILLSTYLE;
 import com.jpexs.decompiler.flash.types.FILLSTYLEARRAY;
 import com.jpexs.decompiler.flash.types.LINESTYLE;
+import com.jpexs.decompiler.flash.types.LINESTYLE2;
 import com.jpexs.decompiler.flash.types.LINESTYLEARRAY;
 import com.jpexs.decompiler.flash.types.MATRIX;
 import com.jpexs.decompiler.flash.types.RECT;
@@ -119,6 +120,26 @@ public abstract class ImageTag extends DrawableTag {
         return image;
     }
 
+    /**
+     * Gets converted image data. Converted means for example DefineBitsJPEG3 including alpha channel - PNG images
+     * @return 
+     */
+    public InputStream getConvertedImageData() {
+        if (getImageFormat() == getOriginalImageFormat()) { //no need to convert
+            InputStream is = getOriginalImageData();
+            if (is != null) {
+                return is;
+            }
+        }
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageHelper.write(getImage().getBufferedImage(), getImageFormat(), baos);
+        return new ByteArrayInputStream(baos.toByteArray());
+    }
+    
+    /**
+     * Gets original image data if available, if not, then converted. Original image data can be for example DefineBitsJPEG3 without transparency.
+     * @return 
+     */
     public InputStream getImageData() {
         InputStream is = getOriginalImageData();
         if (is != null) {
@@ -144,17 +165,18 @@ public abstract class ImageTag extends DrawableTag {
         return false;
     }
 
-    private SHAPEWITHSTYLE getShape() {
+    private SHAPEWITHSTYLE getShape(int shapeNum) {
         RECT rect = getRect();
-        return getShape(rect, false);
+        return getShape(rect, false, shapeNum);
     }
 
-    public SHAPEWITHSTYLE getShape(RECT rect, boolean fill) {
+    public SHAPEWITHSTYLE getShape(RECT rect, boolean fill, int shapeNum) {
         boolean translated = rect.Xmin != 0 || rect.Ymin != 0;
         SHAPEWITHSTYLE shape = new SHAPEWITHSTYLE();
         shape.fillStyles = new FILLSTYLEARRAY();
         shape.fillStyles.fillStyles = new FILLSTYLE[1];
         FILLSTYLE fillStyle = new FILLSTYLE();
+        fillStyle.inShape3 = shapeNum >= 3;
         fillStyle.fillStyleType = Configuration.shapeImportUseNonSmoothedFill.get()
                 ? FILLSTYLE.NON_SMOOTHED_REPEATING_BITMAP : FILLSTYLE.REPEATING_BITMAP;
         fillStyle.bitmapId = getCharacterId();
@@ -177,6 +199,7 @@ public abstract class ImageTag extends DrawableTag {
 
         shape.lineStyles = new LINESTYLEARRAY();
         shape.lineStyles.lineStyles = new LINESTYLE[0];
+        shape.lineStyles.lineStyles2 = new LINESTYLE2[0];
         shape.shapeRecords = new ArrayList<>();
         StyleChangeRecord style = new StyleChangeRecord();
         style.stateFillStyle0 = true;
@@ -226,24 +249,24 @@ public abstract class ImageTag extends DrawableTag {
     }
 
     @Override
-    public Shape getOutline(int frame, int time, int ratio, RenderContext renderContext, Matrix transformation, boolean stroked) {
-        return transformation.toTransform().createTransformedShape(getShape().getOutline(swf, stroked));
+    public Shape getOutline(boolean fast, int frame, int time, int ratio, RenderContext renderContext, Matrix transformation, boolean stroked, ExportRectangle viewRect, double unzoom) {
+        return transformation.toTransform().createTransformedShape(getShape(1).getOutline(fast, 1, swf, stroked));
     }
 
     @Override
-    public void toImage(int frame, int time, int ratio, RenderContext renderContext, SerializableImage image, SerializableImage fullImage, boolean isClip, Matrix transformation, Matrix strokeTransformation, Matrix absoluteTransformation, Matrix fullTransformation, ColorTransform colorTransform, double unzoom, boolean sameImage, ExportRectangle viewRect, boolean scaleStrokes, int drawMode) {
-        BitmapExporter.export(swf, getShape(), null, image, transformation, strokeTransformation, colorTransform, true);
+    public void toImage(int frame, int time, int ratio, RenderContext renderContext, SerializableImage image, SerializableImage fullImage, boolean isClip, Matrix transformation, Matrix strokeTransformation, Matrix absoluteTransformation, Matrix fullTransformation, ColorTransform colorTransform, double unzoom, boolean sameImage, ExportRectangle viewRect, boolean scaleStrokes, int drawMode, int blendMode, boolean canUseSmoothing) {
+        BitmapExporter.export(1, swf, getShape(1), null, image, unzoom, transformation, strokeTransformation, colorTransform, true, canUseSmoothing);
     }
 
     @Override
     public void toSVG(SVGExporter exporter, int ratio, ColorTransform colorTransform, int level) throws IOException {
-        SVGShapeExporter shapeExporter = new SVGShapeExporter(swf, getShape(), getCharacterId(), exporter, null, colorTransform, 1);
+        SVGShapeExporter shapeExporter = new SVGShapeExporter(1, swf, getShape(1), getCharacterId(), exporter, null, colorTransform, 1);
         shapeExporter.export();
     }
 
     @Override
     public void toHtmlCanvas(StringBuilder result, double unitDivisor) {
-        CanvasShapeExporter cse = new CanvasShapeExporter(null, unitDivisor, swf, getShape(), null, 0, 0);
+        CanvasShapeExporter cse = new CanvasShapeExporter(1, null, unitDivisor, swf, getShape(1), null, 0, 0);
         cse.export();
         result.append(cse.getShapeData());
     }
@@ -283,5 +306,5 @@ public abstract class ImageTag extends DrawableTag {
     @Override
     public RECT getRectWithStrokes() {
         return getRect();
-    }
+    }    
 }

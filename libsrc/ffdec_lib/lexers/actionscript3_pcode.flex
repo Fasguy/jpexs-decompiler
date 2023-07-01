@@ -162,9 +162,14 @@ ExceptionTarget = "exceptiontarget "{PositiveNumberLiteral}":"
   "method"                      {  yybegin(PARAMETERS); return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_METHOD, yytext());}
   "metadata"                    {  yybegin(PARAMETERS); return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_METADATA_BLOCK, yytext());}
   "item"                        {  yybegin(PARAMETERS); return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_ITEM, yytext());}
+  "instance"                    {  yybegin(PARAMETERS); return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_INSTANCE, yytext());}
+  "extends"                     {  yybegin(PARAMETERS); return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_EXTENDS, yytext());}
+  "implements"                  {  yybegin(PARAMETERS); return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_IMPLEMENTS, yytext());}
+  "protectedns"                 {  yybegin(PARAMETERS); return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_PROTECTEDNS_BLOCK, yytext());}
   "end"                         {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_END, yytext());}
   
 /*in params too:*/
+  "class"                       {  yybegin(PARAMETERS); return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_CLASS, yytext());}
   "dispid"                      {  yybegin(PARAMETERS); return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_DISPID, yytext());}
   "slotid"                      {  yybegin(PARAMETERS); return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_SLOTID, yytext());}
   "value"                       {  yybegin(PARAMETERS); return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_VALUE, yytext());}
@@ -205,6 +210,7 @@ ExceptionTarget = "exceptiontarget "{PositiveNumberLiteral}":"
   "MultinameL"                 {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_MULTINAMEL, yytext());}
   "MultinameLA"                {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_MULTINAMELA, yytext());}
   "TypeName"                   {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_TYPENAME, yytext());}
+  "Unknown"                    {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_UNKNOWN, yytext()); }
   "null"                       {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_NULL, yytext());}
   "("                          {  return new ParsedSymbol(ParsedSymbol.TYPE_PARENT_OPEN, yytext());}
   ")"                          {  return new ParsedSymbol(ParsedSymbol.TYPE_PARENT_CLOSE, yytext());}
@@ -242,9 +248,11 @@ ExceptionTarget = "exceptiontarget "{PositiveNumberLiteral}":"
   "flag"                        {  yybegin(PARAMETERS); return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_FLAG, yytext());}
   
 
+  /* Flag - old alias for "NATIVE" */
+  "EXPLICIT"                   {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_NATIVE, yytext());}  
 
    /*Flags*/
-  "EXPLICIT"                   {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_EXPLICIT, yytext());}
+  "NATIVE"                     {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_NATIVE, yytext());}  
   "HAS_OPTIONAL"               {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_HAS_OPTIONAL, yytext());}
   "HAS_PARAM_NAMES"            {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_HAS_PARAM_NAMES, yytext());}
   "IGNORE_REST"                {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_IGNORE_REST, yytext());}
@@ -268,10 +276,20 @@ ExceptionTarget = "exceptiontarget "{PositiveNumberLiteral}":"
   "FINAL"                      {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_FINAL, yytext());}
   "OVERRIDE"                   {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_OVERRIDE, yytext());}
   "METADATA"                   {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_METADATA, yytext());}
+  "SEALED"                     {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_SEALED, yytext());}
+  "INTERFACE"                  {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_INTERFACE, yytext());}
+  "PROTECTEDNS"                {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_PROTECTEDNS, yytext());}
+  "NON_NULLABLE"               {  return new ParsedSymbol(ParsedSymbol.TYPE_KEYWORD_NON_NULLABLE, yytext());}
   
   /* numeric literals */
 
-  {NumberLiteral}            { return new ParsedSymbol(ParsedSymbol.TYPE_INTEGER, Long.parseLong((yytext())));  }
+  {NumberLiteral}            { 
+                                try {
+                                    return new ParsedSymbol(ParsedSymbol.TYPE_INTEGER, Integer.parseInt((yytext())));  
+                                } catch(NumberFormatException nfe) {
+                                    return new ParsedSymbol(ParsedSymbol.TYPE_FLOAT, Double.parseDouble((yytext())));
+                                }
+                             }
   {FloatLiteral}                 { return new ParsedSymbol(ParsedSymbol.TYPE_FLOAT, Double.parseDouble((yytext())));  }
   {Identifier}            { return new ParsedSymbol(ParsedSymbol.TYPE_IDENTIFIER, yytext());  }
   {LineTerminator}      {yybegin(YYINITIAL);}

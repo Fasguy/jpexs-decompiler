@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -26,7 +26,6 @@ import com.jpexs.decompiler.graph.GraphSourceItem;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.GraphTargetVisitorInterface;
 import com.jpexs.decompiler.graph.SourceGenerator;
-import com.jpexs.decompiler.graph.TypeItem;
 import com.jpexs.decompiler.graph.model.LocalData;
 import java.util.List;
 import java.util.Objects;
@@ -44,13 +43,19 @@ public class CallPropertyAVM2Item extends AVM2Item {
     public List<GraphTargetItem> arguments;
 
     public boolean isVoid;
+    
+    public GraphTargetItem type;
+    
+    public boolean isStatic;
 
-    public CallPropertyAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, boolean isVoid, GraphTargetItem receiver, GraphTargetItem propertyName, List<GraphTargetItem> arguments) {
+    public CallPropertyAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, boolean isVoid, GraphTargetItem receiver, GraphTargetItem propertyName, List<GraphTargetItem> arguments, GraphTargetItem type, boolean isStatic) {
         super(instruction, lineStartIns, PRECEDENCE_PRIMARY);
         this.receiver = receiver;
         this.propertyName = propertyName;
         this.arguments = arguments;
         this.isVoid = isVoid;
+        this.type = type;
+        this.isStatic = isStatic;
     }
 
     @Override
@@ -62,7 +67,7 @@ public class CallPropertyAVM2Item extends AVM2Item {
 
     @Override
     public GraphTextWriter appendTo(GraphTextWriter writer, LocalData localData) throws InterruptedException {
-        formatProperty(writer, receiver, propertyName, localData);
+        formatProperty(writer, receiver, propertyName, localData, isStatic);
         writer.spaceBeforeCallParenthesies(arguments.size());
         writer.append("(");
         for (int a = 0; a < arguments.size(); a++) {
@@ -83,7 +88,7 @@ public class CallPropertyAVM2Item extends AVM2Item {
 
     @Override
     public GraphTargetItem returnType() {
-        return TypeItem.UNBOUNDED;
+        return type;
     }
 
     @Override

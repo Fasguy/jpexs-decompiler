@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -30,6 +30,7 @@ import com.jpexs.decompiler.graph.GraphTargetVisitorInterface;
 import com.jpexs.decompiler.graph.SourceGenerator;
 import com.jpexs.decompiler.graph.TypeItem;
 import com.jpexs.decompiler.graph.model.LocalData;
+import com.jpexs.decompiler.graph.model.UnboundedTypeItem;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -57,8 +58,57 @@ public class CoerceAVM2Item extends AVM2Item {
 
     @Override
     public GraphTextWriter appendTo(GraphTextWriter writer, LocalData localData) throws InterruptedException {
-        //return hilight("(" + type + ")", highlight)+
-        return value.toString(writer, localData);
+        //Same for ConvertAVM2Item
+        boolean displayCoerce = true;
+        GraphTargetItem valueReturnType = value.returnType();
+        switch (typeObj.toString()) {
+            case "*":
+                displayCoerce = false;
+                break;
+            case "Boolean":
+                displayCoerce = !valueReturnType.equals(TypeItem.BOOLEAN)
+                        && !valueReturnType.equals(TypeItem.UNBOUNDED);
+                break;
+            case "Number":
+                displayCoerce = !valueReturnType.equals(TypeItem.INT)
+                        && !valueReturnType.equals(TypeItem.NUMBER)
+                        && !valueReturnType.equals(TypeItem.UINT)
+                        && !valueReturnType.equals(TypeItem.UNBOUNDED);
+                break;
+            case "int":
+                displayCoerce = !valueReturnType.equals(TypeItem.INT)
+                        && !valueReturnType.equals(TypeItem.UNBOUNDED);
+                break;
+            case "uint":
+                if (valueReturnType.equals(TypeItem.INT) && (value instanceof IntegerValueAVM2Item)) {
+                    displayCoerce = (((IntegerValueAVM2Item) value).value < 0);
+                } else {
+                    displayCoerce = !valueReturnType.equals(TypeItem.UINT)
+                            && !valueReturnType.equals(TypeItem.UNBOUNDED);
+                }
+                break;
+            case "String":
+                displayCoerce = !valueReturnType.equals(TypeItem.STRING)
+                        && !valueReturnType.equals(new TypeItem("XML"))
+                        && !valueReturnType.equals(new TypeItem("XMLList"))
+                        && !valueReturnType.equals(new TypeItem("null"))
+                        && !valueReturnType.equals(TypeItem.UNBOUNDED);
+                break;
+            default:
+                displayCoerce = false;
+                break;
+            //default:
+            // there should be something like instanceof, or not, just comment it out...
+            //    displayCoerce = !valueReturnType.equals(typeObj);
+        }
+        if (displayCoerce) {
+            typeObj.toString(writer, localData).append("(");
+        }
+        value.toString(writer, localData);
+        if (displayCoerce) {
+            writer.append(")");
+        }
+        return writer;
     }
 
     @Override
@@ -101,6 +151,15 @@ public class CoerceAVM2Item extends AVM2Item {
 
     @Override
     public GraphTargetItem returnType() {
+        if (typeObj instanceof UnboundedTypeItem) {
+            return typeObj;
+        }
+        if (typeObj instanceof ApplyTypeAVM2Item) {
+            return typeObj;
+        }
+        if (typeObj instanceof TypeItem) {
+            return typeObj;
+        }
         return new TypeItem(typeObj.toString());
     }
 

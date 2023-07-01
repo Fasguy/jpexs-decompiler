@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -40,7 +40,10 @@ public class NewFunctionIns extends InstructionDefinition {
     @Override
     public void translate(AVM2LocalData localData, TranslateStack stack, AVM2Instruction ins, List<GraphTargetItem> output, String path) {
         int methodIndex = ins.operands[0];
-        NewFunctionAVM2Item function = new NewFunctionAVM2Item(ins, localData.lineStartInstruction, "", path, false, localData.scriptIndex, localData.classIndex, localData.abc, localData.fullyQualifiedNames, methodIndex, (ScopeStack) localData.scopeStack.clone());
+        ScopeStack newScopeStack = new ScopeStack();
+        newScopeStack.addAll(localData.scopeStack);
+        newScopeStack.addAll(localData.localScopeStack);
+        NewFunctionAVM2Item function = new NewFunctionAVM2Item(ins, localData.lineStartInstruction, "", path, false, localData.scriptIndex, localData.classIndex, localData.abc, methodIndex, newScopeStack);
         stack.push(function);
     }
 

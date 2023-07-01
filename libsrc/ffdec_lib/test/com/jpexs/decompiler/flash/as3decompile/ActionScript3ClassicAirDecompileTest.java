@@ -1,3 +1,19 @@
+/*
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3.0 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.as3decompile;
 
 import com.jpexs.decompiler.flash.ActionScript3DecompileTestBase;
@@ -26,20 +42,27 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "{\r\n"
                 + "trace(arguments[0]);\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testArguments() {
         decompileMethod("classic_air", "testArguments", "return arguments[0];\r\n",
-                false);
+                 false);
+    }
+
+    @Test
+    public void testCallCall() {
+        decompileMethod("classic_air", "testCallCall", "var o:* = new getDefinitionByName(\"Object\");\r\n"
+                + "var o2:* = new (getDefinitionByName(\"Object\"))();\r\n",
+                 false);
     }
 
     @Test
     public void testCallLocal() {
         decompileMethod("classic_air", "testCallLocal", "var f:Function = getF();\r\n"
                 + "var b:int = f(1,3);\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -59,7 +82,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "trace(\"infinally\");\r\n"
                 + "}\r\n"
                 + "trace(\"after\");\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -79,7 +102,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "{\r\n"
                 + "trace(\"ch\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -88,11 +111,40 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "var b:int = 0;\r\n"
                 + "var c:int = 0;\r\n"
                 + "var d:int = 0;\r\n"
+                + "var f:int = 0;\r\n"
                 + "d = c = b = a = 5;\r\n"
                 + "var e:TestClass2 = TestClass2.createMe(\"test\");\r\n"
                 + "e.attrib1 = e.attrib2 = e.attrib3 = this.getCounter();\r\n"
-                + "this.traceIt(e.toString());\r\n",
-                false);
+                + "this.traceIt(e.toString());\r\n"
+                + "prop = f = a = 4;\r\n"
+                + "if(f == 2)\r\n"
+                + "{\r\n"
+                + "trace(\"OK: \" + f);\r\n"
+                + "}\r\n",
+                 false);
+    }
+
+    @Test
+    public void testCollidingTry() {
+        decompileMethod("classic_air", "testCollidingTry", "var e:int = 0;\r\n"
+                + "try\r\n"
+                + "{\r\n"
+                + "e = 0;\r\n"
+                + "}\r\n"
+                + "catch(e:*)\r\n"
+                + "{\r\n"
+                + "trace(e);\r\n"
+                + "}\r\n"
+                + "try\r\n"
+                + "{\r\n"
+                + "trace(\"x\");\r\n"
+                + "}\r\n"
+                + "catch(e:*)\r\n"
+                + "{\r\n"
+                + "trace(e);\r\n"
+                + "}\r\n"
+                + "trace(\"y\");\r\n",
+                 false);
     }
 
     @Test
@@ -100,7 +152,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
         decompileMethod("classic_air", "testComma", "var a:int = 5;\r\n"
                 + "var b:int = 0;\r\n"
                 + "trace(a > 4 ? (b = 5, a) : 35);\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -108,7 +160,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
         decompileMethod("classic_air", "testComplexExpressions", "var i:int = 0;\r\n"
                 + "var j:int = 0;\r\n"
                 + "j = i += i += i++;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -138,7 +190,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "{\r\n"
                 + "trace(e.message);\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -204,7 +256,91 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "trace(\"hello\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
+    }
+
+    @Test
+    public void testConvert() {
+        decompileMethod("classic_air", "testConvert", "var s:String = null;\r\n"
+                + "var i:int = 0;\r\n"
+                + "var a:* = undefined;\r\n"
+                + "var dict:Dictionary = new Dictionary();\r\n"
+                + "s = \"a\";\r\n"
+                + "i = int(s);\r\n"
+                + "var j:int;\r\n"
+                + "s = String(j = n);\r\n"
+                + "s = ns;\r\n"
+                + "s = String(i == 4 ? \"\" : i);\r\n"
+                + "s = i == 4 ? \"\" : String(i);\r\n"
+                + "s = TestConvert.TEST;\r\n"
+                + "i = this.TEST;\r\n"
+                + "i = 4 * 5;\r\n"
+                + "i = a * 6;\r\n"
+                + "i = a;\r\n"
+                + "var o:Object = {\r\n"
+                + "0:\"A\",\r\n"
+                + "1:\"B\",\r\n"
+                + "2:\"C\"\r\n"
+                + "};\r\n"
+                + "i = int(s.charAt(10));\r\n"
+                + "var v:Vector.<String>;\r\n"
+                + "(v = new Vector.<String>()).push(\"A\");\r\n"
+                + "v.push(\"B\");\r\n"
+                + "i = int(v[0]);\r\n"
+                + "s = v[1];\r\n"
+                + "s = v.join(\"x\");\r\n"
+                + "i = int(v.join(\"x\"));\r\n"
+                + "i = prot;\r\n"
+                + "s = String(prot);\r\n"
+                + "i = sprot;\r\n"
+                + "s = String(sprot);\r\n"
+                + "s = String(getTimer());\r\n"
+                + "var x:XML;\r\n"
+                + "s = x = <list>\r\n"
+                + "<item id=\"1\">1</item>\r\n"
+                + "<item id=\"2\">2</item>\r\n"
+                + "<item id=\"3\">3</item>\r\n"
+                + "</list>;\r\n"
+                + "trace(\"a\");\r\n"
+                + "var xlist:XMLList = x.item;\r\n"
+                + "trace(\"b\");\r\n"
+                + "i = int(xlist[i].@id);\r\n"
+                + "trace(\"c\");\r\n"
+                + "i = int(x.item[i].@id);\r\n"
+                + "dict[String(x.item[i].@id)] = \"Hello\";\r\n"
+                + "var lc:LocalClass;\r\n"
+                + "i = (lc = new LocalClass()).attr;\r\n"
+                + "s = String(lc.attr);\r\n"
+                + "var f:Function;\r\n"
+                + "if(Boolean(f = this.f))\r\n"
+                + "{\r\n"
+                + "trace(\"OK\");\r\n"
+                + "}\r\n"
+                + "if(i)\r\n"
+                + "{\r\n"
+                + "trace(i);\r\n"
+                + "}\r\n"
+                + "if(s)\r\n"
+                + "{\r\n"
+                + "trace(s);\r\n"
+                + "}\r\n"
+                + "if(o)\r\n"
+                + "{\r\n"
+                + "trace(\"obj\");\r\n"
+                + "}\r\n"
+                + "s = xlist;\r\n"
+                + "var d:Number = 0;\r\n"
+                + "d = 1;\r\n"
+                + "d = 1.5;\r\n"
+                + "i = 1;\r\n"
+                + "i = 1.5;\r\n"
+                + "o[int(d * 5)] = 1;\r\n"
+                + "this.n = 1.5;\r\n"
+                + "super.prot = 1.5;\r\n"
+                + "super.prot = int(s);\r\n"
+                + "i = super.prot;\r\n"
+                + "s = String(super.prot);\r\n",
+                 false);
     }
 
     @Test
@@ -220,7 +356,23 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "}\r\n"
                 + "k = 7;\r\n",
-                false);
+                 false);
+    }
+
+    @Test
+    public void testDeclarationInterface() {
+        decompileMethod("classic_air", "testDeclarationInterface", "var i:MyIFace = null;\r\n"
+                + "var n:int = 2;\r\n"
+                + "switch(n)\r\n"
+                + "{\r\n"
+                + "case 0:\r\n"
+                + "i = new MyClass();\r\n"
+                + "break;\r\n"
+                + "case 1:\r\n"
+                + "i = new MyClass2();\r\n"
+                + "}\r\n"
+                + "return i;\r\n",
+                 false);
     }
 
     @Test
@@ -230,7 +382,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "var vint:int = 0;\r\n"
                 + "var vuint:uint = 0;\r\n"
                 + "var vclass:TestClass1 = null;\r\n"
-                + "var vnumber:* = NaN;\r\n"
+                + "var vnumber:Number = NaN;\r\n"
                 + "var vobject:Object = null;\r\n"
                 + "vall = 6;\r\n"
                 + "vstr = \"hello\";\r\n"
@@ -240,7 +392,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "vnumber = 0.5;\r\n"
                 + "vnumber = 6;\r\n"
                 + "vobject = vclass;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -258,7 +410,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "trace(\"4\");\r\n"
                 + "}\r\n"
                 + "trace(\"after switch\");\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -280,7 +432,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "{\r\n"
                 + "trace(\"D\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -292,7 +444,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "a++;\r\n"
                 + "}\r\n"
                 + "while(a < 20);\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -313,7 +465,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "while(k < 9);\r\n"
                 + "return 2;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -323,7 +475,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "nextChar();\r\n"
                 + "}\r\n"
                 + "while(ch != \"\\n\" && ch != \"\");\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -345,7 +497,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "while(k < 10);\r\n"
                 + "trace(\"ss\");\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -356,7 +508,15 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "trace(\"between\");\r\n"
                 + "var g:* = k.(d.attrib++, false);\r\n"
                 + "trace(\"end\");\r\n",
-                false);
+                 false);
+    }
+
+    @Test
+    public void testExecutionOrder() {
+        decompileMethod("classic_air", "testExecutionOrder", "var m:MyClass = null;\r\n"
+                + "m.x = (m = create() as MyClass).x + 5;\r\n"
+                + "trace(m.x);\r\n",
+                 false);
     }
 
     @Test
@@ -377,7 +537,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "arr[0]();\r\n"
                 + "}\r\n"
                 + "return i == 0;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -399,7 +559,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "return \"hu\" + str;\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -410,7 +570,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "trace(\"a=\" + a);\r\n"
                 + "a++;\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -421,7 +581,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "var a:int = 4;\r\n"
                 + "var b:int = 7;\r\n"
                 + "var c:int = 9;\r\n"
-                + "for(i = uint(0); i < len; x = a > 4 && b < 2 || c > 10)\r\n"
+                + "for(i = 0; i < len; x = a > 4 && b < 2 || c > 10)\r\n"
                 + "{\r\n"
                 + "c = 1;\r\n"
                 + "if(c == 2)\r\n"
@@ -436,7 +596,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "trace(\"D\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -451,7 +611,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "trace(\"hello:\" + a);\r\n"
                 + "a++;\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -480,7 +640,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "trace(\"part5\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -495,7 +655,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "{\r\n"
                 + "trace(\"item #\" + item);\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -512,7 +672,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "{\r\n"
                 + "trace(\"item #\" + test[0]);\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -526,7 +686,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "{\r\n"
                 + "trace(\"item #\" + this.testPriv);\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -544,7 +704,30 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "return item;\r\n"
                 + "}\r\n"
                 + "return null;\r\n",
-                false);
+                 false);
+    }
+
+    @Test
+    public void testForEachReturn2() {
+        decompileMethod("classic_air", "testForEachReturn2", "var obj:* = null;\r\n"
+                + "var x:int = 5;\r\n"
+                + "if(x != null)\r\n"
+                + "{\r\n"
+                + "obj = {};\r\n"
+                + "for each(var item in obj)\r\n"
+                + "{\r\n"
+                + "switch(item[\"key\"])\r\n"
+                + "{\r\n"
+                + "case 1:\r\n"
+                + "case 2:\r\n"
+                + "case 3:\r\n"
+                + "case 4:\r\n"
+                + "return item;\r\n"
+                + "}\r\n"
+                + "}\r\n"
+                + "}\r\n"
+                + "return null;\r\n",
+                 false);
     }
 
     @Test
@@ -552,7 +735,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
         decompileMethod("classic_air", "testForGoto", "var i:* = 0;\r\n"
                 + "var c:int = 0;\r\n"
                 + "var len:int = 5;\r\n"
-                + "for(i = uint(0); i < len; i++)\r\n"
+                + "for(i = 0; i < len; i++)\r\n"
                 + "{\r\n"
                 + "c = 1;\r\n"
                 + "if(c == 2)\r\n"
@@ -570,7 +753,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "trace(\"C\");\r\n"
                 + "}\r\n"
                 + "trace(\"exit\");\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -585,7 +768,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "{\r\n"
                 + "trace(item);\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -604,7 +787,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "trace(\"forend\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -618,7 +801,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "return item;\r\n"
                 + "}\r\n"
                 + "return null;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -639,7 +822,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "trace(\"final\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -672,7 +855,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "trace(\"C\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -704,7 +887,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "trace(\"after\");\r\n"
                 + "}\r\n"
                 + "return 89;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -728,7 +911,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "trace(\"E\");\r\n"
                 + "}\r\n"
                 + "return 5;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -756,7 +939,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "trace(\"C\");\r\n"
                 + "}\r\n"
                 + "trace(\"return\");\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -777,7 +960,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "}\r\n"
                 + "trace(\"return\");\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -802,7 +985,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "j++;\r\n"
                 + "}\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -827,7 +1010,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "trace(\"D\");\r\n"
                 + "}\r\n"
                 + "trace(\"finish\");\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -835,7 +1018,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
         decompileMethod("classic_air", "testGotos7", "var i:int = 0;\r\n"
                 + "for(i = 0; i < 10; i++)\r\n"
                 + "{\r\n"
-                + "switch(int(i))\r\n"
+                + "switch(i)\r\n"
                 + "{\r\n"
                 + "case 0:\r\n"
                 + "trace(\"zero\");\r\n"
@@ -857,13 +1040,13 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "trace(\"before loop end\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testHello() {
         decompileMethod("classic_air", "testHello", "trace(\"hello\");\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -873,7 +1056,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "{\r\n"
                 + "trace(\"onTrue\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -887,7 +1070,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "{\r\n"
                 + "trace(\"onFalse\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -908,7 +1091,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "trace(\"in finally\");\r\n"
                 + "}\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -932,7 +1115,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "trace(\"C\");\r\n"
                 + "return 7;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -957,7 +1140,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "{\r\n"
                 + "trace(\"in catch\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -979,14 +1162,31 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "{\r\n"
                 + "trace(\"D\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
+    }
+
+    @Test
+    public void testImplicitCoerce() {
+        decompileMethod("classic_air", "testImplicitCoerce", "var j:int = 2;\r\n"
+                + "var i:int = 5;\r\n"
+                + "var r:* = Math.random();\r\n"
+                + "if(j & Number(r == 1) && 5)\r\n"
+                + "{\r\n"
+                + "trace(\"OK\");\r\n"
+                + "}\r\n"
+                + "var s:String = \"hello: \" + r;\r\n"
+                + "if(s)\r\n"
+                + "{\r\n"
+                + "trace(\"F\");\r\n"
+                + "}\r\n",
+                 false);
     }
 
     @Test
     public void testImportedVar() {
         decompileMethod("classic_air", "testImportedVar", "trace(myvar);\r\n"
                 + "myvar = 5;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1000,7 +1200,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "b++;\r\n"
                 + "var c:int = 1;\r\n"
                 + "b = c++;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1051,7 +1251,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "trace(\"--attr\");\r\n"
                 + "trace(--attrx);\r\n"
                 + "--attrx;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1071,7 +1271,32 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "return first;\r\n"
                 + "};\r\n"
                 + "traceParameter(\"hello\");\r\n",
-                false);
+                 false);
+    }
+
+    @Test
+    public void testInlineFunctions2() {
+        decompileMethod("classic_air", "testInlineFunctions2", "var f:* = function(a:int):int\r\n"
+                + "{\r\n"
+                + "return a + 1;\r\n"
+                + "};\r\n"
+                + "var g:Function = function(a:int):int\r\n"
+                + "{\r\n"
+                + "return a + 1;\r\n"
+                + "};\r\n"
+                + "var h:Function = (function():*\r\n"
+                + "{\r\n"
+                + "var h2:Function;\r\n"
+                + "return h2 = function(a:int):int\r\n"
+                + "{\r\n"
+                + "return a + 1;\r\n"
+                + "};\r\n"
+                + "})();\r\n"
+                + "(function(a:int):int\r\n"
+                + "{\r\n"
+                + "return a + 1;\r\n"
+                + "})(1);\r\n",
+                 false);
     }
 
     @Test
@@ -1082,7 +1307,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "trace(testProm);\r\n"
                 + "};\r\n"
                 + "innerFunc(a);\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1098,7 +1323,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "s = 8;\r\n"
                 + "}\r\n"
                 + "innerFunc(a);\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1125,7 +1350,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "trace(\"b!=7\");\r\n"
                 + "}\r\n"
                 + "trace(\"end\");\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1150,7 +1375,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "{\r\n"
                 + "trace(\"finally block\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1164,20 +1389,26 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "b = true;\r\n"
                 + "}\r\n"
                 + "b = (i == 0 || i == 1) && j == 0;\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testManualConvert() {
         decompileMethod("classic_air", "testManualConvert", "trace(\"String(this).length\");\r\n"
                 + "trace(String(this).length);\r\n",
-                false);
+                 false);
+    }
+
+    @Test
+    public void testMetadata() {
+        decompileMethod("classic_air", "testMetadata", "trace(\"hello\");\r\n",
+                 false);
     }
 
     @Test
     public void testMissingDefault() {
         decompileMethod("classic_air", "testMissingDefault", "var jj:int = 1;\r\n"
-                + "switch(int(jj) - 1)\r\n"
+                + "switch(jj - 1)\r\n"
                 + "{\r\n"
                 + "case 0:\r\n"
                 + "jj = 1;\r\n"
@@ -1188,7 +1419,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "default:\r\n"
                 + "jj = 3;\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1204,20 +1435,20 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "{\r\n"
                 + "trace(\"onFalse\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testNamedAnonFunctions() {
-        decompileMethod("classic_air", "testNamedAnonFunctions", "var test:* = new function():*\r\n"
+        decompileMethod("classic_air", "testNamedAnonFunctions", "var test:* = (function():*\r\n"
                 + "{\r\n"
                 + "var testFunc:Function;\r\n"
                 + "return testFunc = function(param1:*, param2:int, param3:Array):Boolean\r\n"
                 + "{\r\n"
                 + "return (param1 as TestClass2).attrib1 == 5;\r\n"
                 + "};\r\n"
-                + "}()();\r\n",
-                false);
+                + "})();\r\n",
+                 false);
     }
 
     @Test
@@ -1227,34 +1458,140 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "var a:* = ns::unnamespacedFunc();\r\n"
                 + "var b:* = ns::[name];\r\n"
                 + "trace(b.c);\r\n"
-                + "var c:* = myInternal::neco;\r\n",
-                false);
+                + "var c:int = myInternal::neco;\r\n"
+                + "var d:int = myInternal2::neco;\r\n",
+                 false);
+    }
+
+    @Test
+    public void testNames2() {
+        decompileMethod("classic_air", "testNames2", "var j:int = 0;\r\n"
+                + "var g:Function = null;\r\n"
+                + "this.i = 0;\r\n"
+                + "i = 1;\r\n"
+                + "j = 2;\r\n"
+                + "trace(this.i);\r\n"
+                + "trace(i);\r\n"
+                + "trace(j);\r\n"
+                + "f();\r\n"
+                + "this.f();\r\n"
+                + "g();\r\n",
+                 false);
     }
 
     @Test
     public void testNegate() {
         decompileMethod("classic_air", "testNegate", "var a:int = 5;\r\n"
                 + "var b:int = ~a;\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testNumberCall() {
         decompileMethod("classic_air", "testNumberCall", "var a:String = (5).toString();\r\n"
                 + "var b:String = 5.2.toString();\r\n",
-                false);
+                 false);
+    }
+
+    @Test
+    public void testOperations() {
+        decompileMethod("classic_air", "testOperations", "var cr:MyClass = null;\r\n"
+                + "var br:* = false;\r\n"
+                + "var r:* = NaN;\r\n"
+                + "var v:* = undefined;\r\n"
+                + "var xlr:XMLList = null;\r\n"
+                + "var sr:String = null;\r\n"
+                + "var c:MyClass = new MyClass();\r\n"
+                + "var d:Dictionary = new Dictionary();\r\n"
+                + "var n1:Number = 2;\r\n"
+                + "var n2:Number = 3;\r\n"
+                + "var b1:Boolean = true;\r\n"
+                + "var b2:Boolean = false;\r\n"
+                + "var x:XML = <a>\r\n"
+                + "<b>one\r\n"
+                + "<c>\r\n"
+                + "<b>two</b>\r\n"
+                + "</c>\r\n"
+                + "</b>\r\n"
+                + "<b>three</b>\r\n"
+                + "</a>;\r\n"
+                + "var o:Object = {\r\n"
+                + "\"a\":1,\r\n"
+                + "\"b\":2\r\n"
+                + "};\r\n"
+                + "var s1:String = \"hello\";\r\n"
+                + "var s2:String = \"there\";\r\n"
+                + "r = -n1;\r\n"
+                + "r = ~n1;\r\n"
+                + "br = !b1;\r\n"
+                + "n1++;\r\n"
+                + "r = n1;\r\n"
+                + "r = n1++;\r\n"
+                + "cr = c as MyClass;\r\n"
+                + "br = \"hello\" in d;\r\n"
+                + "r = b1 ? n1 : n2;\r\n"
+                + "r = n1 << n2;\r\n"
+                + "r = n1 >> n2;\r\n"
+                + "r = n1 >>> n2;\r\n"
+                + "r = n1 & n2;\r\n"
+                + "r = n1 | n2;\r\n"
+                + "r = n1 / n2;\r\n"
+                + "r = n1 % n2;\r\n"
+                + "br = n1 == n2;\r\n"
+                + "br = n1 === n2;\r\n"
+                + "br = n1 != n2;\r\n"
+                + "br = n1 !== n2;\r\n"
+                + "br = n1 < n2;\r\n"
+                + "br = n1 <= n2;\r\n"
+                + "br = n1 > n2;\r\n"
+                + "br = n1 >= n2;\r\n"
+                + "br = b1 && b2;\r\n"
+                + "br = b1 || b2;\r\n"
+                + "r = n1 - n2;\r\n"
+                + "r = n1 * n2;\r\n"
+                + "r = n1 + n2;\r\n"
+                + "r = n1 ^ n2;\r\n"
+                + "br = c instanceof MyClass;\r\n"
+                + "br = c is MyClass;\r\n"
+                + "xlr = x..b;\r\n"
+                + "sr = s1 + s2;\r\n"
+                + "r &= n1;\r\n"
+                + "r |= n1;\r\n"
+                + "r /= n1;\r\n"
+                + "r -= n1;\r\n"
+                + "r %= n1;\r\n"
+                + "r *= n1;\r\n"
+                + "r += n1;\r\n"
+                + "r <<= n1;\r\n"
+                + "r >>= n1;\r\n"
+                + "r >>>= n1;\r\n"
+                + "r ^= n1;\r\n"
+                + "if(br)\r\n"
+                + "{\r\n"
+                + "br = b1;\r\n"
+                + "}\r\n"
+                + "if(!br)\r\n"
+                + "{\r\n"
+                + "br = b1;\r\n"
+                + "}\r\n"
+                + "sr += s1;\r\n"
+                + "delete o.a;\r\n"
+                + "\"test\" + this.f();\r\n"
+                + "v = undefined;\r\n"
+                + "sr = typeof c;\r\n",
+                 false);
     }
 
     @Test
     public void testParamNames() {
         decompileMethod("classic_air", "testParamNames", "return firstp + secondp + thirdp;\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testParamsCount() {
         decompileMethod("classic_air", "testParamsCount", "return firstp;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1271,7 +1608,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "a = 6;\r\n"
                 + "a = 0.6666666666666666;\r\n"
                 + "trace(\"a=\" + a);\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1281,34 +1618,74 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "var c:int = 3;\r\n"
                 + "var d:* = a << (b >>> c);\r\n"
                 + "var e:* = a << b >>> c;\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testProperty() {
-        decompileMethod("classic_air", "testProperty", "var d:* = new TestClass1();\r\n"
+        decompileMethod("classic_air", "testProperty", "var d:TestClass1 = new TestClass1();\r\n"
                 + "var k:int = 15;\r\n"
                 + "if(k == 15)\r\n"
                 + "{\r\n"
                 + "d.method(d.attrib * 5);\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testRegExp() {
-        decompileMethod("classic_air", "testRegExp", "var a1:* = /[a-z\\r\\n0-9\\\\]+/i;\r\n"
+        decompileMethod("classic_air", "testRegExp", "var r:Number = NaN;\r\n"
+                + "var a1:* = /[a-z\\r\\n0-9\\\\]+/i;\r\n"
                 + "var a2:* = /[a-z\\r\\n0-9\\\\]+/i;\r\n"
                 + "var b1:* = /[0-9AB]+/;\r\n"
-                + "var b2:* = /[0-9AB]+/;\r\n",
-                false);
+                + "var b2:* = /[0-9AB]+/;\r\n"
+                + "var n1:Number = 5;\r\n"
+                + "var n2:Number = 2;\r\n"
+                + "var n3:Number = 1;\r\n"
+                + "trace(\"not a regexp 1\");\r\n"
+                + "r = n1 / n2 / n3;\r\n"
+                + "trace(\"not a regexp 2\");\r\n"
+                + "r /= n1 / n2;\r\n",
+                 false);
     }
 
     @Test
     public void testRest() {
         decompileMethod("classic_air", "testRest", "trace(\"firstRest:\" + restval[0]);\r\n"
                 + "return firstp;\r\n",
-                false);
+                 false);
+    }
+
+    @Test
+    public void testSlots() {
+        decompileMethod("classic_air", "testSlots", "var i:int = 1;\r\n"
+                + "var f:Function = function():void\r\n"
+                + "{\r\n"
+                + "trace(\"hello\");\r\n"
+                + "};\r\n"
+                + "i = 0;\r\n"
+                + "trace(i++);\r\n"
+                + "trace(i--);\r\n"
+                + "trace(++i);\r\n"
+                + "trace(--i);\r\n",
+                 false);
+    }
+
+    @Test
+    public void testSlots2() {
+        decompileMethod("classic_air", "testSlots2", "var f:Function = function():void\r\n"
+                + "{\r\n"
+                + "var n:int = 0;\r\n"
+                + "try\r\n"
+                + "{\r\n"
+                + "trace(\"intry\");\r\n"
+                + "}\r\n"
+                + "catch(e:Error)\r\n"
+                + "{\r\n"
+                + "n = 1;\r\n"
+                + "}\r\n"
+                + "};\r\n",
+                 false);
     }
 
     @Test
@@ -1318,7 +1695,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "{\r\n"
                 + "trace(\"is eight\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1327,7 +1704,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "this.traceIt(\"hello30\");\r\n"
                 + "this.traceIt(\"hello\" + (k - 1));\r\n"
                 + "this.traceIt(\"hello56\");\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1337,7 +1714,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "trace(\"backslash: \\\\ \");\r\n"
                 + "trace(\"single quotes: \\'hello!\\'\");\r\n"
                 + "trace(\"new line \\r\\n hello!\");\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1356,7 +1733,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "case 89:\r\n"
                 + "trace(\"eightynine\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1373,7 +1750,35 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "case \"C\":\r\n"
                 + "trace(\"is C\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
+    }
+
+    @Test
+    public void testSwitchContinue() {
+        decompileMethod("classic_air", "testSwitchContinue", "var i:int = 0;\r\n"
+                + "var r:int = Math.random() % 10;\r\n"
+                + "if(r > 5)\r\n"
+                + "{\r\n"
+                + "for(i = 0; i < 10; i++)\r\n"
+                + "{\r\n"
+                + "switch(i)\r\n"
+                + "{\r\n"
+                + "case 0:\r\n"
+                + "trace(\"hello\");\r\n"
+                + "break;\r\n"
+                + "case 1:\r\n"
+                + "trace(\"hi\");\r\n"
+                + "break;\r\n"
+                + "case 2:\r\n"
+                + "trace(\"howdy\");\r\n"
+                + "break;\r\n"
+                + "default:\r\n"
+                + "continue;\r\n"
+                + "}\r\n"
+                + "trace(\"message shown\");\r\n"
+                + "}\r\n"
+                + "}\r\n",
+                 false);
     }
 
     @Test
@@ -1395,7 +1800,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "default:\r\n"
                 + "trace(\"default clause\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1405,16 +1810,16 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "switch(int(code) - 2)\r\n"
                 + "{\r\n"
                 + "case 0:\r\n"
+                + "case 1:\r\n"
                 + "if(a)\r\n"
                 + "{\r\n"
                 + "trace(\"A\");\r\n"
                 + "break;\r\n"
                 + "}\r\n"
                 + "break;\r\n"
-                + "case 1:\r\n"
                 + "}\r\n"
                 + "trace(\"B\");\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1425,7 +1830,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "var d:int = 78;\r\n"
                 + "var e:* = a == b ? (c == d ? 1 : 7) : 3;\r\n"
                 + "trace(\"e=\" + e);\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1450,7 +1855,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "trace(\"Finally part\");\r\n"
                 + "}\r\n"
                 + "trace(\"end\");\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1468,7 +1873,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "{\r\n"
                 + "trace(\"in catch\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1496,7 +1901,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "{\r\n"
                 + "return 4;\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1538,13 +1943,34 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "trace(\"after\");\r\n"
                 + "return \"X\";\r\n",
-                false);
+                 false);
+    }
+
+    @Test
+    public void testUndefined() {
+        decompileMethod("classic_air", "testUndefined", "var i:int;\r\n"
+                + "var j:int;\r\n"
+                + "var c:int;\r\n"
+                + "var f:Function;\r\n"
+                + "c = 5 + i;\r\n"
+                + "f = function():void\r\n"
+                + "{\r\n"
+                + "trace(c);\r\n"
+                + "trace(j);\r\n"
+                + "};\r\n"
+                + "while(i < 10)\r\n"
+                + "{\r\n"
+                + "trace(i);\r\n"
+                + "i++;\r\n"
+                + "}\r\n"
+                + "f();\r\n",
+                 false);
     }
 
     @Test
     public void testUsagesTry() {
         decompileMethod("classic_air", "testUsagesTry", "var k:int = 5;\r\n"
-                + "switch(int(k))\r\n"
+                + "switch(k)\r\n"
                 + "{\r\n"
                 + "case 0:\r\n"
                 + "trace(\"1\");\r\n"
@@ -1572,7 +1998,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "trace(\"after\");\r\n"
                 + "return \"X\";\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1583,14 +2009,14 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "var a:int = 5;\r\n"
                 + "v[a * 8 - 39] = \"hi2\";\r\n"
                 + "trace(v[0]);\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testVector2() {
         decompileMethod("classic_air", "testVector2", "var a:Vector.<Vector.<int>> = new Vector.<Vector.<int>>();\r\n"
                 + "var b:Vector.<int> = new <int>[10,20,30];\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1604,7 +2030,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "a = 7;\r\n"
                 + "b = 9;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1623,7 +2049,58 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "}\r\n"
                 + "return \"B\";\r\n",
-                false);
+                 false);
+    }
+
+    @Test
+    public void testWhileBreak2() {
+        decompileMethod("classic_air", "testWhileBreak2", "var k:int = 8;\r\n"
+                + "while(true)\r\n"
+                + "{\r\n"
+                + "trace(\"X\");\r\n"
+                + "if(k == 1)\r\n"
+                + "{\r\n"
+                + "trace(\"A\");\r\n"
+                + "return;\r\n"
+                + "}\r\n"
+                + "trace(\"Y\");\r\n"
+                + "if(k < 10)\r\n"
+                + "{\r\n"
+                + "trace(\"k1\");\r\n"
+                + "if(k == 2)\r\n"
+                + "{\r\n"
+                + "trace(\"B\");\r\n"
+                + "if(k > 1)\r\n"
+                + "{\r\n"
+                + "trace(\"B1\");\r\n"
+                + "break;\r\n"
+                + "}\r\n"
+                + "trace(\"B2\");\r\n"
+                + "}\r\n"
+                + "trace(\"Z\");\r\n"
+                + "if(k == 3)\r\n"
+                + "{\r\n"
+                + "trace(\"C\");\r\n"
+                + "break;\r\n"
+                + "}\r\n"
+                + "trace(\"Z2\");\r\n"
+                + "if(k == 4)\r\n"
+                + "{\r\n"
+                + "trace(\"D\");\r\n"
+                + "break;\r\n"
+                + "}\r\n"
+                + "trace(\"k2\");\r\n"
+                + "}\r\n"
+                + "trace(\"E\");\r\n"
+                + "if(k == 2)\r\n"
+                + "{\r\n"
+                + "trace(\"E1\");\r\n"
+                + "return;\r\n"
+                + "}\r\n"
+                + "trace(\"gg\");\r\n"
+                + "}\r\n"
+                + "trace(\"ss\");\r\n",
+                 false);
     }
 
     @Test
@@ -1645,7 +2122,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "}\r\n"
                 + "trace(\"hello2\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1668,7 +2145,7 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "continue;\r\n"
                 + "}\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -1696,21 +2173,24 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "trace(\"after_try\");\r\n"
                 + "}\r\n"
                 + "trace(\"end\");\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testXml() {
         decompileMethod("classic_air", "testXml", "var name:String = \"ahoj\";\r\n"
-                + "var myXML:XML = <order id=\"604\">\r\n"
+                + "var myXML:XML;\r\n"
+                + "var k:* = (myXML = <order id=\"604\">\r\n"
                 + "<book isbn=\"12345\">\r\n"
                 + "<title>{name}</title>\r\n"
                 + "</book>\r\n"
-                + "</order>;\r\n"
-                + "var k:* = myXML.@id;\r\n"
+                + "</order>).@id;\r\n"
                 + "var all:String = myXML.@*.toXMLString();\r\n"
                 + "k = myXML.book;\r\n"
                 + "k = myXML.book.(@isbn == \"12345\");\r\n"
+                + "var list:Vector.<int> = new Vector.<int>();\r\n"
+                + "var i:int = Math.random();\r\n"
+                + "list[i] = myXML.book.(@isbn == i + 1);\r\n"
                 + "var g:XML = <script>\r\n"
                 + "<![CDATA[\r\n"
                 + "function() {\r\n"
@@ -1817,7 +2297,25 @@ public class ActionScript3ClassicAirDecompileTest extends ActionScript3Decompile
                 + "here some code;\r\n"
                 + "}\r\n"
                 + "]]>;\r\n"
-                + "var testComment:XML = <!-- myXML comment-->;\r\n",
-                false);
+                + "var testComment:XML = <!-- myXML comment-->;\r\n"
+                + "var xtaga:String = \"a\";\r\n"
+                + "var xtagb:String = \"b\";\r\n"
+                + "var xattrname:String = \"attr\";\r\n"
+                + "var xattrval:String = \"value\";\r\n"
+                + "var xcontent:String = \"content\";\r\n"
+                + "var xxx:XML = <{xtaga} >\r\n"
+                + "<{xtagb} >\r\n"
+                + "<ul>\r\n"
+                + "<li>Item 1</li>\r\n"
+                + "<li  {xattrname}=\"val\" attr2={xattrval}>Item 2: {xcontent}</li>\r\n"
+                + "<?processinstr testvalue ?>\r\n"
+                + "<!--\r\n"
+                + "comment\r\n"
+                + "-->\r\n"
+                + "</ul>\r\n"
+                + "</{xtagb} >\r\n"
+                + "</{xtaga} >\r\n"
+                + ";\r\n",
+                 false);
     }
 }

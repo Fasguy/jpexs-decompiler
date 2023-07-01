@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -25,7 +25,6 @@ import com.jpexs.decompiler.graph.CompilationException;
 import com.jpexs.decompiler.graph.GraphSourceItem;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.SourceGenerator;
-import com.jpexs.decompiler.graph.TypeItem;
 import com.jpexs.decompiler.graph.model.LocalData;
 import java.util.List;
 import java.util.Set;
@@ -40,11 +39,13 @@ public class LocalRegAVM2Item extends AVM2Item {
 
     public GraphTargetItem computedValue;
 
+    public GraphTargetItem type;
+    
     private final Object computedResult;
 
-    private boolean isCT = false;
+    private boolean isCT = false;        
 
-    public LocalRegAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, int regIndex, GraphTargetItem computedValue) {
+    public LocalRegAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, int regIndex, GraphTargetItem computedValue, GraphTargetItem type) {
         super(instruction, lineStartIns, PRECEDENCE_PRIMARY);
         this.regIndex = regIndex;
         if (computedValue == null) {
@@ -56,6 +57,7 @@ public class LocalRegAVM2Item extends AVM2Item {
             computedResult = null;
         }
         this.computedValue = computedValue;
+        this.type = type;
     }
 
     @Override
@@ -131,7 +133,7 @@ public class LocalRegAVM2Item extends AVM2Item {
 
     @Override
     public GraphTargetItem returnType() {
-        return TypeItem.UNBOUNDED;
+        return type;
     }
 
     @Override

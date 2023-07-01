@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -67,12 +67,20 @@ public class BooleanEditor extends JCheckBox implements GenericTagEditor {
     }
 
     @Override
-    public void save() {
+    public boolean save() {        
         try {
+            boolean oldValue = (boolean) ReflectionTools.getValue(obj, field, index);
+            boolean newValue = isSelected();
+            
+            if (oldValue == newValue) {
+                return false;
+            }
+            
             ReflectionTools.setValue(obj, field, index, isSelected());
         } catch (IllegalArgumentException | IllegalAccessException ex) {
             // ignore
         }
+        return true;
     }
 
     @Override

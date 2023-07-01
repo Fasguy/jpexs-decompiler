@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -202,6 +202,7 @@ import com.jpexs.decompiler.flash.tags.Tag;
 import com.jpexs.decompiler.flash.tags.TagStub;
 import com.jpexs.decompiler.flash.tags.UnknownTag;
 import com.jpexs.decompiler.flash.tags.VideoFrameTag;
+import com.jpexs.decompiler.flash.tags.base.ButtonTag;
 import com.jpexs.decompiler.flash.tags.gfx.DefineCompactedFont;
 import com.jpexs.decompiler.flash.tags.gfx.DefineExternalGradient;
 import com.jpexs.decompiler.flash.tags.gfx.DefineExternalImage;
@@ -282,7 +283,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -318,6 +318,17 @@ public class SWFInputStream implements AutoCloseable {
 
     public DumpInfo dumpInfo;
 
+    private byte[] data;
+
+    private int limit;
+
+    public String getCharset() {
+        if (swf == null) {
+            return Utf8Helper.charsetName;
+        }
+        return swf.getCharset();
+    }
+    
     public void addPercentListener(ProgressListener listener) {
         listeners.add(listener);
     }
@@ -357,6 +368,8 @@ public class SWFInputStream implements AutoCloseable {
     public SWFInputStream(SWF swf, byte[] data, long startingPos, int limit) throws IOException {
         this.swf = swf;
         this.startingPos = startingPos;
+        this.data = data;
+        this.limit = limit;       
         is = new MemoryInputStream(data, 0, limit);
     }
 
@@ -495,12 +508,12 @@ public class SWFInputStream implements AutoCloseable {
             r = readEx();
             if (r == 0) {
                 endDumpLevel();
-                return new String(baos.toByteArray(), Utf8Helper.charset);
+                return new String(baos.toByteArray(), swf == null ? Utf8Helper.charsetName : swf.getCharset());
             }
             baos.write(r);
         }
     }
-
+    
     /**
      * Reads one netstring (length + string) value from the stream
      *
@@ -511,23 +524,7 @@ public class SWFInputStream implements AutoCloseable {
     public String readNetString(String name) throws IOException {
         newDumpLevel(name, "string");
         int length = readEx();
-        String ret = new String(readBytesInternalEx(length));
-        endDumpLevel();
-        return ret;
-    }
-
-    /**
-     * Reads one netstring (length + string) value from the stream
-     *
-     * @param name
-     * @param charset
-     * @return String value
-     * @throws IOException
-     */
-    public String readNetString(String name, Charset charset) throws IOException {
-        newDumpLevel(name, "string");
-        int length = readEx();
-        String ret = new String(readBytesInternalEx(length), charset);
+        String ret = new String(readBytesInternalEx(length), swf.getCharset());
         endDumpLevel();
         return ret;
     }
@@ -553,7 +550,7 @@ public class SWFInputStream implements AutoCloseable {
      * @throws IOException
      */
     private long readUI32Internal() throws IOException {
-        return (readEx() + (readEx() << 8) + (readEx() << 16) + (readEx() << 24)) & 0xffffffff;
+        return (readEx() + (readEx() << 8) + (readEx() << 16) + (readEx() << 24)) & 0xffffffffL;
     }
 
     /**
@@ -596,14 +593,19 @@ public class SWFInputStream implements AutoCloseable {
      */
     public long readSI32(String name) throws IOException {
         newDumpLevel(name, "SI32");
-        long uval = readEx() + (readEx() << 8) + (readEx() << 16) + (readEx() << 24);
-        if (uval >= 0x80000000) {
-            uval = -(((~uval) & 0xffffffff) + 1);
-        }
+        long uval = readSI32Internal();
         endDumpLevel(uval);
         return uval;
     }
 
+    private long readSI32Internal() throws IOException {
+        long uval = readEx() + (readEx() << 8) + (readEx() << 16) + (readEx() << 24);
+        if (uval >= 0x80000000) {
+            uval = -(((~uval) & 0xffffffff) + 1);
+        }
+        return uval;
+    }
+    
     /**
      * Reads one SI16 (Signed 16bit integer) value from the stream
      *
@@ -613,11 +615,16 @@ public class SWFInputStream implements AutoCloseable {
      */
     public int readSI16(String name) throws IOException {
         newDumpLevel(name, "SI16");
+        int uval = readSI16Internal();
+        endDumpLevel(uval);
+        return uval;
+    }
+    
+    private int readSI16Internal() throws IOException {
         int uval = readEx() + (readEx() << 8);
         if (uval >= 0x8000) {
             uval = -(((~uval) & 0xffff) + 1);
         }
-        endDumpLevel(uval);
         return uval;
     }
 
@@ -658,9 +665,8 @@ public class SWFInputStream implements AutoCloseable {
      */
     public double readFIXED(String name) throws IOException {
         newDumpLevel(name, "FIXED");
-        int afterPoint = readUI16Internal();
-        int beforePoint = readUI16Internal();
-        double ret = beforePoint + ((double) (afterPoint)) / 65536;
+        long si = readSI32Internal();
+        double ret = si / (double)(1 << 16);
         endDumpLevel(ret);
         return ret;
     }
@@ -674,9 +680,8 @@ public class SWFInputStream implements AutoCloseable {
      */
     public float readFIXED8(String name) throws IOException {
         newDumpLevel(name, "FIXED8");
-        int afterPoint = readEx();
-        int beforePoint = readSI8Internal();
-        float ret = beforePoint + ((float) afterPoint) / 256;
+        int si = readSI16Internal();
+        float ret = si / (float)(1 << 8);
         endDumpLevel(ret);
         return ret;
     }
@@ -809,10 +814,10 @@ public class SWFInputStream implements AutoCloseable {
 
         newDumpLevel(name, "bytes", specialType, specialValue);
 
-        int startPos = (int) getPos();
+        int startPos = (int) is.getPos();
         skipBytesEx(count);
         endDumpLevel();
-        return new ByteArrayRange(swf.uncompressedData, startPos, (int) count);
+        return new ByteArrayRange(data, startPos, (int) count);
     }
 
     /**
@@ -1155,7 +1160,7 @@ public class SWFInputStream implements AutoCloseable {
         public Tag call() throws Exception {
             DumpInfo di = dumpInfo;
             try {
-                Tag t = resolveTag(tag, level, parallel, skipUnusualTags, lazy);
+                Tag t = resolveTag(tag, level, parallel, skipUnusualTags, lazy, true);
                 if (dumpInfo != null && t != null) {
                     dumpInfo.name = t.getName();
                 }
@@ -1196,7 +1201,6 @@ public class SWFInputStream implements AutoCloseable {
         }
         List<Tag> tags = new ArrayList<>();
         Tag tag;
-        boolean isAS3 = false;
         while (available() > 0) {
             long pos = getPos();
             newDumpLevel(null, "TAG", DumpInfoSpecialType.TAG, getPos());
@@ -1207,52 +1211,9 @@ public class SWFInputStream implements AutoCloseable {
             }
 
             boolean doParse = true;
-            if (!skipUnusualTags) {
-                doParse = true;
-            } else if (tag != null) {
-                switch (tag.getId()) {
-                    case FileAttributesTag.ID: // FileAttributes
-                        if (tag instanceof TagStub) {
-                            tag = resolveTag((TagStub) tag, level, parallel1, skipUnusualTags, lazy);
-                        }
-                        FileAttributesTag fileAttributes = (FileAttributesTag) tag;
-                        if (fileAttributes.actionScript3) {
-                            isAS3 = true;
-                        }
-                        doParse = true;
-                        break;
-                    case DoActionTag.ID:
-                    case DoInitActionTag.ID:
-                        doParse = !isAS3;
-                        break;
-                    case ShowFrameTag.ID:
-                    case PlaceObjectTag.ID:
-                    case PlaceObject2Tag.ID:
-                    case RemoveObjectTag.ID:
-                    case RemoveObject2Tag.ID:
-                    case PlaceObject3Tag.ID: // ?
-                    case StartSoundTag.ID:
-                    case FrameLabelTag.ID:
-                    case SoundStreamHeadTag.ID:
-                    case SoundStreamHead2Tag.ID:
-                    case SoundStreamBlockTag.ID:
-                    case VideoFrameTag.ID:
-                    case EndTag.ID:
-                        doParse = true;
-                        break;
-                    default:
-                        if (level > 0) { //No such tags in DefineSprite allowed
-                            logger.log(Level.FINE, "Tag({0}) found in DefineSprite => Ignored", tag.getId());
-                            doParse = false;
-                        } else {
-                            doParse = true;
-                        }
-
-                }
-            }
 
             if (parseTags && !parallel1 && doParse && (tag instanceof TagStub)) {
-                tag = resolveTag((TagStub) tag, level, parallel, skipUnusualTags, lazy);
+                tag = resolveTag((TagStub) tag, level, parallel, skipUnusualTags, lazy, true);
             }
             DumpInfo di = dumpInfo;
             if (di != null && tag != null) {
@@ -1307,7 +1268,7 @@ public class SWFInputStream implements AutoCloseable {
         return tags;
     }
 
-    public static Tag resolveTag(TagStub tag, int level, boolean parallel, boolean skipUnusualTags, boolean lazy) throws InterruptedException {
+    public static Tag resolveTag(TagStub tag, int level, boolean parallel, boolean skipUnusualTags, boolean lazy, boolean logErrors) throws InterruptedException {
         Tag ret;
 
         ByteArrayRange data = tag.getOriginalRange();
@@ -1603,8 +1564,10 @@ public class SWFInputStream implements AutoCloseable {
                 ret.remainingData = sis.readByteRangeEx(sis.available(), "remaining");
             }
         } catch (IOException ex) {
-            logger.log(Level.SEVERE, "Error during tag reading. SWF: " + swf.getShortFileName() + " ID: " + tag.getId() + " name: " + tag.getName() + " pos: " + data.getPos(), ex);
-            ret = new TagStub(swf, tag.getId(), "ErrorTag", data, null);
+            if (logErrors) {
+                logger.log(Level.SEVERE, "Error during tag reading. SWF: " + swf.getTitleOrShortFileName() + " ID: " + tag.getId() + " name: " + tag.getName() + " pos: " + data.getPos(), ex);
+            }
+            ret = new TagStub(swf, tag.getId(), "Error", data, null);
         }
         ret.forceWriteAsLong = tag.forceWriteAsLong;
         ret.setTimelined(tag.getTimelined());
@@ -1645,7 +1608,7 @@ public class SWFInputStream implements AutoCloseable {
             tagLength = available;
         }
 
-        ByteArrayRange dataRange = new ByteArrayRange(swf.uncompressedData, (int) pos, (int) (tagLength + headerLength));
+        ByteArrayRange dataRange = new ByteArrayRange(this.data, (int) pos, (int) (tagLength + headerLength));
         skipBytes(tagLength);
 
         TagStub tagStub = new TagStub(swf, tagID, "Unresolved", dataRange, tagDataStream);
@@ -1659,7 +1622,7 @@ public class SWFInputStream implements AutoCloseable {
         if (resolve) {
             DumpInfo di = dumpInfo;
             try {
-                ret = resolveTag(tagStub, level, parallel, skipUnusualTags, lazy);
+                ret = resolveTag(tagStub, level, parallel, skipUnusualTags, lazy, true);
             } catch (Exception ex) {
                 tagDataStream.endDumpLevelUntil(di);
                 logger.log(Level.SEVERE, "Problem in " + timelined.toString(), ex);
@@ -1715,7 +1678,7 @@ public class SWFInputStream implements AutoCloseable {
         try {
             actionCode = readUI8("actionCode");
             if (actionCode == 0) {
-                return new ActionEnd();
+                return new ActionEnd(getCharset());
             }
             if (actionCode == -1) {
                 return null;
@@ -1762,7 +1725,7 @@ public class SWFInputStream implements AutoCloseable {
                 case 0x0D:
                     return new ActionDivide();
                 case 0x0E:
-                    return new ActionEquals();
+                    return new ActionEquals(getCharset());
                 case 0x0F:
                     return new ActionLess();
                 case 0x10:
@@ -1800,17 +1763,17 @@ public class SWFInputStream implements AutoCloseable {
                 case 0x9D:
                     return new ActionIf(actionLength, this);
                 case 0x9E:
-                    return new ActionCall(actionLength);
+                    return new ActionCall(actionLength, getCharset());
                 case 0x1C:
                     return new ActionGetVariable();
                 case 0x1D:
                     return new ActionSetVariable();
                 case 0x9A:
-                    return new ActionGetURL2(actionLength, this);
+                    return new ActionGetURL2(actionLength, this, getCharset());
                 case 0x9F:
                     return new ActionGotoFrame2(actionLength, this);
                 case 0x20:
-                    return new ActionSetTarget2();
+                    return new ActionSetTarget2(getCharset());
                 case 0x22:
                     return new ActionGetProperty();
                 case 0x23:
@@ -1897,11 +1860,11 @@ public class SWFInputStream implements AutoCloseable {
                 case 0x50:
                     return new ActionIncrement();
                 case 0x4C:
-                    return new ActionPushDuplicate();
+                    return new ActionPushDuplicate(getCharset());
                 case 0x3E:
                     return new ActionReturn();
                 case 0x4D:
-                    return new ActionStackSwap();
+                    return new ActionStackSwap(getCharset());
                 case 0x87:
                     return new ActionStoreRegister(actionLength, this);
                 // SWF6 Actions
@@ -1919,11 +1882,11 @@ public class SWFInputStream implements AutoCloseable {
                 case 0x8E:
                     return new ActionDefineFunction2(actionLength, this, swf.version);
                 case 0x69:
-                    return new ActionExtends();
+                    return new ActionExtends(getCharset());
                 case 0x2B:
                     return new ActionCastOp();
                 case 0x2C:
-                    return new ActionImplementsOp();
+                    return new ActionImplementsOp(getCharset());
                 case 0x8F:
                     return new ActionTry(actionLength, this, swf.version);
                 case 0x2A:
@@ -1933,7 +1896,7 @@ public class SWFInputStream implements AutoCloseable {
                      //skip(actionLength);
                      }*/
                     //throw new UnknownActionException(actionCode);
-                    Action r = new ActionUnknown(actionCode, actionLength);
+                    Action r = new ActionUnknown(actionCode, actionLength, getCharset());
                     if (Configuration.useDetailedLogging.get()) {
                         logger.log(Level.SEVERE, "Unknown action code: {0}", actionCode);
                     }
@@ -2063,7 +2026,7 @@ public class SWFInputStream implements AutoCloseable {
         ret.clipEventPress = readUB(1, "clipEventPress") == 1;
         ret.clipEventInitialize = readUB(1, "clipEventInitialize") == 1;
         ret.clipEventData = readUB(1, "clipEventData") == 1;
-        if (swf.version >= 6) {
+        if (swf.version >= 6 && available() > 0) {
             ret.reserved = (int) readUB(5, "reserved");
             ret.clipEventConstruct = readUB(1, "clipEventConstruct") == 1;
             ret.clipEventKeyPress = readUB(1, "clipEventKeyPress") == 1;
@@ -2485,17 +2448,17 @@ public class SWFInputStream implements AutoCloseable {
     /**
      * Reads list of BUTTONRECORD values from the stream
      *
-     * @param inDefineButton2 Whether read from inside of DefineButton2Tag or
-     * not
+     * @param swf
+     * @param buttonTag
      * @param name
      * @return List of BUTTONRECORD values
      * @throws IOException
      */
-    public List<BUTTONRECORD> readBUTTONRECORDList(boolean inDefineButton2, String name) throws IOException {
+    public List<BUTTONRECORD> readBUTTONRECORDList(SWF swf, ButtonTag buttonTag, String name) throws IOException {
         List<BUTTONRECORD> ret = new ArrayList<>();
         newDumpLevel(name, "BUTTONRECORDList");
         BUTTONRECORD br;
-        while ((br = readBUTTONRECORD(inDefineButton2, "record")) != null) {
+        while ((br = readBUTTONRECORD(swf, buttonTag, "record")) != null) {
             ret.add(br);
         }
         endDumpLevel();
@@ -2505,13 +2468,14 @@ public class SWFInputStream implements AutoCloseable {
     /**
      * Reads one BUTTONRECORD value from the stream
      *
-     * @param inDefineButton2 True when in DefineButton2
+     * @param swf
+     * @param tag
      * @param name
      * @return BUTTONRECORD value
      * @throws IOException
      */
-    public BUTTONRECORD readBUTTONRECORD(boolean inDefineButton2, String name) throws IOException {
-        BUTTONRECORD ret = new BUTTONRECORD();
+    public BUTTONRECORD readBUTTONRECORD(SWF swf, ButtonTag tag, String name) throws IOException {
+        BUTTONRECORD ret = new BUTTONRECORD(swf, tag);
         newDumpLevel(name, "BUTTONRECORD");
         ret.reserved = (int) readUB(2, "reserved");
         ret.buttonHasBlendMode = readUB(1, "buttonHasBlendMode") == 1;
@@ -2531,7 +2495,7 @@ public class SWFInputStream implements AutoCloseable {
         ret.characterId = readUI16("characterId");
         ret.placeDepth = readUI16("placeDepth");
         ret.placeMatrix = readMatrix("placeMatrix");
-        if (inDefineButton2) {
+        if (tag instanceof DefineButton2Tag) {
             ret.colorTransform = readCXFORMWITHALPHA("colorTransform");
             if (ret.buttonHasFilterList) {
                 ret.filterList = readFILTERLIST("filterList");
@@ -2793,9 +2757,9 @@ public class SWFInputStream implements AutoCloseable {
                 ret.lineStyles[i] = readLINESTYLE(shapeNum, "lineStyle");
             }
         } else {
-            ret.lineStyles = new LINESTYLE2[lineStyleCount];
+            ret.lineStyles2 = new LINESTYLE2[lineStyleCount];
             for (int i = 0; i < lineStyleCount; i++) {
-                ret.lineStyles[i] = readLINESTYLE2(shapeNum, "lineStyle");
+                ret.lineStyles2[i] = readLINESTYLE2(shapeNum, "lineStyle");
             }
         }
         endDumpLevel();

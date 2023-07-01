@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -30,7 +30,7 @@ import java.util.List;
  *
  * @author JPEXS
  */
-public class AndItem extends BinaryOpItem {
+public class AndItem extends BinaryOpItem implements CompoundableBinaryOp {
 
     @Override
     public List<GraphSourceItemPos> getNeededSources() {

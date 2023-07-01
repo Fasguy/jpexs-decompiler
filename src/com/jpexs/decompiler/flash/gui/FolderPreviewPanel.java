@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -44,13 +44,20 @@ import java.awt.event.MouseEvent;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.SwingUtilities;
+import javax.swing.tree.TreePath;
 import org.pushingpixels.substance.api.ColorSchemeAssociationKind;
 import org.pushingpixels.substance.api.ComponentState;
 import org.pushingpixels.substance.api.DecorationAreaType;
@@ -71,13 +78,11 @@ public class FolderPreviewPanel extends JPanel {
 
     private boolean repaintQueued;
 
-    private int lastWidth;
-
-    private int lastHeight;
-
-    public Map<Integer, TreeItem> selectedItems = new HashMap<>();
+    private Map<Integer, TreeItem> selectedItems = new TreeMap<>();
 
     private Cache<Integer, SerializableImage> cachedPreviews;
+    
+    private MainPanel mainPanel;
 
     private static final int PREVIEW_SIZE = 150;
 
@@ -98,20 +103,22 @@ public class FolderPreviewPanel extends JPanel {
 
     public FolderPreviewPanel(final MainPanel mainPanel, List<TreeItem> items) {
         this.items = items;
-        cachedPreviews = Cache.getInstance(false, false, "preview");
+        this.mainPanel = mainPanel;
+        cachedPreviews = Cache.getInstance(false, false, "preview", true);
 
         addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() > 1) {
                     if (selectedIndex > -1) {
-                        mainPanel.setTagTreeSelectedNode(FolderPreviewPanel.this.items.get(selectedIndex));
+                        mainPanel.setTagTreeSelectedNode(mainPanel.getCurrentTree(), FolderPreviewPanel.this.items.get(selectedIndex));
                     }
                 }
             }
 
             @Override
             public void mousePressed(MouseEvent e) {
+                requestFocusInWindow();
                 int width = getWidth();
 
                 int cols = width / CELL_WIDTH;
@@ -123,7 +130,7 @@ public class FolderPreviewPanel extends JPanel {
                     return;
                 }
 
-                if (e.getButton() == MouseEvent.BUTTON1 || selectedItems.isEmpty()) {
+                if (SwingUtilities.isLeftMouseButton(e) || selectedItems.isEmpty()) {
                     if (!e.isControlDown()) {
                         selectedItems.clear();
                     }
@@ -148,13 +155,14 @@ public class FolderPreviewPanel extends JPanel {
                     }
                 }
 
-                if (e.getButton() == MouseEvent.BUTTON3) {
-                    mainPanel.tagTree.contextPopupMenu.update(new ArrayList<>(selectedItems.values()));
-                    mainPanel.tagTree.contextPopupMenu.show(FolderPreviewPanel.this, e.getX(), e.getY());
+                if (SwingUtilities.isRightMouseButton(e)) {
+                    mainPanel.getContextPopupMenu().update(getSelectedItemsSorted());
+                    mainPanel.getContextPopupMenu().show(FolderPreviewPanel.this, e.getX(), e.getY());
                 }
                 repaint();
             }
         });
+        setFocusable(true);
     }
 
     public synchronized void setItems(List<TreeItem> items) {
@@ -166,6 +174,7 @@ public class FolderPreviewPanel extends JPanel {
         repaint();
         selectedItems.clear();
         selectedIndex = -1;
+        ((JScrollPane)getParent().getParent()).getVerticalScrollBar().setValue(0);
     }
 
     public void clear() {
@@ -178,11 +187,12 @@ public class FolderPreviewPanel extends JPanel {
 
     @Override
     public Dimension getPreferredSize() {
-        int width = getParent().getSize().width - 20;
+        int width = getParent().getSize().width - 1;
         int cols = width / CELL_WIDTH;
         int rows = (int) Math.ceil(items.size() / (float) cols);
         int height = rows * CELL_HEIGHT;
-        return new Dimension(width, height);
+        int prefWidth = cols * CELL_WIDTH;
+        return new Dimension(prefWidth, height);
     }
 
     @Override
@@ -191,11 +201,7 @@ public class FolderPreviewPanel extends JPanel {
         repaintQueued = false;
         Rectangle r = getVisibleRect();
         int width = getWidth();
-
         int cols = width / CELL_WIDTH;
-        int rows = (int) Math.ceil(items.size() / (float) cols);
-        int height = rows * CELL_HEIGHT;
-
         int start_y = r.y / CELL_HEIGHT;
         JLabel l = new JLabel();
         Font f = l.getFont().deriveFont(AffineTransform.getScaleInstance(0.8, 0.8));
@@ -251,6 +257,12 @@ public class FolderPreviewPanel extends JPanel {
                     } else {
                         s = treeItem.toString();
                     }
+                    
+                    int itemIndex = mainPanel.getCurrentTree().getFullModel().getItemIndex(treeItem);
+                    if (itemIndex > 1) {
+                        s += " [" + itemIndex + "]";
+                    }
+                    
                     g.setFont(f);
                     g.setColor(borderColor);
                     g.drawLine(x * CELL_WIDTH, y * CELL_HEIGHT + BORDER_SIZE + PREVIEW_SIZE, x * CELL_WIDTH + CELL_WIDTH, y * CELL_HEIGHT + BORDER_SIZE + PREVIEW_SIZE);
@@ -264,17 +276,11 @@ public class FolderPreviewPanel extends JPanel {
                 }
             }
         }
-
-        if (lastWidth != width || lastHeight != height) {
-            lastWidth = width;
-            lastHeight = height;
-            setSize(new Dimension(width, height));
-        }
     }
 
     private synchronized void renderImageTask(final int index, final TreeItem treeItem) {
         executor.submit(() -> {
-            cachedPreviews.put(index, renderImage(treeItem.getSwf(), treeItem));
+            cachedPreviews.put(index, renderImage((SWF)treeItem.getOpenable(), treeItem));
             if (!repaintQueued) {
                 repaintQueued = true;
                 View.execInEventDispatchLater(() -> {
@@ -316,7 +322,7 @@ public class FolderPreviewPanel extends JPanel {
             String key = "frame_" + fn.frame + "_" + timeline.id + "_" + zoom;
             imgSrc = swf.getFromCache(key);
             if (imgSrc == null) {
-                imgSrc = SWF.frameToImageGet(timeline, fn.frame, 0, null, 0, rect, new Matrix(), null, null, zoom);
+                imgSrc = SWF.frameToImageGet(timeline, fn.frame, 0, null, 0, rect, new Matrix(), null, null, zoom, !Configuration.disableBitmapSmoothing.get());
                 swf.putToCache(key, imgSrc);
             }
 
@@ -372,7 +378,7 @@ public class FolderPreviewPanel extends JPanel {
         if (imgSrc == null) {
             DrawableTag drawable = (DrawableTag) treeItem;
             ExportRectangle viewRectangle = new ExportRectangle(0, 0, ow, oh);
-            drawable.toImage(0, 0, 0, new RenderContext(), image, image, false, m, m, m, m, null, scale, false, viewRectangle, true, Timeline.DRAW_MODE_ALL);
+            drawable.toImage(0, 0, 0, new RenderContext(), image, image, false, m, new Matrix(), m, m, null, scale, false, viewRectangle, true, Timeline.DRAW_MODE_ALL, 0, !Configuration.disableBitmapSmoothing.get());
         } else {
             Graphics2D g = (Graphics2D) image.getGraphics();
             g.setTransform(m.toTransform());
@@ -380,4 +386,22 @@ public class FolderPreviewPanel extends JPanel {
         }
         return image;
     }
+    
+    public List<TreeItem> getSelectedItemsSorted() {
+        return new ArrayList<>(selectedItems.values());
+    }
+    
+    public boolean isSomethingSelected() {
+        return !selectedItems.isEmpty();
+    }
+
+    public Map<Integer, TreeItem> getSelectedItems() {
+        return selectedItems;
+    }
+
+    public void setSelectedItems(Map<Integer, TreeItem> selectedItems) {
+        this.selectedItems = selectedItems;
+    }
+    
+    
 }

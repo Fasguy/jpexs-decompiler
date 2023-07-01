@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -49,7 +49,7 @@ public class TimelineViewPanel extends JPanel {
         timeline.setTimelined(timelined);
         add(new JPersistentSplitPane(JSplitPane.HORIZONTAL_SPLIT, timeline, previewPanel = new ImagePanel(), Configuration.guiTimeLineSplitPaneDividerLocationPercent));
 
-        previewPanel.setTimelined(timelined, timelined.getTimeline().swf, 0);
+        previewPanel.setTimelined(timelined, timelined.getTimeline().swf, 0, true, true, !Configuration.animateSubsprites.get(), true, !Configuration.playFrameSounds.get(), true);
         //previewPanel.setPreferredSize(new Dimension(400,300));
         previewPanel.pause();
         previewPanel.gotoFrame(0);

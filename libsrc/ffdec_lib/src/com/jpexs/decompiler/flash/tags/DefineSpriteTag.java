@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -27,8 +27,12 @@ import com.jpexs.decompiler.flash.tags.base.BoundedTag;
 import com.jpexs.decompiler.flash.tags.base.CharacterIdTag;
 import com.jpexs.decompiler.flash.tags.base.CharacterTag;
 import com.jpexs.decompiler.flash.tags.base.DrawableTag;
+import com.jpexs.decompiler.flash.tags.base.FontTag;
 import com.jpexs.decompiler.flash.tags.base.PlaceObjectTypeTag;
+import com.jpexs.decompiler.flash.tags.base.RemoveTag;
 import com.jpexs.decompiler.flash.tags.base.RenderContext;
+import com.jpexs.decompiler.flash.tags.base.SoundStreamHeadTypeTag;
+import com.jpexs.decompiler.flash.tags.gfx.DefineExternalStreamSound;
 import com.jpexs.decompiler.flash.timeline.Timeline;
 import com.jpexs.decompiler.flash.timeline.Timelined;
 import com.jpexs.decompiler.flash.types.BasicType;
@@ -48,6 +52,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -158,6 +163,10 @@ public class DefineSpriteTag extends DrawableTag implements Timelined {
 
     @Override
     public void resetTimeline() {
+        Cache<CharacterTag, RECT> cache = swf == null ? null : swf.getRectCache();
+        if (cache != null) {
+            cache.remove(this);
+        }
         if (timeline != null) {
             timeline.reset(swf, this, spriteId, getRect());
         }
@@ -218,13 +227,36 @@ public class DefineSpriteTag extends DrawableTag implements Timelined {
 
         ret = new RECT(Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE);
         HashMap<Integer, Integer> depthMap = new HashMap<>();
+        HashMap<Integer, MATRIX> depthMatrixMap = new HashMap<>();
         boolean foundSomething = false;
         for (Tag t : getTags()) {
             MATRIX m = null;
             int characterId = -1;
+            if (t instanceof RemoveTag) {
+                RemoveTag rt = (RemoveTag)t;
+                depthMap.remove(rt.getDepth());
+                depthMatrixMap.remove(rt.getDepth());
+            }
             if (t instanceof PlaceObjectTypeTag) {
                 PlaceObjectTypeTag pot = (PlaceObjectTypeTag) t;
                 m = pot.getMatrix();
+                
+                if (m == null) {
+                    if (pot.flagMove()) {
+                        if (!depthMatrixMap.containsKey(pot.getDepth())) {
+                            m = null; //??
+                        } else {
+                            m = depthMatrixMap.get(pot.getDepth());
+                        }
+                    }
+                }
+                
+                if (!pot.flagMove() && depthMap.containsKey(pot.getDepth())) {                
+                    continue;
+                }
+                
+                depthMatrixMap.put(pot.getDepth(), m);
+                
                 int charId = pot.getCharacterId();
                 if (charId > -1) {
                     depthMap.put(pot.getDepth(), charId);
@@ -234,6 +266,12 @@ public class DefineSpriteTag extends DrawableTag implements Timelined {
                     if (chi != null) {
                         characterId = chi;
                     }
+                }                
+            }
+            if (characterId != -1 && swf != null) {
+                //Do not handle Fonts as characters. TODO: make this better
+                if (swf.getCharacter(characterId) instanceof FontTag) {
+                    characterId = -1;
                 }
             }
             if (characterId == -1) {
@@ -324,6 +362,11 @@ public class DefineSpriteTag extends DrawableTag implements Timelined {
     }
 
     @Override
+    public int indexOfTag(Tag tag) {
+        return subTags.indexOf(tag);
+    }
+
+    @Override
     public void createOriginalData() {
         super.createOriginalData();
         for (Tag subTag : getTags()) {
@@ -332,9 +375,9 @@ public class DefineSpriteTag extends DrawableTag implements Timelined {
     }
 
     @Override
-    public void getNeededCharacters(Set<Integer> needed) {
+    public void getNeededCharacters(Set<Integer> needed, SWF swf) {
         for (Tag t : getTags()) {
-            if (t instanceof CharacterIdTag) {
+            if ((t instanceof CharacterIdTag) && !(t instanceof SoundStreamHeadTypeTag) && !(t instanceof DefineExternalStreamSound)) {
                 needed.add(((CharacterIdTag) t).getCharacterId());
             }
         }
@@ -351,7 +394,7 @@ public class DefineSpriteTag extends DrawableTag implements Timelined {
 
     @Override
     public boolean removeCharacter(int characterId) {
-        boolean modified = getTimeline().removeCharacter(characterId);
+        boolean modified = getTimeline().removeCharacter(characterId, null);
         if (modified) {
             setModified(true);
         }
@@ -364,13 +407,13 @@ public class DefineSpriteTag extends DrawableTag implements Timelined {
     }
 
     @Override
-    public Shape getOutline(int frame, int time, int ratio, RenderContext renderContext, Matrix transformation, boolean stroked) {
-        return getTimeline().getOutline(frame, time, renderContext, transformation, stroked);
+    public Shape getOutline(boolean fast, int frame, int time, int ratio, RenderContext renderContext, Matrix transformation, boolean stroked, ExportRectangle viewRect, double unzoom) {
+        return getTimeline().getOutline(fast, frame, time, renderContext, transformation, stroked, viewRect, unzoom);
     }
 
     @Override
-    public void toImage(int frame, int time, int ratio, RenderContext renderContext, SerializableImage image, SerializableImage fullImage, boolean isClip, Matrix transformation, Matrix strokeTransformation, Matrix absoluteTransformation, Matrix fullTransformation, ColorTransform colorTransform, double unzoom, boolean sameImage, ExportRectangle viewRect, boolean scaleStrokes, int drawMode) {
-        getTimeline().toImage(frame, time, renderContext, image, fullImage, isClip, transformation, strokeTransformation, absoluteTransformation, colorTransform, unzoom, sameImage, viewRect, fullTransformation, scaleStrokes, drawMode);
+    public void toImage(int frame, int time, int ratio, RenderContext renderContext, SerializableImage image, SerializableImage fullImage, boolean isClip, Matrix transformation, Matrix strokeTransformation, Matrix absoluteTransformation, Matrix fullTransformation, ColorTransform colorTransform, double unzoom, boolean sameImage, ExportRectangle viewRect, boolean scaleStrokes, int drawMode, int blendMode, boolean canUseSmoothing) {
+        getTimeline().toImage(frame, time, renderContext, image, fullImage, isClip, transformation, strokeTransformation, absoluteTransformation, colorTransform, unzoom, sameImage, viewRect, fullTransformation, scaleStrokes, drawMode, blendMode, canUseSmoothing);
     }
 
     @Override
@@ -431,9 +474,39 @@ public class DefineSpriteTag extends DrawableTag implements Timelined {
         removeTag(index);
         addTag(index, newTag);
     }
+    
+    @Override
+    public void replaceTag(Tag oldTag, Tag newTag) {        
+        int index = indexOfTag(oldTag);
+        if (index != -1) {
+            replaceTag(index, newTag);
+        }
+    }
 
     @Override
     public RECT getRectWithStrokes() {
         return getRect(); //?
     }
+    
+    @Override
+    public Set<Integer> getMissingNeededCharacters(Set<Integer> needed) {
+        Set<Integer> ret = new LinkedHashSet<>();
+        for (Tag tag : getTags()) {
+            Set<Integer> subNeeded = new HashSet<>();
+            tag.getNeededCharactersDeep(subNeeded);
+            Set<Integer> sub = tag.getMissingNeededCharacters(subNeeded);
+            ret.addAll(sub);
+        }
+        return ret;
+    }
+    
+    @Override
+    public int getFrameCount() {
+        return frameCount;
+    }
+
+    @Override
+    public void setFrameCount(int frameCount) {
+        this.frameCount = frameCount;
+    }  
 }

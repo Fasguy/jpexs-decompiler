@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -30,7 +30,7 @@ import java.util.List;
  *
  * @author JPEXS
  */
-public class OrItem extends BinaryOpItem {
+public class OrItem extends BinaryOpItem implements CompoundableBinaryOp {
 
     public OrItem(GraphSourceItem src, GraphSourceItem lineStartIns, GraphTargetItem leftSide, GraphTargetItem rightSide) {
         super(src, lineStartIns, PRECEDENCE_LOGICALOR, leftSide, rightSide, "||", "Boolean", "Boolean");

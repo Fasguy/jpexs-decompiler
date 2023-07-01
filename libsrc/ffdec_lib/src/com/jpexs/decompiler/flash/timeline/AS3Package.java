@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,14 +12,15 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.timeline;
 
 import com.jpexs.decompiler.flash.IdentifiersDeobfuscation;
-import com.jpexs.decompiler.flash.SWF;
 import com.jpexs.decompiler.flash.abc.ClassPath;
 import com.jpexs.decompiler.flash.abc.ScriptPack;
 import com.jpexs.decompiler.flash.treeitems.AS3ClassTreeItem;
+import com.jpexs.decompiler.flash.treeitems.Openable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +32,7 @@ import java.util.TreeMap;
  */
 public class AS3Package extends AS3ClassTreeItem {
 
-    private final SWF swf;
+    private final Openable openable;
 
     public String packageName;
 
@@ -42,16 +43,32 @@ public class AS3Package extends AS3ClassTreeItem {
     private List<AS3Package> sortedPackages;
 
     private List<ScriptPack> sortedScripts;
+    
+    private boolean flat;
+    
+    private boolean defaultPackage;
 
-    public AS3Package(String packageName, SWF swf) {
+    public AS3Package(String packageName, Openable openable, boolean flat, boolean defaultPackage) {
         super(packageName, "", null);
-        this.swf = swf;
+        this.flat = flat;
+        this.openable = openable;
         this.packageName = packageName;
+        this.defaultPackage = defaultPackage;
     }
 
+    public boolean isDefaultPackage() {
+        return defaultPackage;
+    }
+
+    public boolean isFlat() {
+        return flat;
+    }
+    
+    
+
     @Override
-    public SWF getSwf() {
-        return swf;
+    public Openable getOpenable() {
+        return openable;
     }
 
     public List<AS3Package> getSubPackages() {
@@ -98,7 +115,7 @@ public class AS3Package extends AS3ClassTreeItem {
     public List<AS3ClassTreeItem> getAllChildren() {
         List<AS3ClassTreeItem> result = new ArrayList<>(getChildCount());
         result.addAll(subPackages.values());
-        result.addAll(scripts.values());
+        result.addAll(getScriptPacks());
         return result;
     }
 
@@ -108,11 +125,14 @@ public class AS3Package extends AS3ClassTreeItem {
         }
 
         index -= subPackages.size();
-        return getScriptPacks().get(index);
+        if (index < getScriptPacks().size()) {
+            return getScriptPacks().get(index);
+        }
+        return null;
     }
 
     public int getChildCount() {
-        return subPackages.size() + scripts.size();
+        return subPackages.size() + getScriptPacks().size();
     }
 
     public int getIndexOfChild(AS3ClassTreeItem child) {
@@ -147,6 +167,9 @@ public class AS3Package extends AS3ClassTreeItem {
 
     @Override
     public String toString() {
+        if (flat) {
+            return packageName;
+        }
         return IdentifiersDeobfuscation.printIdentifier(true, packageName);
     }
 

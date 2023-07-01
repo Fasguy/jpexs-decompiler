@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -80,6 +80,7 @@ import com.jpexs.decompiler.graph.Graph;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.TranslateStack;
 import com.jpexs.helpers.Helper;
+import com.jpexs.helpers.utf8.Utf8Helper;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -477,15 +478,15 @@ public class FlashPlayerTest {
             new AVM2Instruction(0, AVM2Instructions.PushShort, new int[]{1073741824}), // 68
             new AVM2Instruction(0, AVM2Instructions.PushShort, new int[]{2147483647}), // 69
             new AVM2Instruction(0, AVM2Instructions.PushInt, new int[]{0}), // 70
-            new AVM2Instruction(0, AVM2Instructions.PushInt, new int[]{abc.constants.getIntId(-2147483649L, true)}), // 71
+            //new AVM2Instruction(0, AVM2Instructions.PushInt, new int[]{abc.constants.getIntId(-2147483649L, true)}), // 71
             new AVM2Instruction(0, AVM2Instructions.PushInt, new int[]{abc.constants.getIntId(-2147483648, true)}), // 72
             new AVM2Instruction(0, AVM2Instructions.PushInt, new int[]{abc.constants.getIntId(-1, true)}), // 73
             new AVM2Instruction(0, AVM2Instructions.PushInt, new int[]{abc.constants.getIntId(0, true)}), // 74
             new AVM2Instruction(0, AVM2Instructions.PushInt, new int[]{abc.constants.getIntId(1, true)}), // 75
             new AVM2Instruction(0, AVM2Instructions.PushInt, new int[]{abc.constants.getIntId(2147483647, true)}), // 76
-            new AVM2Instruction(0, AVM2Instructions.PushInt, new int[]{abc.constants.getIntId(2147483648L, true)}), // 77
-            new AVM2Instruction(0, AVM2Instructions.PushUInt, new int[]{abc.constants.getIntId(4294967295L, true)}), // 78
-            new AVM2Instruction(0, AVM2Instructions.PushUInt, new int[]{abc.constants.getIntId(4294967296L, true)}), // 79
+            //new AVM2Instruction(0, AVM2Instructions.PushInt, new int[]{abc.constants.getIntId(2147483648L, true)}), // 77
+            //new AVM2Instruction(0, AVM2Instructions.PushUInt, new int[]{abc.constants.getIntId(4294967295L, true)}), // 78
+            //new AVM2Instruction(0, AVM2Instructions.PushUInt, new int[]{abc.constants.getIntId(4294967296L, true)}), // 79
             new AVM2Instruction(0, AVM2Instructions.PushUInt, new int[]{0}), // 80
             new AVM2Instruction(0, AVM2Instructions.PushUInt, new int[]{abc.constants.getUIntId(-2147483649L, true)}), // 81
             new AVM2Instruction(0, AVM2Instructions.PushUInt, new int[]{abc.constants.getUIntId(-2147483648, true)}), // 82
@@ -533,22 +534,22 @@ public class FlashPlayerTest {
                     Action opAction = getOpAction(i);
 
                     if (i >= 13 + 23) {
-                        newActions.add(new ActionPush("mystring_\u00E1rv\u00EDzt\u0171r\u0151_t\u00FCk\u00F6rf\u00FAr\u00F3g\u00E9p"));
+                        newActions.add(new ActionPush("mystring_\u00E1rv\u00EDzt\u0171r\u0151_t\u00FCk\u00F6rf\u00FAr\u00F3g\u00E9p", Utf8Helper.charsetName));
                     }
 
                     Object p1o = pushes[p1];
                     Object p2o = null;
                     if (i >= 13) {
                         p2o = pushes[p2];
-                        newActions.add(new ActionPush(p2o));
+                        newActions.add(new ActionPush(p2o, Utf8Helper.charsetName));
                     }
 
-                    newActions.add(new ActionPush(p1o));
+                    newActions.add(new ActionPush(p1o, Utf8Helper.charsetName));
 
                     newActions.add(opAction);
-                    newActions.add(new ActionPushDuplicate());
+                    newActions.add(new ActionPushDuplicate(Utf8Helper.charsetName));
                     newActions.add(new ActionTypeOf());
-                    newActions.add(new ActionStackSwap());
+                    newActions.add(new ActionStackSwap(Utf8Helper.charsetName));
                     newActions.add(new ActionStringAdd());
 
                     AS2ExecuteTask task = new AS2ExecuteTask();
@@ -739,7 +740,7 @@ public class FlashPlayerTest {
             case 9:
                 return new ActionDivide();
             case 10:
-                return new ActionEquals();
+                return new ActionEquals(Utf8Helper.charsetName);
             case 11:
                 return new ActionEquals2();
             case 12:

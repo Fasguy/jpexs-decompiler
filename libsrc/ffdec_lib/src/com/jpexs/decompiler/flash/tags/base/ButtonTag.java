@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -66,14 +66,9 @@ public abstract class ButtonTag extends DrawableTag implements Timelined {
     public abstract boolean trackAsMenu();
 
     @Override
-    public void getNeededCharacters(Set<Integer> needed) {
+    public void getNeededCharacters(Set<Integer> needed, SWF swf) {
         for (BUTTONRECORD r : getRecords()) {
             needed.add(r.characterId);
-        }
-
-        DefineButtonSoundTag sounds = getSounds();
-        if (sounds != null) {
-            sounds.getNeededCharacters(needed);
         }
     }
 
@@ -93,13 +88,13 @@ public abstract class ButtonTag extends DrawableTag implements Timelined {
     }
 
     @Override
-    public Shape getOutline(int frame, int time, int ratio, RenderContext renderContext, Matrix transformation, boolean stroked) {
-        return getTimeline().getOutline(frame, time, renderContext, transformation, stroked);
+    public Shape getOutline(boolean fast, int frame, int time, int ratio, RenderContext renderContext, Matrix transformation, boolean stroked, ExportRectangle viewRect, double unzoom) {
+        return getTimeline().getOutline(fast, frame, time, renderContext, transformation, stroked, viewRect, unzoom);
     }
 
     @Override
-    public void toImage(int frame, int time, int ratio, RenderContext renderContext, SerializableImage image, SerializableImage fullImage, boolean isClip, Matrix transformation, Matrix strokeTransformation, Matrix absoluteTransformation, Matrix fullTransformation, ColorTransform colorTransform, double unzoom, boolean sameImage, ExportRectangle viewRect, boolean scaleStrokes, int drawMode) {
-        getTimeline().toImage(frame, time, renderContext, image, fullImage, isClip, transformation, strokeTransformation, absoluteTransformation, colorTransform, unzoom, sameImage, viewRect, fullTransformation, scaleStrokes, drawMode);
+    public void toImage(int frame, int time, int ratio, RenderContext renderContext, SerializableImage image, SerializableImage fullImage, boolean isClip, Matrix transformation, Matrix strokeTransformation, Matrix absoluteTransformation, Matrix fullTransformation, ColorTransform colorTransform, double unzoom, boolean sameImage, ExportRectangle viewRect, boolean scaleStrokes, int drawMode, int blendMode, boolean canUseSmoothing) {
+        getTimeline().toImage(frame, time, renderContext, image, fullImage, isClip, transformation, strokeTransformation, absoluteTransformation, colorTransform, unzoom, sameImage, viewRect, fullTransformation, scaleStrokes, drawMode, blendMode, canUseSmoothing);
     }
 
     @Override
@@ -108,6 +103,9 @@ public abstract class ButtonTag extends DrawableTag implements Timelined {
     }
 
     public DefineButtonSoundTag getSounds() {
+        if (swf == null) {
+            return null;
+        }
         return (DefineButtonSoundTag) swf.getCharacterIdTag(getCharacterId(), DefineButtonSoundTag.ID);
     }
 
@@ -172,10 +170,40 @@ public abstract class ButtonTag extends DrawableTag implements Timelined {
     @Override
     public void addTag(int index, Tag tag) {
     }
+    
+    @Override
+    public int indexOfTag(Tag tag) {
+        return -1;
+    }
 
     @Override
     public void replaceTag(int index, Tag newTag) {
         removeTag(index);
         addTag(index, newTag);
     }
+    
+    @Override
+    public void replaceTag(Tag oldTag, Tag newTag) {
+        setModified(true);
+        int index = indexOfTag(oldTag);
+        if (index != -1) {
+            replaceTag(index, newTag);
+        }
+    }
+
+    @Override
+    public void setSwf(SWF swf, boolean deep) {
+        this.swf = swf;
+        for(BUTTONRECORD record:getRecords()) {
+            record.setSourceTag(this);
+        }
+    }        
+
+    @Override
+    public void setModified(boolean value) {
+        super.setModified(value);
+        for(BUTTONRECORD record:getRecords()) {
+            record.setModified(value);
+        }
+    }       
 }

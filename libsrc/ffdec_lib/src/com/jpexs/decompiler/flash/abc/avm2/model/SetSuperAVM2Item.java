@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -16,13 +16,13 @@
  */
 package com.jpexs.decompiler.flash.abc.avm2.model;
 
+import com.jpexs.decompiler.flash.abc.avm2.instructions.SetTypeIns;
 import com.jpexs.decompiler.flash.abc.avm2.model.clauses.DeclarationAVM2Item;
 import com.jpexs.decompiler.flash.helpers.GraphTextWriter;
 import com.jpexs.decompiler.graph.GraphPart;
 import com.jpexs.decompiler.graph.GraphSourceItem;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.GraphTargetVisitorInterface;
-import com.jpexs.decompiler.graph.TypeItem;
 import com.jpexs.decompiler.graph.model.LocalData;
 import java.util.Objects;
 
@@ -41,6 +41,12 @@ public class SetSuperAVM2Item extends AVM2Item implements SetTypeAVM2Item {
     public GraphTargetItem compoundValue;
 
     public String compoundOperator;
+    
+    public GraphTargetItem type;
+    
+    public GraphTargetItem callType;
+    
+    public boolean isStatic;
 
     @Override
     public DeclarationAVM2Item getDeclaration() {
@@ -66,10 +72,13 @@ public class SetSuperAVM2Item extends AVM2Item implements SetTypeAVM2Item {
         return value.getFirstPart();
     }
 
-    public SetSuperAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, GraphTargetItem value, GraphTargetItem object, FullMultinameAVM2Item propertyName) {
+    public SetSuperAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, GraphTargetItem value, GraphTargetItem object, FullMultinameAVM2Item propertyName, GraphTargetItem type, GraphTargetItem callType, boolean isStatic) {
         super(instruction, lineStartIns, PRECEDENCE_ASSIGMENT, value);
         this.object = object;
         this.propertyName = propertyName;
+        this.type = type;
+        this.callType = callType;
+        this.isStatic = isStatic;
     }
 
     @Override
@@ -89,7 +98,7 @@ public class SetSuperAVM2Item extends AVM2Item implements SetTypeAVM2Item {
             return compoundValue.toString(writer, localData);
         }
         writer.append(" = ");
-        return value.toString(writer, localData);
+        return SetTypeIns.handleNumberToInt(value, type).toString(writer, localData);
     }
 
     @Override
@@ -99,7 +108,8 @@ public class SetSuperAVM2Item extends AVM2Item implements SetTypeAVM2Item {
 
     @Override
     public GraphTargetItem returnType() {
-        return TypeItem.UNBOUNDED;
+        return value.returnType();
+        //return TypeItem.UNBOUNDED;
     }
 
     @Override
@@ -109,7 +119,7 @@ public class SetSuperAVM2Item extends AVM2Item implements SetTypeAVM2Item {
 
     @Override
     public GraphTargetItem getObject() {
-        return new GetSuperAVM2Item(getInstruction(), getLineStartIns(), object, propertyName);
+        return new GetSuperAVM2Item(getInstruction(), getLineStartIns(), object, propertyName, type, callType, isStatic);
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -89,7 +89,8 @@ public class DefineFont3Tag extends FontTag {
     @Conditional("fontFlagsHasLayout")
     public int fontLeading;
 
-    @SWFType(BasicType.SI16)
+    //Docs Says SI16, but Flash handles this as unsigned. There's probably not such thing as negative advance
+    @SWFType(BasicType.UI16)
     @Conditional("fontFlagsHasLayout")
     public List<Integer> fontAdvanceTable;
 
@@ -130,11 +131,7 @@ public class DefineFont3Tag extends FontTag {
         fontFlagsItalic = sis.readUB(1, "fontFlagsItalic") == 1;
         fontFlagsBold = sis.readUB(1, "fontFlagsBold") == 1;
         languageCode = sis.readLANGCODE("languageCode");
-        if (swf.version >= 6) {
-            fontName = sis.readNetString("fontName", Utf8Helper.charset);
-        } else {
-            fontName = sis.readNetString("fontName");
-        }
+        fontName = sis.readNetString("fontName");
         int numGlyphs = sis.readUI16("numGlyphs");
         long[] offsetTable = new long[numGlyphs];
         long pos = sis.getPos();
@@ -171,7 +168,7 @@ public class DefineFont3Tag extends FontTag {
             fontLeading = sis.readSI16("fontLeading");
             fontAdvanceTable = new ArrayList<>();
             for (int i = 0; i < numGlyphs; i++) {
-                fontAdvanceTable.add(sis.readSI16("fontAdvance"));
+                fontAdvanceTable.add(sis.readUI16("fontAdvance"));
             }
             fontBoundsTable = new ArrayList<>();
             for (int i = 0; i < numGlyphs; i++) {
@@ -190,7 +187,7 @@ public class DefineFont3Tag extends FontTag {
 
         if (!fontFlagsWideOffsets) {
             ByteArrayOutputStream baosGlyphShapes = new ByteArrayOutputStream();
-            SWFOutputStream sos3 = new SWFOutputStream(baosGlyphShapes, getVersion());
+            SWFOutputStream sos3 = new SWFOutputStream(baosGlyphShapes, getVersion(), getCharset());
             for (int i = 0; i < numGlyphs; i++) {
                 long offset = (glyphShapeTable.size()) * 2 + sos3.getPos();
                 if (offset > 0xffff) {
@@ -238,7 +235,7 @@ public class DefineFont3Tag extends FontTag {
         checkWideParameters();
         List<Long> offsetTable = new ArrayList<>();
         ByteArrayOutputStream baosGlyphShapes = new ByteArrayOutputStream();
-        SWFOutputStream sos3 = new SWFOutputStream(baosGlyphShapes, getVersion());
+        SWFOutputStream sos3 = new SWFOutputStream(baosGlyphShapes, getVersion(), getCharset());
         int numGlyphs = glyphShapeTable.size();
         for (int i = 0; i < numGlyphs; i++) {
             offsetTable.add(sos3.getPos());
@@ -256,11 +253,7 @@ public class DefineFont3Tag extends FontTag {
         sos.writeUB(1, fontFlagsItalic ? 1 : 0);
         sos.writeUB(1, fontFlagsBold ? 1 : 0);
         sos.writeLANGCODE(languageCode);
-        if (swf.version >= 6) {
-            sos.writeNetString(fontName, Utf8Helper.charset);
-        } else {
-            sos.writeNetString(fontName);
-        }
+        sos.writeNetString(fontName);
         sos.writeUI16(numGlyphs);
 
         for (long offset : offsetTable) {
@@ -296,7 +289,7 @@ public class DefineFont3Tag extends FontTag {
             sos.writeUI16(fontDescent);
             sos.writeSI16(fontLeading);
             for (int i = 0; i < numGlyphs; i++) {
-                sos.writeSI16(fontAdvanceTable.get(i));
+                sos.writeUI16(fontAdvanceTable.get(i));
             }
             for (int i = 0; i < numGlyphs; i++) {
                 sos.writeRECT(fontBoundsTable.get(i));
@@ -315,7 +308,7 @@ public class DefineFont3Tag extends FontTag {
 
     @Override
     public int getGlyphWidth(int glyphIndex) {
-        return glyphShapeTable.get(glyphIndex).getBounds().getWidth();
+        return glyphShapeTable.get(glyphIndex).getBounds(1).getWidth();
     }
 
     @Override
@@ -329,12 +322,12 @@ public class DefineFont3Tag extends FontTag {
 
     @Override
     public char glyphToChar(int glyphIndex) {
-        return (char) (int) codeTable.get(glyphIndex);
+        return Utf8Helper.codePointToChar(codeTable.get(glyphIndex), getCodesCharset());
     }
 
     @Override
     public int charToGlyph(char c) {
-        return codeTable.indexOf((int) c);
+        return codeTable.indexOf(Utf8Helper.charToCodePoint(c, getCodesCharset()));
     }
 
     @Override
@@ -446,7 +439,11 @@ public class DefineFont3Tag extends FontTag {
         }
         int fontStyle = getFontStyle();
         SHAPE shp = SHAPERECORD.fontCharacterToSHAPE(font, (int) Math.round(getDivider() * 1024), character);
-        int code = (int) character;
+        int code = (int) Utf8Helper.charToCodePoint(character, getCodesCharset());
+        
+        if (code == -1) { //Fixme - throw exception, etc.
+            code = 0;
+        }
         int pos = -1;
         boolean exists = false;
         for (int i = 0; i < codeTable.size(); i++) {
@@ -465,7 +462,7 @@ public class DefineFont3Tag extends FontTag {
         if (!exists) {
             shiftGlyphIndices(fontID, pos, true);
             glyphShapeTable.add(pos, shp);
-            codeTable.add(pos, (int) character);
+            codeTable.add(pos, code);
         } else {
             glyphShapeTable.set(pos, shp);
         }
@@ -473,33 +470,33 @@ public class DefineFont3Tag extends FontTag {
 
             Font advanceFont = font.deriveFont(fontStyle, 1024); // Not multiplied with divider as it causes problems to create font with height around 20k
             if (!exists) {
-                fontBoundsTable.add(pos, shp.getBounds());
+                fontBoundsTable.add(pos, shp.getBounds(1));
                 fontAdvanceTable.add(pos, (int) getDivider() * Math.round(FontHelper.getFontAdvance(advanceFont, character)));
             } else {
-                fontBoundsTable.set(pos, shp.getBounds());
+                fontBoundsTable.set(pos, shp.getBounds(1));
                 fontAdvanceTable.set(pos, (int) getDivider() * Math.round(FontHelper.getFontAdvance(advanceFont, character)));
             }
 
             for (int k = 0; k < fontKerningTable.size(); k++) {
-                if (fontKerningTable.get(k).fontKerningCode1 == character
-                        || fontKerningTable.get(k).fontKerningCode2 == character) {
+                if (fontKerningTable.get(k).fontKerningCode1 == code
+                        || fontKerningTable.get(k).fontKerningCode2 == code) {
                     fontKerningTable.remove(k);
                     k--;
                 }
             }
             List<FontHelper.KerningPair> kerning = getFontKerningPairs(font, (int) (getDivider() * 1024));
             for (FontHelper.KerningPair pair : kerning) {
-                if (pair.char1 != character && pair.char2 != character) {
+                if (pair.char1 != code && pair.char2 != code) {
                     continue;
                 }
                 int glyph1 = charToGlyph(pair.char1);
-                if (pair.char1 == character) {
+                if (pair.char1 == code) {
 
                 } else if (glyph1 == -1) {
                     continue;
                 }
                 int glyph2 = charToGlyph(pair.char2);
-                if (pair.char2 == character) {
+                if (pair.char2 == code) {
 
                 } else if (glyph2 == -1) {
                     continue;
@@ -581,7 +578,7 @@ public class DefineFont3Tag extends FontTag {
                 continue;
             }
             SHAPE shp = SHAPERECORD.fontCharacterToSHAPE(font, (int) Math.round(getDivider() * 1024), ch);
-            newFontBoundsTable.add(shp.getBounds());
+            newFontBoundsTable.add(shp.getBounds(1));
             int fontStyle = getFontStyle();
             Font advanceFont = font.deriveFont(fontStyle, 1024); // Not multiplied with divider as it causes problems to create font with height around 20k
             newFontAdvanceTable.add((int) getDivider() * Math.round(FontHelper.getFontAdvance(advanceFont, ch)));
@@ -601,7 +598,8 @@ public class DefineFont3Tag extends FontTag {
     public String getCharacters() {
         StringBuilder ret = new StringBuilder(codeTable.size());
         for (int i : codeTable) {
-            ret.append((char) i);
+            Character c = Utf8Helper.codePointToChar(i, getCodesCharset());
+            ret.append(c == null ? "?" : c);
         }
         return ret.toString();
     }
@@ -631,9 +629,12 @@ public class DefineFont3Tag extends FontTag {
 
     @Override
     public int getCharKerningAdjustment(char c1, char c2) {
+        int c1Code = Utf8Helper.charToCodePoint(c1, getCodesCharset());
+        int c2Code = Utf8Helper.charToCodePoint(c2, getCodesCharset());
+        
         int kerningAdjustment = 0;
         for (KERNINGRECORD ker : fontKerningTable) {
-            if (ker.fontKerningCode1 == c1 && ker.fontKerningCode2 == c2) {
+            if (ker.fontKerningCode1 == c1Code && ker.fontKerningCode2 == c2Code) {
                 kerningAdjustment = ker.fontKerningAdjustment;
                 break;
             }
@@ -702,5 +703,13 @@ public class DefineFont3Tag extends FontTag {
     @Override
     public boolean isLeadingEditable() {
         return hasLayout();
+    }
+    
+    @Override
+    public String getCodesCharset() {
+        if (fontFlagsShiftJIS) {
+            return "Shift_JIS";
+        }
+        return getCharset();
     }
 }

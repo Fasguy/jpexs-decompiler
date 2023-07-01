@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -124,11 +124,11 @@ public abstract class SetLocalTypeIns extends InstructionDefinition implements S
             }
         }
 
-        SetLocalAVM2Item result = new SetLocalAVM2Item(ins, localData.lineStartInstruction, regId, value);
+        SetLocalAVM2Item result = new SetLocalAVM2Item(ins, localData.lineStartInstruction, regId, value, value.returnType());
         if (value.getNotCoerced() instanceof CompoundableBinaryOp) {
             CompoundableBinaryOp binaryOp = (CompoundableBinaryOp) value.getNotCoerced();
-            if (binaryOp.getLeftSide() instanceof LocalRegAVM2Item) {
-                LocalRegAVM2Item loc = (LocalRegAVM2Item) binaryOp.getLeftSide();
+            if (binaryOp.getLeftSide().getNotCoerced() instanceof LocalRegAVM2Item) {
+                LocalRegAVM2Item loc = (LocalRegAVM2Item) binaryOp.getLeftSide().getNotCoerced();
                 if (loc.regIndex == regId) {
                     result.setCompoundValue(binaryOp.getRightSide());
                     result.setCompoundOperator(binaryOp.getOperator());
@@ -136,7 +136,7 @@ public abstract class SetLocalTypeIns extends InstructionDefinition implements S
             }
         }
 
-        SetTypeIns.handleResult(value, stack, output, localData, result, regId);
+        SetTypeIns.handleResult(value, stack, output, localData, result, regId, value.returnType());
     }
 
     @Override

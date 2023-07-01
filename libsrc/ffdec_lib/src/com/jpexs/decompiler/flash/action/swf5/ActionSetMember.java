@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,6 +20,7 @@ import com.jpexs.decompiler.flash.BaseLocalData;
 import com.jpexs.decompiler.flash.action.Action;
 import com.jpexs.decompiler.flash.action.ActionScriptObject;
 import com.jpexs.decompiler.flash.action.LocalDataArea;
+import com.jpexs.decompiler.flash.action.model.CompoundableBinaryOpAs12;
 import com.jpexs.decompiler.flash.action.model.DecrementActionItem;
 import com.jpexs.decompiler.flash.action.model.GetMemberActionItem;
 import com.jpexs.decompiler.flash.action.model.IncrementActionItem;
@@ -28,6 +29,7 @@ import com.jpexs.decompiler.flash.action.model.PostIncrementActionItem;
 import com.jpexs.decompiler.flash.action.model.SetMemberActionItem;
 import com.jpexs.decompiler.flash.action.model.StoreRegisterActionItem;
 import com.jpexs.decompiler.flash.action.model.TemporaryRegister;
+import com.jpexs.decompiler.flash.action.model.TemporaryRegisterMark;
 import com.jpexs.decompiler.flash.action.model.operations.PreDecrementActionItem;
 import com.jpexs.decompiler.flash.action.model.operations.PreIncrementActionItem;
 import com.jpexs.decompiler.flash.types.annotations.SWFVersion;
@@ -36,6 +38,7 @@ import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.SecondPassData;
 import com.jpexs.decompiler.graph.TranslateStack;
 import com.jpexs.decompiler.graph.model.CompoundableBinaryOp;
+import com.jpexs.helpers.utf8.Utf8Helper;
 import java.util.HashMap;
 import java.util.List;
 
@@ -47,7 +50,7 @@ import java.util.List;
 public class ActionSetMember extends Action {
 
     public ActionSetMember() {
-        super(0x4F, 0);
+        super(0x4F, 0, Utf8Helper.charsetName);
     }
 
     @Override
@@ -120,7 +123,7 @@ public class ActionSetMember extends Action {
         if (inside instanceof StoreRegisterActionItem) {
             inside = inside.value;
         }
-        if (inside instanceof CompoundableBinaryOp) {
+        if (inside instanceof CompoundableBinaryOpAs12) {
             if (!object.hasSideEffect() && !memberName.hasSideEffect()) {
                 CompoundableBinaryOp binaryOp = (CompoundableBinaryOp) inside;
                 if (binaryOp.getLeftSide() instanceof GetMemberActionItem) {
@@ -155,7 +158,9 @@ public class ActionSetMember extends Action {
                     sr.temporary = true;
                     ((SetMemberActionItem) ret).setValue(sr);
                 }
-                variables.put("__register" + sr.register.number, new TemporaryRegister(sr.register.number, ret));
+                TemporaryRegister tr = new TemporaryRegister(sr.register.number, ret);
+                variables.put("__register" + sr.register.number, tr);
+                output.add(new TemporaryRegisterMark(tr));   
                 return;
             }
         }

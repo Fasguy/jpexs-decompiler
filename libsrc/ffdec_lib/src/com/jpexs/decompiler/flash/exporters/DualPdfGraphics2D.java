@@ -1,9 +1,24 @@
+/*
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3.0 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.exporters;
 
 import com.jpexs.decompiler.flash.SWF;
 import com.jpexs.decompiler.flash.exporters.commonshape.Matrix;
 import com.jpexs.decompiler.flash.exporters.modes.FontExportMode;
-import com.jpexs.decompiler.flash.tags.DefineTextTag;
 import com.jpexs.decompiler.flash.tags.base.FontTag;
 import com.jpexs.decompiler.flash.tags.base.StaticTextTag;
 import com.jpexs.decompiler.flash.types.ColorTransform;
@@ -28,7 +43,6 @@ import java.awt.Stroke;
 import java.awt.font.FontRenderContext;
 import java.awt.font.GlyphVector;
 import java.awt.geom.AffineTransform;
-import java.awt.geom.PathIterator;
 import java.awt.image.BufferedImage;
 import java.awt.image.BufferedImageOp;
 import java.awt.image.ImageObserver;
@@ -584,7 +598,6 @@ public class DualPdfGraphics2D extends Graphics2D implements BlendModeSetable, G
 
             StringBuilder text = new StringBuilder();
             int deltaX = 0;
-            setColor(Color.green);
             for (int i = 0; i < rec.glyphEntries.size(); i++) {
                 GLYPHENTRY entry = rec.glyphEntries.get(i);
                 GLYPHENTRY nextEntry = i < rec.glyphEntries.size() - 1 ? rec.glyphEntries.get(i + 1) : null;
@@ -648,7 +661,7 @@ public class DualPdfGraphics2D extends Graphics2D implements BlendModeSetable, G
                 }
             } else {
                 FontExporter fe = new FontExporter();
-                File tempFile;
+                File tempFile = null;
                 try {
                     tempFile = File.createTempFile("ffdec_font_export_", ".ttf");
                     fe.exportFont(font, FontExportMode.TTF, tempFile);
@@ -657,6 +670,9 @@ public class DualPdfGraphics2D extends Graphics2D implements BlendModeSetable, G
                     g.setTtfFont(f, tempFile);
                 } catch (IOException ex) {
                     Logger.getLogger(FrameExporter.class.getName()).log(Level.SEVERE, null, ex);
+                }
+                if (tempFile != null && tempFile.exists()) {
+                    tempFile.delete();
                 }
             }
         }

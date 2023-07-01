@@ -1,3 +1,19 @@
+/*
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3.0 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.as3decompile;
 
 import com.jpexs.decompiler.flash.ActionScript3DecompileTestBase;
@@ -19,16 +35,17 @@ public class ActionScript3AssembledDecompileTest extends ActionScript3DecompileT
     @Test
     public void testActivationProps() {
         decompileMethod("assembled", "testActivationProps", "var myvar2:int = 10;\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testDeclareReg() {
-        decompileMethod("assembled", "testDeclareReg", "with(other)\r\n"
+        decompileMethod("assembled", "testDeclareReg", "var other:XML;\r\n"
+                + "with(other)\r\n"
                 + "{\r\n"
                 + "trace(\"hey\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -36,7 +53,7 @@ public class ActionScript3AssembledDecompileTest extends ActionScript3DecompileT
         decompileMethod("assembled", "testDecrementPrecedence", "var _loc2_:int = 10;\r\n"
                 + "var _loc1_:int = 5;\r\n"
                 + "var _loc3_:* = _loc2_ & (1 << _loc1_) - 1;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -62,21 +79,21 @@ public class ActionScript3AssembledDecompileTest extends ActionScript3DecompileT
                 + "{\r\n"
                 + "}\r\n"
                 + "return 5;\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testDoubleDup() {
         decompileMethod("assembled", "testDoubleDup", "var _loc10_:Rectangle = myprop(_loc5_);\r\n"
                 + "_loc10_.mymethod(-_loc10_.width,-_loc10_.height);\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testDup() {
         decompileMethod("assembled", "testDup", "var _loc1_:Number;\r\n"
                 + "return 1 - (_loc1_ = 1 - _loc1_ / _loc4_) * _loc1_;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -87,7 +104,7 @@ public class ActionScript3AssembledDecompileTest extends ActionScript3DecompileT
                 + "{\r\n"
                 + "trace(_loc2_);\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -103,7 +120,7 @@ public class ActionScript3AssembledDecompileTest extends ActionScript3DecompileT
                 + "}\r\n"
                 + "}\r\n"
                 + "_loc3_ = 0;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -112,14 +129,14 @@ public class ActionScript3AssembledDecompileTest extends ActionScript3DecompileT
                 + "{\r\n"
                 + "_loc6_.methodname(_loc1_,_loc2_,_loc5_);\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testIncrement() {
         decompileMethod("assembled", "testIncrement", "super();\r\n"
                 + "b = a++;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -128,13 +145,13 @@ public class ActionScript3AssembledDecompileTest extends ActionScript3DecompileT
                 + "{\r\n"
                 + "somemethod();\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testIncrement3() {
         decompileMethod("assembled", "testIncrement3", "_loc1_.length--;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -150,23 +167,31 @@ public class ActionScript3AssembledDecompileTest extends ActionScript3DecompileT
                 + "}\r\n"
                 + "§§pop();\r\n"
                 + "§§pop();\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testSetSlotDup() {
-        decompileMethod("assembled", "testSetSlotDup", "var _loc5_:int = 5;\r\n"
-                + "var myslot:int;\r\n"
+        decompileMethod("assembled", "testSetSlotDup", "var myslot:int;\r\n"
+                + "var _loc5_:int = 5;\r\n"
                 + "myname.somemethod(\"okay\",myslot = _loc5_);\r\n"
                 + "myname.start();\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testSetSlotFindProperty() {
         decompileMethod("assembled", "testSetSlotFindProperty", "var myprop:int;\r\n"
                 + "return myprop = 50;\r\n",
-                false);
+                 false);
+    }
+
+    @Test
+    public void testSwapAssignment() {
+        decompileMethod("assembled", "testSwapAssignment", "var _loc6_:Bitmap = MyFactory.createBitmap();\r\n"
+                + "_loc6_.x = _loc6_.x + 5;\r\n"
+                + "_loc6_.y = -10;\r\n",
+                 false);
     }
 
     @Test
@@ -186,7 +211,7 @@ public class ActionScript3AssembledDecompileTest extends ActionScript3DecompileT
                 + "_loc2_ = \"C\";\r\n"
                 + "}\r\n"
                 + "_loc2_ = \"after\";\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -209,7 +234,7 @@ public class ActionScript3AssembledDecompileTest extends ActionScript3DecompileT
                 + "default:\r\n"
                 + "_loc2_ = 100;\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -237,7 +262,7 @@ public class ActionScript3AssembledDecompileTest extends ActionScript3DecompileT
                 + "case 2:\r\n"
                 + "trace(\"case2\");\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -283,7 +308,7 @@ public class ActionScript3AssembledDecompileTest extends ActionScript3DecompileT
                 + "}\r\n"
                 + "trace(\"G\");\r\n"
                 + "return null;\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -312,7 +337,7 @@ public class ActionScript3AssembledDecompileTest extends ActionScript3DecompileT
                 + "}\r\n"
                 + "}\r\n"
                 + "trace(\"after\");\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -333,13 +358,14 @@ public class ActionScript3AssembledDecompileTest extends ActionScript3DecompileT
                 + "trace(\"in catch\");\r\n"
                 + "}\r\n"
                 + "trace(\"after\");\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testTryDoWhile2() {
-        decompileMethod("assembled", "testTryDoWhile2", "trace(\"hello\");\r\n"
-                + "var _loc5_:* = Math.random();\r\n"
+        decompileMethod("assembled", "testTryDoWhile2", "var _loc5_:*;\r\n"
+                + "trace(\"hello\");\r\n"
+                + "_loc5_ = Math.random();\r\n"
                 + "do\r\n"
                 + "{\r\n"
                 + "try\r\n"
@@ -352,14 +378,17 @@ public class ActionScript3AssembledDecompileTest extends ActionScript3DecompileT
                 + "}\r\n"
                 + "while(_loc5_ <= 100);\r\n"
                 + "trace(\"after\");\r\n",
-                false);
+                 false);
     }
 
     @Test
     public void testTryWhile() {
-        decompileMethod("assembled", "testTryWhile", "try\r\n"
+        decompileMethod("assembled", "testTryWhile", "var a:String;\r\n"
+                + "var b:String;\r\n"
+                + "var c:String;\r\n"
+                + "try\r\n"
                 + "{\r\n"
-                + "var c:String = \"aa\";\r\n"
+                + "c = \"aa\";\r\n"
                 + "while(c)\r\n"
                 + "{\r\n"
                 + "if(b)\r\n"
@@ -375,7 +404,7 @@ public class ActionScript3AssembledDecompileTest extends ActionScript3DecompileT
                 + "return;\r\n"
                 + "}\r\n"
                 + "trace(\"finish\");\r\n",
-                false);
+                 false);
     }
 
     @Test
@@ -389,6 +418,6 @@ public class ActionScript3AssembledDecompileTest extends ActionScript3DecompileT
                 + "{\r\n"
                 + "return _loc5_;\r\n"
                 + "}\r\n",
-                false);
+                 false);
     }
 }

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -16,6 +16,7 @@
  */
 package com.jpexs.decompiler.flash.abc;
 
+import com.jpexs.decompiler.flash.AppResources;
 import com.jpexs.decompiler.flash.DeobfuscationListener;
 import com.jpexs.decompiler.flash.EndOfStreamException;
 import com.jpexs.decompiler.flash.EventListener;
@@ -48,8 +49,8 @@ import com.jpexs.decompiler.flash.abc.usages.ClassNameMultinameUsage;
 import com.jpexs.decompiler.flash.abc.usages.ConstVarNameMultinameUsage;
 import com.jpexs.decompiler.flash.abc.usages.ConstVarTypeMultinameUsage;
 import com.jpexs.decompiler.flash.abc.usages.DefinitionUsage;
-import com.jpexs.decompiler.flash.abc.usages.ExtendsMultinameUsage;
-import com.jpexs.decompiler.flash.abc.usages.ImplementsMultinameUsage;
+import com.jpexs.decompiler.flash.abc.usages.SuperClassMultinameUsage;
+import com.jpexs.decompiler.flash.abc.usages.SuperInterfaceMultinameUsage;
 import com.jpexs.decompiler.flash.abc.usages.MethodBodyMultinameUsage;
 import com.jpexs.decompiler.flash.abc.usages.MethodNameMultinameUsage;
 import com.jpexs.decompiler.flash.abc.usages.MethodParamsMultinameUsage;
@@ -66,9 +67,12 @@ import com.jpexs.decompiler.flash.importers.As3ScriptReplaceException;
 import com.jpexs.decompiler.flash.importers.As3ScriptReplacerInterface;
 import com.jpexs.decompiler.flash.tags.ABCContainerTag;
 import com.jpexs.decompiler.flash.tags.Tag;
+import com.jpexs.decompiler.flash.treeitems.Openable;
+import com.jpexs.decompiler.flash.treeitems.OpenableList;
 import com.jpexs.decompiler.flash.types.annotations.Internal;
 import com.jpexs.decompiler.graph.DottedChain;
 import com.jpexs.helpers.utf8.Utf8PrintWriter;
+import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
@@ -85,7 +89,7 @@ import java.util.logging.Logger;
  *
  * @author JPEXS
  */
-public class ABC {
+public class ABC implements Openable {
 
     public ABCVersion version = new ABCVersion(46, 16);
 
@@ -119,9 +123,25 @@ public class ABC {
     /* Map from multiname index of namespace value to namespace name**/
     private Map<String, DottedChain> namespaceMap;
 
+    private String file;
+
+    private String fileTitle;
+
+    private OpenableList openableList;
+
+    private boolean isOpenable = false;
+
     public ABC(ABCContainerTag tag) {
         this.parentTag = tag;
         this.deobfuscation = null;
+    }
+
+    @Override
+    public Openable getOpenable() {
+        if (isOpenable) {
+            return this;
+        }
+        return parentTag.getSwf();
     }
 
     public SWF getSwf() {
@@ -129,7 +149,11 @@ public class ABC {
     }
 
     public List<ABCContainerTag> getAbcTags() {
-        return getSwf().getAbcList();
+        Openable openable = getOpenable();
+        if (openable instanceof SWF) {
+            return ((SWF) openable).getAbcList();
+        }
+        return new ArrayList<>();
     }
 
     public int addMethodBody(MethodBody body) {
@@ -235,6 +259,7 @@ public class ABC {
     public int removeTraps() throws InterruptedException {
         return removeTraps(null);
     }
+
     public int removeTraps(DeobfuscationListener listener) throws InterruptedException {
         int rem = 0;
         for (int s = 0; s < script_info.size(); s++) {
@@ -265,10 +290,41 @@ public class ABC {
         }
         return ret;
     }
-
+   
+    public void getTraitStringUsages(Set<Integer> ret, Traits traits) {
+        for (Trait t:traits.traits) {
+            if (t instanceof TraitClass) {
+                int ci = ((TraitClass)t).class_info;
+                getTraitStringUsages(ret, instance_info.get(ci).instance_traits);
+                getTraitStringUsages(ret, class_info.get(ci).static_traits);
+            }
+            if (t instanceof TraitSlotConst) {
+                TraitSlotConst tsc = (TraitSlotConst)t;
+                if (tsc.value_kind == ValueKind.CONSTANT_Utf8) {
+                    ret.add(tsc.value_index);
+                }
+            }
+        }
+    }
+    
     public Set<Integer> getStringUsages() {
         Set<Integer> ret = new HashSet<>();
+        
+        for (ScriptInfo si:script_info) {
+            getTraitStringUsages(ret, si.traits);
+        }
+        
+        for (MethodInfo mi: method_info) {
+            if((mi.flags & MethodInfo.FLAG_HAS_OPTIONAL) == MethodInfo.FLAG_HAS_OPTIONAL) {
+                for (ValueKind vk : mi.optional) {
+                    if (vk.value_kind == ValueKind.CONSTANT_Utf8) {
+                        ret.add(vk.value_index);
+                    }
+                }
+            }
+        }
         for (MethodBody body : bodies) {
+            getTraitStringUsages(ret, body.traits);
             for (AVM2Instruction ins : body.getCode().code) {
                 for (int i = 0; i < ins.definition.operands.length; i++) {
                     if (ins.definition.operands[i] == AVM2Code.DAT_STRING_INDEX) {
@@ -284,7 +340,11 @@ public class ABC {
         if (ret.containsKey(strIndex)) {
             if (!"name".equals(usageType)) {
                 if (!ret.get(strIndex).equals(usageType)) {
-                    ret.put(strIndex, "name");
+                    if ("class".equals(usageType) || ret.get(strIndex).equals("class")) {
+                        ret.put(strIndex, "class");
+                    } else {
+                        ret.put(strIndex, "name");
+                    }
                 }
             }
         } else {
@@ -292,20 +352,23 @@ public class ABC {
         }
     }
 
-    private void getStringUsageTypes(Map<Integer, String> ret, Traits traits, boolean classesOnly) {
+    private void getStringUsageTypes(Map<Integer, String> ret, Traits traits) {
         for (Trait t : traits.traits) {
             int strIndex = constants.getMultiname(t.name_index).name_index;
             String usageType = "";
             if (t instanceof TraitClass) {
                 TraitClass tc = (TraitClass) t;
-                getStringUsageTypes(ret, class_info.get(tc.class_info).static_traits, classesOnly);
-                getStringUsageTypes(ret, instance_info.get(tc.class_info).instance_traits, classesOnly);
+                getStringUsageTypes(ret, class_info.get(tc.class_info).static_traits);
+                getStringUsageTypes(ret, instance_info.get(tc.class_info).instance_traits);
 
                 if (instance_info.get(tc.class_info).name_index != 0) {
                     setStringUsageType(ret, constants.getMultiname(instance_info.get(tc.class_info).name_index).name_index, "class");
                 }
                 if (instance_info.get(tc.class_info).super_index != 0) {
                     setStringUsageType(ret, constants.getMultiname(instance_info.get(tc.class_info).super_index).name_index, "class");
+                }
+                for (int iface : instance_info.get(tc.class_info).interfaces) {
+                    setStringUsageType(ret, constants.getMultiname(iface).name_index, "class");
                 }
 
                 usageType = "class";
@@ -315,14 +378,14 @@ public class ABC {
                 usageType = "method";
                 MethodBody body = findBody(tm.method_info);
                 if (body != null) {
-                    getStringUsageTypes(ret, body.traits, classesOnly);
+                    getStringUsageTypes(ret, body.traits);
                 }
             }
             if (t instanceof TraitFunction) {
                 TraitFunction tf = (TraitFunction) t;
                 MethodBody body = findBody(tf.method_info);
                 if (body != null) {
-                    getStringUsageTypes(ret, body.traits, classesOnly);
+                    getStringUsageTypes(ret, body.traits);
                 }
                 usageType = "function";
             }
@@ -335,15 +398,13 @@ public class ABC {
                     usageType = "const";
                 }
             }
-            if (usageType.equals("class") || (!classesOnly)) {
-                setStringUsageType(ret, strIndex, usageType);
-            }
+            setStringUsageType(ret, strIndex, usageType);
         }
     }
 
-    public void getStringUsageTypes(Map<Integer, String> ret, boolean classesOnly) {
+    public void getStringUsageTypes(Map<Integer, String> ret) {
         for (ScriptInfo script : script_info) {
-            getStringUsageTypes(ret, script.traits, classesOnly);
+            getStringUsageTypes(ret, script.traits);
         }
     }
 
@@ -362,32 +423,40 @@ public class ABC {
         }
     }
 
-    public void deobfuscateIdentifiers(HashMap<DottedChain, DottedChain> namesMap, RenameType renameType, boolean classesOnly) {
-        Set<Integer> stringUsages = getStringUsages();
+    public void deobfuscateIdentifiers(Map<Integer, String> stringUsageTypes, Set<Integer> stringUsages, HashMap<DottedChain, DottedChain> namesMap, RenameType renameType, boolean doClasses) {        
         Set<Integer> namespaceUsages = getNsStringUsages();
-        Map<Integer, String> stringUsageTypes = new HashMap<>();
-        informListeners("deobfuscate", "Getting usage types...");
-        getStringUsageTypes(stringUsageTypes, classesOnly);
         AVM2Deobfuscation deobfuscation = getDeobfuscation();
-        for (int i = 0; i < instance_info.size(); i++) {
-            informListeners("deobfuscate", "class " + i + "/" + instance_info.size());
-            InstanceInfo insti = instance_info.get(i);
-            if (insti.name_index != 0) {
-                constants.getMultiname(insti.name_index).name_index = deobfuscation.deobfuscateName(stringUsageTypes, stringUsages, namespaceUsages, namesMap, constants.getMultiname(insti.name_index).name_index, true, renameType);
-                if (constants.getMultiname(insti.name_index).namespace_index != 0) {
-                    constants.getNamespace(constants.getMultiname(insti.name_index).namespace_index).name_index
-                            = deobfuscation.deobfuscatePackageName(stringUsageTypes, stringUsages, namesMap, constants.getNamespace(constants.getMultiname(insti.name_index).namespace_index).name_index, renameType);
+
+        if (doClasses) {
+            for (int i = 0; i < instance_info.size(); i++) {
+                informListeners("deobfuscate", "class " + i + "/" + instance_info.size());
+                InstanceInfo insti = instance_info.get(i);
+                if (insti.name_index != 0) {
+                    constants.getMultiname(insti.name_index).name_index = deobfuscation.deobfuscateName(stringUsageTypes, stringUsages, namespaceUsages, namesMap, constants.getMultiname(insti.name_index).name_index, true, renameType);
+                    if (constants.getMultiname(insti.name_index).namespace_index != 0) {
+                        constants.getNamespace(constants.getMultiname(insti.name_index).namespace_index).name_index
+                                = deobfuscation.deobfuscatePackageName(stringUsageTypes, stringUsages, namesMap, constants.getNamespace(constants.getMultiname(insti.name_index).namespace_index).name_index, renameType);
+                    }
+                }
+                if (insti.super_index != 0) {
+                    constants.getMultiname(insti.super_index).name_index = deobfuscation.deobfuscateName(stringUsageTypes, stringUsages, namespaceUsages, namesMap, constants.getMultiname(insti.super_index).name_index, true, renameType);
+                }
+                for (int iface : insti.interfaces) {
+                    constants.getMultiname(iface).name_index = deobfuscation.deobfuscateName(stringUsageTypes, stringUsages, namespaceUsages, namesMap, constants.getMultiname(iface).name_index, true, renameType);
                 }
             }
-            if (insti.super_index != 0) {
-                constants.getMultiname(insti.super_index).name_index = deobfuscation.deobfuscateName(stringUsageTypes, stringUsages, namespaceUsages, namesMap, constants.getMultiname(insti.super_index).name_index, true, renameType);
-            }
-        }
-        if (classesOnly) {
+        } else {
             return;
         }
+       
         for (int i = 1; i < constants.getMultinameCount(); i++) {
             informListeners("deobfuscate", "name " + i + "/" + constants.getMultinameCount());
+               
+            Multiname m = constants.getMultiname(i);
+            int strIndex = m.name_index;
+            if (m.kind == Multiname.MULTINAME && strIndex > 0 && "*".equals(constants.getString(strIndex))) {                    
+                continue;
+            }
             constants.getMultiname(i).name_index = deobfuscation.deobfuscateName(stringUsageTypes, stringUsages, namespaceUsages, namesMap, constants.getMultiname(i).name_index, false, renameType);
         }
         for (int i = 1; i < constants.getNamespaceCount(); i++) {
@@ -412,7 +481,12 @@ public class ABC {
                                     String fullname = constants.getString(strIndex);
                                     String pkg = "";
                                     String name = fullname;
-                                    if (fullname.contains(".")) {
+                                    boolean hasFourDots = false;
+                                    if (fullname.contains("::")) {
+                                        pkg = fullname.substring(0, fullname.lastIndexOf("::"));
+                                        name = fullname.substring(fullname.lastIndexOf("::") + 2);
+                                        hasFourDots = true;
+                                    } else if (fullname.contains(".")) {
                                         pkg = fullname.substring(0, fullname.lastIndexOf('.'));
                                         name = fullname.substring(fullname.lastIndexOf('.') + 1);
                                     }
@@ -426,7 +500,7 @@ public class ABC {
                                     name = constants.getString(nameStrIndex);
                                     String fullChanged = "";
                                     if (!pkg.isEmpty()) {
-                                        fullChanged = pkg + ".";
+                                        fullChanged = pkg + (hasFourDots ? "::" : ".");
                                     }
                                     fullChanged += name;
                                     strIndex = constants.getStringId(fullChanged, true);
@@ -481,7 +555,30 @@ public class ABC {
     }
 
     public ABC(ABCInputStream ais, SWF swf, ABCContainerTag tag) throws IOException {
+        this(ais, swf, tag, null, null);
+    }
+
+    public ABC(ABCInputStream ais, SWF swf, ABCContainerTag tag, String file, String fileTitle) throws IOException {
         this.parentTag = tag;
+        this.file = file;
+        this.fileTitle = fileTitle;
+        if (file != null || fileTitle != null) {
+            isOpenable = true;
+        }
+
+        try {
+            read(ais, swf);
+        } catch (IOException ie) {
+            throw new ABCOpenException(AppResources.translate("error.abc.invalid"), ie);
+        }
+        //this will read all method body codes. TODO: make this ondemand
+        refreshMultinameNamespaceSuffixes();
+        getMethodIndexing();
+
+        SWFDecompilerPlugin.fireAbcParsed(this, swf);
+    }
+
+    private void read(ABCInputStream ais, SWF swf) throws IOException {
         int minor_version = ais.readU16("minor_version");
         int major_version = ais.readU16("major_version");
         version = new ABCVersion(major_version, minor_version);
@@ -704,12 +801,6 @@ public class ABC {
 
             SWFDecompilerPlugin.fireMethodBodyParsed(this, mb, swf);
         }
-
-        //this will read all method body codes. TODO: make this ondemand
-        refreshMultinameNamespaceSuffixes();
-        getMethodIndexing();
-
-        SWFDecompilerPlugin.fireAbcParsed(this, swf);
     }
 
     public void saveToStream(OutputStream os) throws IOException {
@@ -1000,6 +1091,10 @@ public class ABC {
         return abcMethodIndexing;
     }
 
+    public void resetMethodIndexing() {
+        abcMethodIndexing = null;
+    }
+
     public DottedChain nsValueToName(String valueStr) {
         if (valueStr == null) {
             return DottedChain.EMPTY;
@@ -1051,21 +1146,21 @@ public class ABC {
         }
     }
 
-    private void checkMultinameUsedInMethod(int multinameIndex, int methodInfo, List<MultinameUsage> ret, int scriptIndex, int classIndex, int traitIndex, int traitsType, boolean isInitializer, Traits traits, int parentTraitIndex) {
+    private void checkMultinameUsedInMethod(int multinameIndex, boolean exactMatch, int methodInfo, List<MultinameUsage> ret, int scriptIndex, int classIndex, int traitIndex, int traitsType, boolean isInitializer, Traits traits, int parentTraitIndex) {
         for (int p = 0; p < method_info.get(methodInfo).param_types.length; p++) {
-            if (method_info.get(methodInfo).param_types[p] == multinameIndex) {
+            if (isSameName(multinameIndex, method_info.get(methodInfo).param_types[p], exactMatch)) {
                 ret.add(new MethodParamsMultinameUsage(this, multinameIndex, scriptIndex, classIndex, traitIndex, traitsType, isInitializer, traits, parentTraitIndex));
                 break;
             }
         }
-        if (method_info.get(methodInfo).ret_type == multinameIndex) {
+        if (isSameName(multinameIndex, method_info.get(methodInfo).ret_type, exactMatch)) {
             ret.add(new MethodReturnTypeMultinameUsage(this, multinameIndex, scriptIndex, classIndex, traitIndex, traitsType, isInitializer, traits, parentTraitIndex));
         }
         MethodBody body = findBody(methodInfo);
         if (body != null) {
-            findMultinameUsageInTraits(body.traits, multinameIndex, traitsType, scriptIndex, classIndex, ret, traitIndex);
+            findMultinameUsageInTraits(body.traits, multinameIndex, exactMatch, traitsType, scriptIndex, classIndex, ret, traitIndex);
             for (ABCException e : body.exceptions) {
-                if ((e.name_index == multinameIndex) || (e.type_index == multinameIndex)) {
+                if ((isSameName(multinameIndex, e.name_index, exactMatch)) || (isSameName(multinameIndex, e.type_index, exactMatch))) {
                     ret.add(new MethodBodyMultinameUsage(this, multinameIndex, scriptIndex, classIndex, traitIndex, traitsType, isInitializer, traits, parentTraitIndex));
                     return;
                 }
@@ -1073,7 +1168,7 @@ public class ABC {
             for (AVM2Instruction ins : body.getCode().code) {
                 for (int o = 0; o < ins.definition.operands.length; o++) {
                     if (ins.definition.operands[o] == AVM2Code.DAT_MULTINAME_INDEX) {
-                        if (ins.operands[o] == multinameIndex) {
+                        if (isSameName(multinameIndex, ins.operands[o], exactMatch)) {
                             ret.add(new MethodBodyMultinameUsage(this, multinameIndex, scriptIndex, classIndex, traitIndex, traitsType, isInitializer, traits, parentTraitIndex));
                             return;
                         }
@@ -1114,7 +1209,7 @@ public class ABC {
                 for (int o = 0; o < ins.definition.operands.length; o++) {
                     if (ins.definition.operands[o] == AVM2Code.DAT_MULTINAME_INDEX) {
                         int mi = ins.operands[o];
-                        if (!foundMultinames[mi]) {
+                        if (mi < foundMultinames.length && !foundMultinames[mi]) {
                             ret.get(mi).add(new MethodBodyMultinameUsage(this, mi, scriptIndex, classIndex, traitIndex, traitsType, isInitializer, traits, parentTraitIndex));
                             foundMultinames[mi] = true;
                         }
@@ -1123,43 +1218,73 @@ public class ABC {
             }
         }
     }
+    
+    private boolean isSameName(int expectedQNameIndex, int checkedNameIndex, boolean exactMatch) {
+        if (expectedQNameIndex == checkedNameIndex) {
+            return true;
+        }        
+        if (exactMatch) {
+            return false;
+        }
+        Multiname expectedQName = constants.getMultiname(expectedQNameIndex);
+        Multiname checkedName = constants.getMultiname(checkedNameIndex);
+        if (checkedName == null) {
+            return false;
+        }
+        
+        if (expectedQName.name_index != checkedName.name_index) {
+            return false;
+        }
+        if (checkedName.kind == Multiname.QNAME) {
+            return expectedQName.namespace_index == checkedName.namespace_index;
+        }
+        if (checkedName.kind != Multiname.MULTINAME) {
+            return false;
+        }
+        for (int ns:constants.getNamespaceSet(checkedName.namespace_set_index).namespaces) {
+            if (ns == expectedQName.namespace_index) {
+                return true;
+            }
+        }           
+        return false;
+    }
 
-    private void findMultinameUsageInTraits(Traits traits, int multinameIndex, int traitsType, int scriptIndex, int classIndex, List<MultinameUsage> ret, int parentTraitIndex) {
+    private void findMultinameUsageInTraits(Traits traits, int multinameIndex, boolean exactMatch, int traitsType, int scriptIndex, int classIndex, List<MultinameUsage> ret, int parentTraitIndex) {
         for (int t = 0; t < traits.traits.size(); t++) {
             if (traits.traits.get(t) instanceof TraitClass) {
                 TraitClass tc = (TraitClass) traits.traits.get(t);
-                if (tc.name_index == multinameIndex) {
+                if (isSameName(multinameIndex, tc.name_index, exactMatch)) {
                     ret.add(new ClassNameMultinameUsage(this, multinameIndex, tc.class_info, scriptIndex));
                 }
                 int c = tc.class_info;
-                if (instance_info.get(c).super_index == multinameIndex) {
-                    ret.add(new ExtendsMultinameUsage(this, multinameIndex, c, scriptIndex));
+                if (isSameName(multinameIndex, instance_info.get(c).super_index, exactMatch)) {
+                    ret.add(new SuperClassMultinameUsage(this, multinameIndex, c, scriptIndex));
                 }
                 for (int i = 0; i < instance_info.get(c).interfaces.length; i++) {
-                    if (instance_info.get(c).interfaces[i] == multinameIndex) {
-                        ret.add(new ImplementsMultinameUsage(this, multinameIndex, c, scriptIndex));
+                    if (isSameName(multinameIndex, instance_info.get(c).interfaces[i], exactMatch)) {
+                        ret.add(new SuperInterfaceMultinameUsage(this, multinameIndex, c, scriptIndex));
                     }
                 }
-                checkMultinameUsedInMethod(multinameIndex, instance_info.get(c).iinit_index, ret, -1/*FIXME*/, c, 0, TraitMultinameUsage.TRAITS_TYPE_INSTANCE, true, null, -1);
-                checkMultinameUsedInMethod(multinameIndex, class_info.get(c).cinit_index, ret, -1/*FIXME*/, c, 0, TraitMultinameUsage.TRAITS_TYPE_CLASS, true, null, -1);
-                findMultinameUsageInTraits(instance_info.get(c).instance_traits, multinameIndex, TraitMultinameUsage.TRAITS_TYPE_INSTANCE, -1/*FIXME*/, c, ret, -1);
-                findMultinameUsageInTraits(class_info.get(c).static_traits, multinameIndex, TraitMultinameUsage.TRAITS_TYPE_CLASS, -1/*FIXME*/, c, ret, -1);
+                checkMultinameUsedInMethod(multinameIndex, exactMatch, instance_info.get(c).iinit_index, ret, -1/*FIXME*/, c, 0, TraitMultinameUsage.TRAITS_TYPE_INSTANCE, true, null, -1);
+                checkMultinameUsedInMethod(multinameIndex, exactMatch, class_info.get(c).cinit_index, ret, -1/*FIXME*/, c, 0, TraitMultinameUsage.TRAITS_TYPE_CLASS, true, null, -1);
+                findMultinameUsageInTraits(instance_info.get(c).instance_traits, multinameIndex, exactMatch, TraitMultinameUsage.TRAITS_TYPE_INSTANCE, -1/*FIXME*/, c, ret, -1);
+                findMultinameUsageInTraits(class_info.get(c).static_traits, multinameIndex, exactMatch, TraitMultinameUsage.TRAITS_TYPE_CLASS, -1/*FIXME*/, c, ret, -1);
             }
             if (traits.traits.get(t) instanceof TraitSlotConst) {
                 TraitSlotConst tsc = (TraitSlotConst) traits.traits.get(t);
-                if (tsc.name_index == multinameIndex) {
+                if (isSameName(multinameIndex, tsc.name_index, exactMatch)) {
                     ret.add(new ConstVarNameMultinameUsage(this, multinameIndex, scriptIndex, classIndex, t, traitsType, traits, parentTraitIndex));
                 }
-                if (tsc.type_index == multinameIndex) {
+                if (isSameName(multinameIndex, tsc.type_index, exactMatch)) {
                     ret.add(new ConstVarTypeMultinameUsage(this, multinameIndex, scriptIndex, classIndex, t, traitsType, traits, parentTraitIndex));
                 }
             }
             if (traits.traits.get(t) instanceof TraitMethodGetterSetter) {
                 TraitMethodGetterSetter tmgs = (TraitMethodGetterSetter) traits.traits.get(t);
-                if (tmgs.name_index == multinameIndex) {
+                if (isSameName(multinameIndex, tmgs.name_index, exactMatch)) {
                     ret.add(new MethodNameMultinameUsage(this, multinameIndex, scriptIndex, classIndex, t, traitsType, false, traits, parentTraitIndex));
                 }
-                checkMultinameUsedInMethod(multinameIndex, tmgs.method_info, ret, scriptIndex, classIndex, t, traitsType, false, traits, parentTraitIndex);
+                checkMultinameUsedInMethod(multinameIndex, exactMatch, tmgs.method_info, ret, scriptIndex, classIndex, t, traitsType, false, traits, parentTraitIndex);
             }
         }
     }
@@ -1175,10 +1300,10 @@ public class ABC {
                 int classNameMultinameIndex = instance_info.get(c).name_index;
                 ret.get(classNameMultinameIndex).add(new ClassNameMultinameUsage(this, classNameMultinameIndex, c, scriptIndex));
                 int extendsMultinameIndex = instance_info.get(c).super_index;
-                ret.get(extendsMultinameIndex).add(new ExtendsMultinameUsage(this, extendsMultinameIndex, c, scriptIndex));
+                ret.get(extendsMultinameIndex).add(new SuperClassMultinameUsage(this, extendsMultinameIndex, c, scriptIndex));
                 for (int i = 0; i < instance_info.get(c).interfaces.length; i++) {
                     int implementsMultinameIndex = instance_info.get(c).interfaces[i];
-                    ret.get(implementsMultinameIndex).add(new ImplementsMultinameUsage(this, implementsMultinameIndex, c, scriptIndex));
+                    ret.get(implementsMultinameIndex).add(new SuperInterfaceMultinameUsage(this, implementsMultinameIndex, c, scriptIndex));
                 }
                 checkAllMultinameUsedInMethod(instance_info.get(c).iinit_index, ret, -1/*FIXME*/, c, 0, TraitMultinameUsage.TRAITS_TYPE_INSTANCE, true, null, -1);
                 checkAllMultinameUsedInMethod(class_info.get(c).cinit_index, ret, -1/*FIXME*/, c, 0, TraitMultinameUsage.TRAITS_TYPE_CLASS, true, null, -1);
@@ -1199,7 +1324,7 @@ public class ABC {
     }
 
     public List<MultinameUsage> findMultinameDefinition(int multinameIndex) {
-        List<MultinameUsage> usages = findMultinameUsage(multinameIndex);
+        List<MultinameUsage> usages = findMultinameUsage(multinameIndex, false);
         List<MultinameUsage> ret = new ArrayList<>();
         for (MultinameUsage u : usages) {
             if (u instanceof DefinitionUsage) {
@@ -1213,7 +1338,7 @@ public class ABC {
         List<MultinameUsage> ret = new ArrayList<>();
         for (int multinameIndex = 1; multinameIndex < constants.getMultinameCount(); multinameIndex++) {
             if (constants.getMultiname(multinameIndex).namespace_index == namespaceIndex) {
-                ret.addAll(findMultinameUsage(multinameIndex));
+                ret.addAll(findMultinameUsage(multinameIndex, false));
             }
         }
         return ret;
@@ -1291,13 +1416,14 @@ public class ABC {
         }
     }
 
-    public List<MultinameUsage> findMultinameUsage(int multinameIndex) {
+    public List<MultinameUsage> findMultinameUsage(int multinameIndex, boolean exactMatch) {
         List<MultinameUsage> ret = new ArrayList<>();
         if (multinameIndex == 0) {
             return ret;
         }
         for (int s = 0; s < script_info.size(); s++) {
-            findMultinameUsageInTraits(script_info.get(s).traits, multinameIndex, TraitMultinameUsage.TRAITS_TYPE_SCRIPT, s, -1, ret, -1);
+            checkMultinameUsedInMethod(multinameIndex, exactMatch, script_info.get(s).init_index, ret, s, -1, 0, TraitMultinameUsage.TRAITS_TYPE_SCRIPT, true, null, -1);
+            findMultinameUsageInTraits(script_info.get(s).traits, multinameIndex, exactMatch, TraitMultinameUsage.TRAITS_TYPE_SCRIPT, s, -1, ret, -1);
         }
         loopm:
         for (int t = 1; t < constants.getMultinameCount(); t++) {
@@ -1325,6 +1451,7 @@ public class ABC {
         }
 
         for (int s = 0; s < script_info.size(); s++) {
+            checkAllMultinameUsedInMethod(script_info.get(s).init_index, ret, s, -1, 0, TraitMultinameUsage.TRAITS_TYPE_SCRIPT, true, null, -1);                
             findAllMultinameUsageInTraits(script_info.get(s).traits, TraitMultinameUsage.TRAITS_TYPE_SCRIPT, s, -1, ret, -1);
         }
 
@@ -1681,6 +1808,7 @@ public class ABC {
         getSwf().clearAbcListCache();
         getSwf().clearScriptCache();
         getMethodIndexing();
+        getSwf().getAbcIndex().refreshAbc(this);
     }
 
     /**
@@ -2088,10 +2216,16 @@ public class ABC {
             return null;
         }
         Namespace ns = constants.getNamespace(link_ns_index);
-        if (ns.kind != Namespace.KIND_NAMESPACE) {
+        if (ns.kind != Namespace.KIND_NAMESPACE && ns.kind != Namespace.KIND_PACKAGE_INTERNAL) {
             return null;
         }
         String name = constants.getString(ns.name_index);
+        if (name.equals("http://adobe.com/AS3/2006/builtin")) { //TODO: This should really be resolved using ABC indexing, not hardcoded constant
+            return DottedChain.parseNoSuffix("AS3");
+        }  
+        
+        return getSwf().getAbcIndex().nsValueToName(name);      
+        /*
         for (ABCContainerTag abcTag : getAbcTags()) {
             DottedChain dc = abcTag.getABC().nsValueToName(name);
             nsname = dc.getLast();
@@ -2102,8 +2236,8 @@ public class ABC {
             if (!nsname.isEmpty()) {
                 return dc;
             }
-        }
-        return null;
+        }*/
+        //return null;
     }
 
     public void clearPacksCache() {
@@ -2116,4 +2250,96 @@ public class ABC {
         deobfuscation = null;
         abcMethodIndexing = null;
     }
+
+    @Override
+    public String getFile() {
+        return file;
+    }
+
+    @Override
+    public String getFileTitle() {
+        if (fileTitle != null) {
+            return fileTitle;
+        }
+        return file;
+    }
+
+    @Override
+    public String getTitleOrShortFileName() {
+        if (fileTitle != null) {
+            return fileTitle;
+        }
+        return new File(file).getName();
+    }
+
+    @Override
+    public String getShortPathTitle() {
+        if (openableList != null) {
+            if (openableList.isBundle()) {
+                return openableList.name + "/" + getTitleOrShortFileName();
+            }
+        }
+        return getTitleOrShortFileName();
+    }
+
+    @Override
+    public String getShortFileName() {
+        return new File(getTitleOrShortFileName()).getName();
+    }
+
+    @Override
+    public String getFullPathTitle() {
+        if (openableList != null) {
+            if (openableList.isBundle()) {
+                return openableList.sourceInfo.getFileTitleOrName() + "/" + getFileTitle();
+            }
+        }
+        return getFileTitle();
+    }
+
+    @Override
+    public boolean isModified() {
+        return getSwf().isModified(); //??
+    }
+
+    @Override
+    public void setOpenableList(OpenableList openableList) {
+        this.openableList = openableList;
+        getSwf().setOpenableList(openableList); //dummySwf
+    }
+
+    @Override
+    public OpenableList getOpenableList() {
+        return openableList;
+    }
+
+    @Override
+    public String toString() {
+        return getTitleOrShortFileName();
+    }
+
+    @Override
+    public void saveTo(OutputStream os) throws IOException {
+        saveToStream(os);
+    }
+
+    @Override
+    public void setFile(String file) {
+        this.file = file;
+        fileTitle = null;
+    }
+
+    @Override
+    public void clearModified() {
+        getSwf().clearModified();
+        List<ABC> allAbcs = new ArrayList<>();
+        allAbcs.add(this);
+        List<ScriptPack> packs = getScriptPacks(null, allAbcs);
+        for (ScriptPack pack : packs) {
+            if (pack.isModified()) {
+                pack.clearModified();
+            }
+        }
+    }
+
 }

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -46,8 +46,18 @@ public class NameValuePair extends AVM2Item {
     }
 
     @Override
-    public GraphTextWriter appendTo(GraphTextWriter writer, LocalData localData) throws InterruptedException {
-        name.toStringString(writer, localData);
+    public GraphTextWriter appendTo(GraphTextWriter writer, LocalData localData) throws InterruptedException {        
+        boolean needsParents = !((name.getNotCoerced() instanceof NumberValueAVM2Item) || (name.getNotCoerced() instanceof StringAVM2Item)); // special for obfuscated strings
+        if (needsParents) {
+            writer.append("(");
+        }
+        if ((name instanceof ConvertAVM2Item) && ((ConvertAVM2Item)name).type.equals(TypeItem.STRING)) {
+            name = name.value;
+        }
+        name.toString(writer, localData);
+        if (needsParents) {
+            writer.append(")");
+        }        
         writer.append(":");
         if (value instanceof TernarOpItem) { //Ternar operator contains ":"
             writer.append("(");

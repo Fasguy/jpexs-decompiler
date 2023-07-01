@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -17,17 +17,21 @@
 package com.jpexs.decompiler.flash.gui;
 
 import com.jpexs.decompiler.flash.SWF;
+import com.jpexs.decompiler.flash.gui.tagtree.AbstractTagTree;
 import com.jpexs.decompiler.flash.tags.base.CharacterTag;
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.util.Map;
+import javax.swing.DefaultListCellRenderer;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JPanel;
 
 /**
@@ -40,7 +44,7 @@ public class ReplaceCharacterDialog extends AppDialog {
 
     private final JButton cancelButton = new JButton(translate("button.cancel"));
 
-    private final JComboBox<ComboBoxItem<Integer>> charactersComboBox = new JComboBox<>();
+    private final JComboBox<ComboBoxItem<CharacterTag>> charactersComboBox = new JComboBox<>();
 
     private int result = ERROR_OPTION;
 
@@ -49,10 +53,13 @@ public class ReplaceCharacterDialog extends AppDialog {
         setSize(400, 150);
         setDefaultCloseOperation(JDialog.HIDE_ON_CLOSE);
         setLayout(new BorderLayout());
-        add(new JLabel(translate("replace.width")), BorderLayout.NORTH);
+        add(new JLabel(translate("replace.with")), BorderLayout.NORTH);
 
         charactersComboBox.setPreferredSize(new Dimension(400, charactersComboBox.getPreferredSize().height));
         add(charactersComboBox, BorderLayout.CENTER);
+        
+        charactersComboBox.setRenderer(new CharacterTagListCellRenderer());
+        
 
         JPanel panButtons = new JPanel(new FlowLayout());
         okButton.addActionListener(this::okButtonActionPerformed);
@@ -86,8 +93,8 @@ public class ReplaceCharacterDialog extends AppDialog {
         }
 
         @SuppressWarnings("unchecked")
-        ComboBoxItem<Integer> item = (ComboBoxItem<Integer>) charactersComboBox.getSelectedItem();
-        return item.getValue();
+        ComboBoxItem<CharacterTag> item = (ComboBoxItem<CharacterTag>) charactersComboBox.getSelectedItem();
+        return item.getValue().getCharacterId();
     }
 
     public int showDialog(SWF swf, int selectedCharacterId) {
@@ -96,11 +103,26 @@ public class ReplaceCharacterDialog extends AppDialog {
             CharacterTag character = characters.get(key);
             int characterId = character.getCharacterId();
             if (characterId != selectedCharacterId) {
-                charactersComboBox.addItem(new ComboBoxItem<>(character.getName(), characterId));
+                charactersComboBox.addItem(new ComboBoxItem<>(character.getName(), character));
             }
         }
 
         setVisible(true);
         return result;
     }
+}
+
+class CharacterTagListCellRenderer extends DefaultListCellRenderer {
+
+    @Override
+    public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+        Component component = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+        if (component instanceof JLabel) {
+            JLabel label = (JLabel) component;
+            @SuppressWarnings("unchecked")
+            ComboBoxItem<CharacterTag> comboboxItem = (ComboBoxItem<CharacterTag>) value;
+            label.setIcon(AbstractTagTree.getIconForType(AbstractTagTree.getTreeNodeType(comboboxItem.getValue())));
+        }
+        return component;
+    }       
 }

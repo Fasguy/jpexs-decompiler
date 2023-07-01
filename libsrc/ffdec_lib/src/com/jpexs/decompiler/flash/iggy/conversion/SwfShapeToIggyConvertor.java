@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.iggy.conversion;
 
 import com.jpexs.decompiler.flash.iggy.IggyShape;
@@ -36,12 +37,12 @@ public class SwfShapeToIggyConvertor {
         return (val / 1024f);
     }
 
-    public static IggyShape convertShape(SHAPE swfShape) {
+    public static IggyShape convertShape(int shapeNum, SHAPE swfShape) {
         /*if (swfShape.shapeRecords.size() == 1) { //no glyphs, maybe space
             return null;
         }*/
         List<IggyShapeNode> nodes = new ArrayList<>();
-        RECT bounds = swfShape.getBounds();
+        RECT bounds = swfShape.getBounds(shapeNum);
         boolean first = true;
         float curX = 0f;
         float curY = 0f;

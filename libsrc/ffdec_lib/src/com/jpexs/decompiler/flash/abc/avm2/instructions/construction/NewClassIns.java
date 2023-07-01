@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -44,7 +44,7 @@ public class NewClassIns extends InstructionDefinition {
     public void translate(AVM2LocalData localData, TranslateStack stack, AVM2Instruction ins, List<GraphTargetItem> output, String path) throws InterruptedException {
         int clsIndex = ins.operands[0];
         HighlightedTextWriter writer = new HighlightedTextWriter(Configuration.getCodeFormatting(), false);
-        stack.pop().toString(writer, LocalData.create(localData.abc, localData.localRegNames, localData.fullyQualifiedNames, new HashSet<>()));
+        stack.pop().toString(writer, LocalData.create(localData.callStack /*??*/, localData.abcIndex, localData.abc, localData.localRegNames, localData.fullyQualifiedNames, new HashSet<>()));
         String baseType = writer.toString();
         ABC abc = localData.abc;
         stack.push(new UnparsedAVM2Item(ins, localData.lineStartInstruction, "§§newclass(" + abc.constants.getMultiname(abc.instance_info.get(clsIndex).name_index).getName(localData.getConstants(), localData.fullyQualifiedNames, false, true) + "," + baseType + ")"));

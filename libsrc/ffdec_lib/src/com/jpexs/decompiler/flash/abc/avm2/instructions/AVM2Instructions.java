@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.abc.avm2.instructions;
 
 /**
@@ -260,11 +261,17 @@ public class AVM2Instructions {
     public static final int ConvertO = 0x77;
 
     public static final int CheckFilter = 0x78;
-
+    
     public static final int ConvertM = 0x79;
+    
+    public static final int ConvertF = 0x79;    
 
     public static final int ConvertMP = 0x7A;
-
+    
+    public static final int UnPlus = 0x7A;
+    
+    public static final int ConvertF4 = 0x7B;  
+    
     public static final int Coerce = 0x80;
 
     public static final int CoerceB = 0x81;
@@ -423,14 +430,10 @@ public class AVM2Instructions {
 
     public static final int Prologue = 0xF9;
 
-    public static final int SendEnter = 0xFA;
-
-    public static final int UnPlus = 0xFA;
+    public static final int SendEnter = 0xFA;   
 
     public static final int DoubleToAtom = 0xFB;
-
-    public static final int ConvertF4 = 0x7B;
-
+    
     public static final int Sweep = 0xFC;
 
     public static final int CodeGenOp = 0xFD;

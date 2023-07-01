@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,9 +12,12 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.types;
 
+import com.jpexs.decompiler.flash.SWF;
+import com.jpexs.decompiler.flash.tags.base.NeedsCharacters;
 import com.jpexs.decompiler.flash.types.annotations.Conditional;
 import com.jpexs.decompiler.flash.types.annotations.EnumValue;
 import com.jpexs.decompiler.flash.types.annotations.Reserved;
@@ -26,7 +29,10 @@ import java.util.Set;
  *
  * @author JPEXS
  */
-public class LINESTYLE2 extends LINESTYLE implements Serializable {
+public class LINESTYLE2 implements NeedsCharacters, Serializable, ILINESTYLE {
+
+    @SWFType(BasicType.UI16)
+    public int width;
 
     @SWFType(value = BasicType.UB, count = 2)
     @EnumValue(value = ROUND_CAP, text = "Round cap")
@@ -76,12 +82,16 @@ public class LINESTYLE2 extends LINESTYLE implements Serializable {
     @Conditional(value = "joinStyle", options = {MITER_JOIN})
     public float miterLimitFactor;
 
+    @Conditional(value = "!hasFillFlag")
+    public RGBA color;
+
+    @Conditional(value = "hasFillFlag")
     public FILLSTYLE fillType;
 
     @Override
-    public void getNeededCharacters(Set<Integer> needed) {
+    public void getNeededCharacters(Set<Integer> needed, SWF swf) {
         if (hasFillFlag) {
-            fillType.getNeededCharacters(needed);
+            fillType.getNeededCharacters(needed, swf);
         }
     }
 
@@ -99,5 +109,37 @@ public class LINESTYLE2 extends LINESTYLE implements Serializable {
             return fillType.removeCharacter(characterId);
         }
         return false;
+    }
+
+    @Override
+    public int getNum() {
+        return 2;
+    }
+
+    @Override
+    public RGB getColor() {
+        if (hasFillFlag) {
+            return null;
+        }
+        return color;
+    }
+
+    @Override
+    public int getWidth() {
+        return width;
+    }
+
+    @Override
+    public void setColor(RGB color) {
+        if (color instanceof RGBA) {
+            this.color = (RGBA) color;
+        }
+        this.color = new RGBA(color.toColor());
+        hasFillFlag = false;
+    }
+
+    @Override
+    public void setWidth(int width) {
+        this.width = width;
     }
 }

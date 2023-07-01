@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@ package com.jpexs.decompiler.flash.gui;
 import com.jpexs.browsers.cache.CacheEntry;
 import com.jpexs.browsers.cache.CacheImplementation;
 import com.jpexs.browsers.cache.CacheReader;
-import com.jpexs.decompiler.flash.SWFSourceInfo;
+import com.jpexs.decompiler.flash.OpenableSourceInfo;
 import com.jpexs.decompiler.flash.configuration.Configuration;
 import com.jpexs.helpers.Helper;
 import com.jpexs.helpers.ReReadableInputStream;
@@ -40,7 +40,6 @@ import java.util.Vector;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
-import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
@@ -227,7 +226,7 @@ public class LoadFromCacheFrame extends AppFrame {
         CacheEntry en = list.getSelectedValue();
         if (en != null) {
             ReReadableInputStream str = new ReReadableInputStream(en.getResponseDataStream());
-            SWFSourceInfo sourceInfo = new SWFSourceInfo(str, null, entryToFileName(en));
+            OpenableSourceInfo sourceInfo = new OpenableSourceInfo(str, null, entryToFileName(en));
             Main.openFile(sourceInfo);
         }
     }

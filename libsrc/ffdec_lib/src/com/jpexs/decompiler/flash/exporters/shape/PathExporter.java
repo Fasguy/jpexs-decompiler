@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -38,22 +38,24 @@ public class PathExporter extends ShapeExporterBase {
     private final List<GeneralPath> strokes = new ArrayList<>();
 
     private double thickness = 0;
+    
+    private boolean aliasedFill = false;
 
     private GeneralPath path = new GeneralPath(GeneralPath.WIND_EVEN_ODD);
 
-    public static List<GeneralPath> export(SWF swf, SHAPE shape) {
-        return export(swf, shape, new ArrayList<>());
+    public static List<GeneralPath> export(int shapeNum, SWF swf, SHAPE shape) {
+        return export(shapeNum, swf, shape, new ArrayList<>());
     }
 
-    public static List<GeneralPath> export(SWF swf, SHAPE shape, List<GeneralPath> strokes) {
-        PathExporter exporter = new PathExporter(swf, shape, null);
+    public static List<GeneralPath> export(int shapeNum, SWF swf, SHAPE shape, List<GeneralPath> strokes) {
+        PathExporter exporter = new PathExporter(shapeNum, swf, shape, null);
         exporter.export();
         strokes.addAll(exporter.strokes);
         return exporter.paths;
     }
 
-    protected PathExporter(SWF swf, SHAPE shape, ColorTransform colorTransform) {
-        super(swf, shape, colorTransform);
+    protected PathExporter(int shapeNum, SWF swf, SHAPE shape, ColorTransform colorTransform) {
+        super(shapeNum, swf, shape, colorTransform);
     }
 
     @Override
@@ -73,7 +75,7 @@ public class PathExporter extends ShapeExporterBase {
 
     @Override
     public void beginFills() {
-
+        aliasedFill = false;
     }
 
     @Override
@@ -150,5 +152,10 @@ public class PathExporter extends ShapeExporterBase {
         }
         paths.add(path);
         path = new GeneralPath(GeneralPath.WIND_EVEN_ODD);  //For correct intersections display
+    }
+
+    @Override
+    public void beginAliasedFills() {
+        aliasedFill = true;
     }
 }

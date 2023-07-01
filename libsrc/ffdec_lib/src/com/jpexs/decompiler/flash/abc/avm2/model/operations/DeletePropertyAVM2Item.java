@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -45,13 +45,15 @@ public class DeletePropertyAVM2Item extends AVM2Item {
     public GraphTargetItem object;
 
     public GraphTargetItem propertyName;
-
+    
     private int line;
 
+    public boolean isStatic;
+    
     //Constructor for compiler
     public DeletePropertyAVM2Item(GraphTargetItem property, int line) {
-        this(null, null, property, null);
-        this.line = line;
+        this(null, null, property, null, false);
+        this.line = line;        
     }
 
     @Override
@@ -60,16 +62,17 @@ public class DeletePropertyAVM2Item extends AVM2Item {
         visitor.visit(propertyName);
     }
 
-    public DeletePropertyAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, GraphTargetItem object, GraphTargetItem propertyName) {
+    public DeletePropertyAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, GraphTargetItem object, GraphTargetItem propertyName, boolean isStatic) {
         super(instruction, lineStartIns, PRECEDENCE_UNARY);
         this.object = object;
         this.propertyName = propertyName;
+        this.isStatic = isStatic;
     }
 
     @Override
     public GraphTextWriter appendTo(GraphTextWriter writer, LocalData localData) throws InterruptedException {
         writer.append("delete ");
-        formatProperty(writer, object, propertyName, localData);
+        formatProperty(writer, object, propertyName, localData, isStatic);
         return writer;
     }
 
@@ -81,7 +84,7 @@ public class DeletePropertyAVM2Item extends AVM2Item {
         }
         if (p instanceof PropertyAVM2Item) {
             PropertyAVM2Item prop = (PropertyAVM2Item) p;
-            return toSourceMerge(localData, generator, prop.resolveObject(localData, generator),
+            return toSourceMerge(localData, generator, prop.resolveObject(localData, generator, true),
                     ins(AVM2Instructions.DeleteProperty, prop.resolveProperty(localData))
             );
         }

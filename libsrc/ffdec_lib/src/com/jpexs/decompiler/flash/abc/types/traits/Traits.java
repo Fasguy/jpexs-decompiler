@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,6 +21,7 @@ import com.jpexs.decompiler.flash.abc.avm2.model.FindPropertyAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.FullMultinameAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.GetLexAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.GetPropertyAVM2Item;
+import com.jpexs.decompiler.flash.abc.avm2.parser.script.AbcIndexing;
 import com.jpexs.decompiler.flash.abc.types.ConvertData;
 import com.jpexs.decompiler.flash.abc.types.Multiname;
 import com.jpexs.decompiler.flash.configuration.Configuration;
@@ -31,6 +32,7 @@ import com.jpexs.decompiler.flash.helpers.NulWriter;
 import com.jpexs.decompiler.flash.search.MethodId;
 import com.jpexs.decompiler.graph.DottedChain;
 import com.jpexs.decompiler.graph.GraphTargetItem;
+import com.jpexs.decompiler.graph.ScopeStack;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
@@ -130,8 +132,12 @@ public class Traits implements Cloneable, Serializable {
         Trait parent;
 
         ConvertData convertData;
+        
+        AbcIndexing abcIndex;
+        
+        ScopeStack scopeStack;
 
-        public TraitConvertTask(Trait trait, Trait parent, ConvertData convertData, boolean makePackages, String path, ABC abc, boolean isStatic, ScriptExportMode exportMode, int scriptIndex, int classIndex, NulWriter writer, List<DottedChain> fullyQualifiedNames, int traitIndex, boolean parallel) {
+        public TraitConvertTask(AbcIndexing abcIndex, Trait trait, Trait parent, ConvertData convertData, boolean makePackages, String path, ABC abc, boolean isStatic, ScriptExportMode exportMode, int scriptIndex, int classIndex, NulWriter writer, List<DottedChain> fullyQualifiedNames, int traitIndex, boolean parallel, ScopeStack scopeStack) {
             this.trait = trait;
             this.parent = parent;
             this.convertData = convertData;
@@ -146,20 +152,22 @@ public class Traits implements Cloneable, Serializable {
             this.fullyQualifiedNames = fullyQualifiedNames;
             this.traitIndex = traitIndex;
             this.parallel = parallel;
+            this.abcIndex = abcIndex;
+            this.scopeStack = scopeStack;
         }
 
         @Override
         public Void call() throws InterruptedException {
             if (makePackages) {
-                trait.convertPackaged(parent, convertData, path, abc, isStatic, exportMode, scriptIndex, classIndex, writer, fullyQualifiedNames, parallel);
+                trait.convertPackaged(abcIndex, parent, convertData, path, abc, isStatic, exportMode, scriptIndex, classIndex, writer, fullyQualifiedNames, parallel, scopeStack);
             } else {
-                trait.convert(parent, convertData, path, abc, isStatic, exportMode, scriptIndex, classIndex, writer, fullyQualifiedNames, parallel);
+                trait.convert(abcIndex, parent, convertData, path, abc, isStatic, exportMode, scriptIndex, classIndex, writer, fullyQualifiedNames, parallel, scopeStack);
             }
             return null;
         }
     }
 
-    public GraphTextWriter toString(Class[] traitTypes, Trait parent, ConvertData convertData, String path, ABC abc, boolean isStatic, ScriptExportMode exportMode, boolean makePackages, int scriptIndex, int classIndex, GraphTextWriter writer, List<DottedChain> fullyQualifiedNames, boolean parallel, List<Integer> ignoredTraitNames) throws InterruptedException {
+    public GraphTextWriter toString(AbcIndexing abcIndex, Class[] traitTypes, Trait parent, ConvertData convertData, String path, ABC abc, boolean isStatic, ScriptExportMode exportMode, boolean makePackages, int scriptIndex, int classIndex, GraphTextWriter writer, List<DottedChain> fullyQualifiedNames, boolean parallel, List<Integer> ignoredTraitNames, boolean insideInterface) throws InterruptedException {
 
         List<Trait> ordered = new ArrayList<>(traits);
         loopi:
@@ -225,29 +233,29 @@ public class Traits implements Cloneable, Serializable {
             }
             writer.newLine();
             int h = abc.getGlobalTraitId(TraitType.METHOD /*non-initializer*/, isStatic, classIndex, t);
-            if (trait instanceof TraitClass) {
-                writer.startClass(((TraitClass) trait).class_info);
-            } else {
+            //if (trait instanceof TraitClass) {
+//                writer.startClass(((TraitClass) trait).class_info);
+            //} else {
                 writer.startTrait(h);
-            }
+            //}
             if (makePackages) {
-                trait.toStringPackaged(parent, convertData, path, abc, isStatic, exportMode, scriptIndex, classIndex, writer, fullyQualifiedNames, parallel);
+                trait.toStringPackaged(abcIndex, parent, convertData, path, abc, isStatic, exportMode, scriptIndex, classIndex, writer, fullyQualifiedNames, parallel, insideInterface);
             } else {
-                trait.toString(parent, convertData, path, abc, isStatic, exportMode, scriptIndex, classIndex, writer, fullyQualifiedNames, parallel);
+                trait.toString(abcIndex, parent, convertData, path, abc, isStatic, exportMode, scriptIndex, classIndex, writer, fullyQualifiedNames, parallel, insideInterface);
             }
-            if (trait instanceof TraitClass) {
-                writer.endClass();
-            } else {
+            //if (trait instanceof TraitClass) {
+            //    writer.endClass();
+            //} else {
                 writer.endTrait();
-            }
+            //}
         }
         return writer;
     }
 
-    public void convert(Trait parent, ConvertData convertData, String path, ABC abc, boolean isStatic, ScriptExportMode exportMode, boolean makePackages, int scriptIndex, int classIndex, NulWriter writer, List<DottedChain> fullyQualifiedNames, boolean parallel) throws InterruptedException {
+    public void convert(AbcIndexing abcIndex, Trait parent, ConvertData convertData, String path, ABC abc, boolean isStatic, ScriptExportMode exportMode, boolean makePackages, int scriptIndex, int classIndex, NulWriter writer, List<DottedChain> fullyQualifiedNames, boolean parallel, ScopeStack scopeStack) throws InterruptedException {
         if (!parallel || traits.size() < 2) {
             for (int t = 0; t < traits.size(); t++) {
-                TraitConvertTask task = new TraitConvertTask(traits.get(t), parent, convertData, makePackages, path, abc, isStatic, exportMode, scriptIndex, classIndex, writer, fullyQualifiedNames, t, parallel);
+                TraitConvertTask task = new TraitConvertTask(abcIndex, traits.get(t), parent, convertData, makePackages, path, abc, isStatic, exportMode, scriptIndex, classIndex, writer, fullyQualifiedNames, t, parallel, scopeStack);
                 task.call();
             }
         } else {
@@ -257,7 +265,7 @@ public class Traits implements Cloneable, Serializable {
             futureResults = new ArrayList<>();
             for (int t = 0; t < traits.size(); t++) {
                 // each convert task needs a separate NulWriter, because they are executed parallel
-                TraitConvertTask task = new TraitConvertTask(traits.get(t), parent, convertData, makePackages, path, abc, isStatic, exportMode, scriptIndex, classIndex, new NulWriter(), fullyQualifiedNames, t, parallel);
+                TraitConvertTask task = new TraitConvertTask(abcIndex, traits.get(t), parent, convertData, makePackages, path, abc, isStatic, exportMode, scriptIndex, classIndex, new NulWriter(), fullyQualifiedNames, t, parallel, scopeStack);
                 Future<Void> future = executor.submit(task);
                 futureResults.add(future);
             }
@@ -294,9 +302,9 @@ public class Traits implements Cloneable, Serializable {
         }
     }
 
-    public void getDependencies(int scriptIndex, int classIndex, boolean isStatic, String customNs, ABC abc, List<Dependency> dependencies, List<String> uses, DottedChain ignorePackage, List<DottedChain> fullyQualifiedNames) throws InterruptedException {
+    public void getDependencies(AbcIndexing abcIndex, int scriptIndex, int classIndex, boolean isStatic, String customNs, ABC abc, List<Dependency> dependencies, DottedChain ignorePackage, List<DottedChain> fullyQualifiedNames) throws InterruptedException {
         for (Trait t : traits) {
-            t.getDependencies(scriptIndex, classIndex, isStatic, customNs, abc, dependencies, uses, ignorePackage, fullyQualifiedNames);
+            t.getDependencies(abcIndex, scriptIndex, classIndex, isStatic, customNs, abc, dependencies, ignorePackage, fullyQualifiedNames);
         }
     }
 

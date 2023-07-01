@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.abc.avm2.deobfuscation;
 
 import com.jpexs.decompiler.flash.abc.ABC;
@@ -86,6 +87,7 @@ public class AVM2DeobfuscatorGetSet extends SWFDecompilerAdapter {
             }
 
             localData.scopeStack.clear();
+            localData.localScopeStack.clear();
             localData.localRegs.clear();
             localData.localRegAssignmentIps.clear();
             localData.localRegs.clear();
@@ -108,9 +110,14 @@ public class AVM2DeobfuscatorGetSet extends SWFDecompilerAdapter {
         localData.localRegs = new HashMap<>(body.max_regs);
         localData.localRegAssignmentIps = new HashMap<>();
         localData.scopeStack = new ScopeStack(true);
+        localData.localScopeStack = new ScopeStack(true);
+        List<MethodBody> callStack = new ArrayList<>();
+        callStack.add(body);
+        localData.callStack = callStack;
         localData.methodBody = body;
         localData.abc = abc;
         localData.localRegNames = new HashMap<>();
+        localData.localRegTypes = new HashMap<>();
         localData.scriptIndex = scriptIndex;
         localData.ip = 0;
         localData.code = body.getCode();

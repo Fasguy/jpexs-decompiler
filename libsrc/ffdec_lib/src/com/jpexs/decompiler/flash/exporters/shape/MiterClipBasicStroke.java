@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -45,12 +45,15 @@ public class MiterClipBasicStroke implements Stroke {
         public float y1;
         public float x2;
         public float y2;
+        
+        public int kind;
 
-        public Vector(float x1, float y1, float x2, float y2) {
+        public Vector(float x1, float y1, float x2, float y2, int kind) {
             this.x1 = x1;
             this.y1 = y1;
             this.x2 = x2;
             this.y2 = y2;
+            this.kind = kind;
         }
 
         public float getLength() {
@@ -71,7 +74,7 @@ public class MiterClipBasicStroke implements Stroke {
         }
 
         public Vector reverse() {
-            return new Vector(x2, y2, x1, y1);
+            return new Vector(x2, y2, x1, y1, kind);
         }
 
         public Vector transform(AffineTransform t) {
@@ -81,7 +84,7 @@ public class MiterClipBasicStroke implements Stroke {
             Point2D toDest = new Point2D.Float();
             t.transform(fromSrc, fromDest);
             t.transform(toSrc, toDest);
-            return new Vector((float) fromDest.getX(), (float) fromDest.getY(), (float) toDest.getX(), (float) toDest.getY());
+            return new Vector((float) fromDest.getX(), (float) fromDest.getY(), (float) toDest.getX(), (float) toDest.getY(), kind);
         }
 
         public Vector parallel(float w) {
@@ -92,7 +95,7 @@ public class MiterClipBasicStroke implements Stroke {
             float y3 = y1 + yd;
             float x4 = x2 + xd;
             float y4 = y2 + yd;
-            return new Vector(x3, y3, x4, y4);
+            return new Vector(x3, y3, x4, y4, kind);
         }
 
     }
@@ -107,56 +110,53 @@ public class MiterClipBasicStroke implements Stroke {
         float points[] = new float[6];
 
         Area area = new Area(stroke.createStrokedShape(p));
-        AffineTransform t = new AffineTransform();
 
         List<Vector> vectors = new ArrayList<>();
-        List<Boolean> offPath = new ArrayList<>();
         float x = 0;
         float y = 0;
+        
+        final int KIND_MOVETO = 2;
+        final int KIND_OFFPATH = 1;
+        final int KIND_NORMAL = 0;
+        
         while (!pi.isDone()) {
             type = pi.currentSegment(points);
             switch (type) {
                 case PathIterator.SEG_MOVETO:
-                    vectors.add(new Vector(x, y, points[0], points[1]));
-                    offPath.add(true);
+                    vectors.add(new Vector(x, y, points[0], points[1], KIND_MOVETO));
                     x = points[0];
                     y = points[1];
                     break;
                 case PathIterator.SEG_LINETO:
-                    vectors.add(new Vector(x, y, points[0], points[1]));
-                    offPath.add(false);
+                    vectors.add(new Vector(x, y, points[0], points[1], KIND_NORMAL));
                     x = points[0];
                     y = points[1];
                     break;
                 case PathIterator.SEG_CUBICTO:
-                    vectors.add(new Vector(x, y, points[0], points[1]));
-                    offPath.add(true);
-                    vectors.add(new Vector(points[0], points[1], points[2], points[3]));
-                    offPath.add(true);
-                    vectors.add(new Vector(points[2], points[3], points[4], points[5]));
-                    offPath.add(false);
+                    vectors.add(new Vector(x, y, points[0], points[1], KIND_OFFPATH));
+                    vectors.add(new Vector(points[0], points[1], points[2], points[3], KIND_OFFPATH));
+                    vectors.add(new Vector(points[2], points[3], points[4], points[5], KIND_NORMAL));
                     x = points[4];
                     y = points[5];
                     break;
                 case PathIterator.SEG_QUADTO:
-                    vectors.add(new Vector(x, y, points[0], points[1]));
-                    offPath.add(true);
-                    vectors.add(new Vector(points[0], points[1], points[2], points[3]));
-                    offPath.add(false);
+                    vectors.add(new Vector(x, y, points[0], points[1], KIND_OFFPATH));
+                    vectors.add(new Vector(points[0], points[1], points[2], points[3], KIND_NORMAL));
                     x = points[2];
                     y = points[3];
                     break;
             }
             pi.next();
         }
-
+        
+        //FIXME - make this faster!!!
         for (int i = 0; i < vectors.size() - 1; i++) {
-            if (offPath.get(i)) {
+            Vector u = vectors.get(i);            
+            Vector v = vectors.get(i + 1);
+            if (u.kind == KIND_OFFPATH || v.kind == KIND_MOVETO) {
                 continue;
             }
-            Vector u = vectors.get(i).transform(t);
-            Vector v = vectors.get(i + 1).transform(t);
-
+            
             float parallelSign = 1;
             float dx = u.x2 - u.x1;
             float dy = u.y2 - u.y1;
@@ -194,23 +194,15 @@ public class MiterClipBasicStroke implements Stroke {
                 intersectX = perp2.x1;
                 float line_a = (perp1.y2 - perp1.y1) / (perp1.x2 - perp1.x1);
                 float line_c = perp1.y1 - line_a * perp1.x1;
-                intersectY = line_a * intersectX + line_c;
-            } else if (perp1.y1 == perp1.y2) {
-                intersectY = perp1.y1;
-                float line_b = (perp2.y2 - perp2.y1) / (perp2.x2 - perp2.x1);
-                float line_d = perp2.y1 - line_b * perp2.x1;
-                intersectX = (intersectY - line_d) / line_b;
-            } else if (perp2.y1 == perp2.y2) {
-                intersectY = perp2.y1;
+                intersectY = line_a * intersectX + line_c;                                
+            } else {                
+                //y = a x + c                
                 float line_a = (perp1.y2 - perp1.y1) / (perp1.x2 - perp1.x1);
                 float line_c = perp1.y1 - line_a * perp1.x1;
-                intersectX = intersectY - line_c / line_a;
-            } else {
-                float line_a = (perp1.y2 - perp1.y1) / (perp1.x2 - perp1.x1);
-                float line_c = perp1.y1 - line_a * perp1.x1;
+                //y = b x + d
                 float line_b = (perp2.y2 - perp2.y1) / (perp2.x2 - perp2.x1);
-                float line_d = perp2.y1 - line_b * perp2.x1;
-
+                float line_d = perp2.y1 - line_b * perp2.x1;               
+                               
                 intersectX = (line_d - line_c) / (line_a - line_b);
                 intersectY = line_a * intersectX + line_c;
             }

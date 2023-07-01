@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -118,6 +118,8 @@ public enum SymbolType {
     ASSIGN_SHIFT_LEFT(GraphTargetItem.PRECEDENCE_ASSIGMENT, true, true),
     ASSIGN_SHIFT_RIGHT(GraphTargetItem.PRECEDENCE_ASSIGMENT, true, true),
     ASSIGN_USHIFT_RIGHT(GraphTargetItem.PRECEDENCE_ASSIGMENT, true, true),
+    ASSIGN_AND(GraphTargetItem.PRECEDENCE_ASSIGMENT, true, true),
+    ASSIGN_OR(GraphTargetItem.PRECEDENCE_ASSIGMENT, true, true),    
     AS(GraphTargetItem.PRECEDENCE_RELATIONAL, true),
     DELETE(GraphTargetItem.PRECEDENCE_UNARY, false),
     INSTANCEOF(GraphTargetItem.PRECEDENCE_RELATIONAL, true),
@@ -192,17 +194,20 @@ public enum SymbolType {
     XML_STARTFINISHTAG_END(GraphTargetItem.PRECEDENCE_PRIMARY, false), // />
     XML_COMMENT(GraphTargetItem.PRECEDENCE_PRIMARY, false), // <!-- ... -->
     XML_CDATA(GraphTargetItem.PRECEDENCE_PRIMARY, false), //<![CDATA[ ... ]]>
-    XML_INSTR_BEGIN(GraphTargetItem.PRECEDENCE_PRIMARY, false), // <?xxx
-    XML_INSTR_END(GraphTargetItem.PRECEDENCE_PRIMARY, false), // ?>
+    XML_INSTR(GraphTargetItem.PRECEDENCE_PRIMARY, false), // <?xxx a b c ?>
+    //XML_INSTR_BEGIN(GraphTargetItem.PRECEDENCE_PRIMARY, false), // <?xxx
+    //XML_INSTR_END(GraphTargetItem.PRECEDENCE_PRIMARY, false), // ?>
     XML_VAR_BEGIN(GraphTargetItem.PRECEDENCE_PRIMARY, false), // {
     XML_ATTRIBUTENAME(GraphTargetItem.PRECEDENCE_PRIMARY, false), // aaa=
     XML_ATTRIBUTEVALUE(GraphTargetItem.PRECEDENCE_PRIMARY, false), // "vvv"
     XML_TEXT(GraphTargetItem.PRECEDENCE_PRIMARY, false),
     XML_ATTRNAMEVAR_BEGIN(GraphTargetItem.PRECEDENCE_PRIMARY, false), // {...}=
     XML_ATTRVALVAR_BEGIN(GraphTargetItem.PRECEDENCE_PRIMARY, false), // aaa={
-    XML_INSTRATTRNAMEVAR_BEGIN(GraphTargetItem.PRECEDENCE_PRIMARY, false), // {...}=
-    XML_INSTRATTRVALVAR_BEGIN(GraphTargetItem.PRECEDENCE_PRIMARY, false), // aaa={
-    XML_INSTRVARTAG_BEGIN(GraphTargetItem.PRECEDENCE_PRIMARY, false), // <?{
+    XML_END(GraphTargetItem.PRECEDENCE_PRIMARY, false),
+    XML_WHITESPACE(GraphTargetItem.PRECEDENCE_PRIMARY, false), //only when enabled - for example for XML
+    //XML_INSTRATTRNAMEVAR_BEGIN(GraphTargetItem.PRECEDENCE_PRIMARY, false), // {...}=
+    // XML_INSTRATTRVALVAR_BEGIN(GraphTargetItem.PRECEDENCE_PRIMARY, false), // aaa={
+    //XML_INSTRVARTAG_BEGIN(GraphTargetItem.PRECEDENCE_PRIMARY, false), // <?{
     FILTER(GraphTargetItem.PRECEDENCE_PRIMARY, false),
     DESCENDANTS(GraphTargetItem.PRECEDENCE_PRIMARY, false),
     NATIVE,

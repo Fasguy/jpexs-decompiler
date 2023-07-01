@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.graph;
 
 import com.jpexs.decompiler.flash.IdentifiersDeobfuscation;
@@ -22,6 +23,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 /**
  *
@@ -29,52 +31,69 @@ import java.util.List;
  */
 public class DottedChain implements Serializable, Comparable<DottedChain> {
 
-    public static final String NO_SUFFIX = "";
-
     public static final DottedChain EMPTY = new DottedChain(true);
 
-    public static final DottedChain TOPLEVEL = new DottedChain(new String[]{}, NO_SUFFIX);
+    public static final DottedChain UNBOUNDED = new DottedChain(new String[]{"*"});
 
-    public static final DottedChain BOOLEAN = new DottedChain(new String[]{"Boolean"}, NO_SUFFIX);
+    public static final DottedChain TOPLEVEL = new DottedChain(new String[]{});
 
-    public static final DottedChain STRING = new DottedChain(new String[]{"String"}, NO_SUFFIX);
+    public static final DottedChain BOOLEAN = new DottedChain(new String[]{"Boolean"});
 
-    public static final DottedChain ARRAY = new DottedChain(new String[]{"Array"}, NO_SUFFIX);
+    public static final DottedChain STRING = new DottedChain(new String[]{"String"});
 
-    public static final DottedChain NUMBER = new DottedChain(new String[]{"Number"}, NO_SUFFIX);
+    public static final DottedChain ARRAY = new DottedChain(new String[]{"Array"});
 
-    public static final DottedChain OBJECT = new DottedChain(new String[]{"Object"}, NO_SUFFIX);
+    public static final DottedChain NUMBER = new DottedChain(new String[]{"Number"});
 
-    public static final DottedChain INT = new DottedChain(new String[]{"int"}, NO_SUFFIX);
+    public static final DottedChain OBJECT = new DottedChain(new String[]{"Object"});
 
-    public static final DottedChain UINT = new DottedChain(new String[]{"uint"}, NO_SUFFIX);
+    public static final DottedChain INT = new DottedChain(new String[]{"int"});
 
-    public static final DottedChain UNDEFINED = new DottedChain(new String[]{"Undefined"}, NO_SUFFIX);
+    public static final DottedChain UINT = new DottedChain(new String[]{"uint"});
 
-    public static final DottedChain XML = new DottedChain(new String[]{"XML"}, NO_SUFFIX);
+    public static final DottedChain UNDEFINED = new DottedChain(new String[]{"Undefined"});
 
-    public static final DottedChain NULL = new DottedChain(new String[]{"null"}, NO_SUFFIX);
+    public static final DottedChain XML = new DottedChain(new String[]{"XML"});
 
-    public static final DottedChain FUNCTION = new DottedChain(new String[]{"Function"}, NO_SUFFIX);
+    public static final DottedChain NULL = new DottedChain(new String[]{"null"});
 
-    public static final DottedChain VOID = new DottedChain(new String[]{"void"}, NO_SUFFIX);
+    public static final DottedChain FUNCTION = new DottedChain(new String[]{"Function"});
 
-    public static final DottedChain NAMESPACE = new DottedChain(new String[]{"Namespace"}, NO_SUFFIX);
+    public static final DottedChain VOID = new DottedChain(new String[]{"void"});
 
-    public static final DottedChain ALL = new DottedChain(new String[]{"*"}, NO_SUFFIX);
+    public static final DottedChain NAMESPACE = new DottedChain(new String[]{"Namespace"});
 
-    private final String[] parts;
+    public static final DottedChain ALL = new DottedChain(new String[]{"*"});
 
-    private final int length;
-
-    private final int hash;
+    private List<PathPart> parts;
 
     private boolean isNull = false;
 
-    private String namespaceSuffix = "";
+    public String getNamespaceSuffix(int index) {
+        return parts.get(index).namespaceSuffix;
+    }
 
-    public String getNamespaceSuffix() {
-        return namespaceSuffix;
+    public String getLastNamespaceSuffix() {
+        if (parts.isEmpty()) {
+            return "";
+        }
+        return parts.get(parts.size() - 1).namespaceSuffix;
+    }
+
+    public static final DottedChain parseNoSuffix(String name) {
+        if (name == null) {
+            return DottedChain.EMPTY;
+        } else if (name.isEmpty()) {
+            return DottedChain.TOPLEVEL;
+        } else {
+            String parts[] = name.split("\\.");
+            List<PathPart> newParts = new ArrayList<>();
+            for (String part : parts) {
+                newParts.add(new PathPart(part, false, ""));                
+            }
+
+            return new DottedChain(newParts, false);
+        }
     }
 
     public static final DottedChain parseWithSuffix(String name) {
@@ -83,57 +102,64 @@ public class DottedChain implements Serializable, Comparable<DottedChain> {
         } else if (name.isEmpty()) {
             return DottedChain.TOPLEVEL;
         } else {
-            String nameNoSuffix = name;
-            String namespaceSuffix = "";
-            if (name.matches(".*#[0-9]+$")) {
-                nameNoSuffix = name.substring(0, name.lastIndexOf("#"));
-                namespaceSuffix = name.substring(name.lastIndexOf("#"));
+            String parts[] = name.split("\\.");
+            List<PathPart> newParts = new ArrayList<>();
+            for (String part : parts) {
+                String nameNoSuffix = part;
+                String namespaceSuffix = "";
+                if (part.matches(".*#[0-9]+$")) {
+                    nameNoSuffix = part.substring(0, part.lastIndexOf("#"));
+                    namespaceSuffix = part.substring(part.lastIndexOf("#"));
+                }
+                newParts.add(new PathPart(nameNoSuffix, false, namespaceSuffix));                                
             }
-            return new DottedChain(nameNoSuffix.split("\\."), namespaceSuffix);
+
+            return new DottedChain(newParts, false);
         }
     }
 
     private DottedChain(boolean isNull) {
         this.isNull = isNull;
-        this.parts = new String[0];
-        this.length = 0;
-        this.hash = 0;
+        this.parts = new ArrayList<>();
     }
 
     public DottedChain(DottedChain src) {
-        this(src.parts, src.namespaceSuffix);
+        this.parts = new ArrayList<>(src.parts);
         this.isNull = src.isNull;
     }
 
-    public DottedChain(List<String> parts) {
-        length = parts.size();
-        this.parts = parts.toArray(new String[length]);
-        hash = calcHash();
+    public DottedChain(String[] parts) {
+        this(Arrays.asList(parts));
     }
 
-    /*public DottedChain(String onePart, String namespaceSuffix) {
-        this(new String[]{onePart}, namespaceSuffix);
-    }*/
-    public DottedChain(String[] parts, String namespaceSuffix) {
-        if (parts.length == 1 && parts[0].isEmpty()) {
-            length = 0;
-            this.parts = new String[0];
-        } else {
-            length = parts.length;
-            this.parts = parts;
-        }
-        hash = calcHash();
-        this.namespaceSuffix = namespaceSuffix;
-    }
-
-    private DottedChain(String[] parts, int length) {
-        this.length = length;
+    private DottedChain(List<PathPart> parts, boolean isNull) {
         this.parts = parts;
-        hash = calcHash();
+        this.isNull = isNull;
+    }
+
+    public DottedChain(List<String> parts) {
+        List<PathPart> newParts = new ArrayList<>();
+        for (String part : parts) {
+            newParts.add(new PathPart(part, false, ""));
+        }
+        this.parts = newParts;
+    }
+
+    public DottedChain(String[] parts, String[] namespaceSuffixes) {
+        this(new boolean[parts.length], parts, namespaceSuffixes);
+    }
+
+    public DottedChain(boolean attributes[], String[] parts, String[] namespaceSuffixes) {
+        List<PathPart> newParts = new ArrayList<>();
+        for (int i = 0; i < attributes.length; i++) {
+            newParts.add(new PathPart(parts[i], attributes[i], namespaceSuffixes[i]));
+        }
+        this.parts = newParts;
+
     }
 
     public boolean isTopLevel() {
-        return !isNull && length == 0;
+        return !isNull && parts.isEmpty();
     }
 
     public boolean isEmpty() {
@@ -141,33 +167,51 @@ public class DottedChain implements Serializable, Comparable<DottedChain> {
     }
 
     public int size() {
-        return length;
+        return parts.size();
     }
 
     public String get(int index) {
-        if (index >= length) {
+        if (index >= parts.size()) {
             throw new ArrayIndexOutOfBoundsException();
         }
 
-        return parts[index];
+        return parts.get(index).name;
+    }
+
+    public boolean isAttribute(int index) {
+        if (index >= parts.size()) {
+            throw new ArrayIndexOutOfBoundsException();
+        }
+        return parts.get(index).attribute;
     }
 
     public DottedChain subChain(int count) {
-        if (count > length) {
+        if (count > parts.size()) {
             throw new ArrayIndexOutOfBoundsException();
         }
 
-        return new DottedChain(parts, count);
+        return new DottedChain(new ArrayList<>(parts.subList(0, count)), isNull);
     }
 
     public String getLast() {
         if (isNull) {
             return null;
         }
-        if (length == 0) {
+        if (parts.isEmpty()) {
             return "";
         } else {
-            return parts[length - 1];
+            return parts.get(parts.size() - 1).name;
+        }
+    }
+
+    public boolean isLastAttribute() {
+        if (isNull) {
+            return false;
+        }
+        if (parts.isEmpty()) {
+            return false;
+        } else {
+            return parts.get(parts.size() - 1).attribute;
         }
     }
 
@@ -175,11 +219,11 @@ public class DottedChain implements Serializable, Comparable<DottedChain> {
         if (isNull) {
             return null;
         }
-        if (length < 2) {
+        if (parts.size() < 2) {
             return EMPTY;
         }
 
-        return new DottedChain(parts, length - 1);
+        return subChain(parts.size() - 1);
     }
 
     public DottedChain addWithSuffix(String name) {
@@ -193,39 +237,42 @@ public class DottedChain implements Serializable, Comparable<DottedChain> {
     }
 
     public DottedChain add(String name, String namespaceSuffix) {
+        return add(false, name, namespaceSuffix);
+    }
+
+    public DottedChain add(boolean attribute, String name, String namespaceSuffix) {
         if (name == null) {
             return new DottedChain(this);
         }
-        String[] nparts = new String[length + 1];
-        if (length > 0) {
-            System.arraycopy(parts, 0, nparts, 0, length);
-        }
-
-        nparts[nparts.length - 1] = name;
-        return new DottedChain(nparts, namespaceSuffix);
+        List<PathPart> newParts = new ArrayList<>(parts);
+        newParts.add(new PathPart(name, attribute, namespaceSuffix));
+        return new DottedChain(newParts, false);
     }
 
     protected String toString(boolean as3, boolean raw, boolean withSuffix) {
         if (isNull) {
             return "";
         }
-        if (length == 0) {
+        if (parts.isEmpty()) {
             return "";
         }
 
         StringBuilder ret = new StringBuilder();
-        for (int i = 0; i < length; i++) {
+        for (int i = 0; i < parts.size(); i++) {
             if (i > 0) {
                 ret.append(".");
             }
-
-            String part = parts[i];
-            boolean lastStar = i == length - 1 && "*".equals(part);
+            if (parts.get(i).attribute) {
+                ret.append("@");
+            }
+            String part = parts.get(i).name;
+            boolean lastStar = i == parts.size() - 1 && "*".equals(part);
             ret.append((raw || lastStar) ? part : IdentifiersDeobfuscation.printIdentifier(as3, part));
+            if (withSuffix) {
+                ret.append(parts.get(i).namespaceSuffix);
+            }
         }
-        if (withSuffix) {
-            ret.append(namespaceSuffix);
-        }
+
         return ret.toString();
     }
 
@@ -233,23 +280,27 @@ public class DottedChain implements Serializable, Comparable<DottedChain> {
         if (isNull) {
             return "";
         }
-        if (length == 0) {
+        if (parts.isEmpty()) {
             return "";
         }
 
         StringBuilder ret = new StringBuilder();
-        for (int i = 0; i < length; i++) {
+        for (int i = 0; i < parts.size(); i++) {
             if (i > 0) {
                 ret.append(File.separator);
             }
 
-            ret.append(Helper.makeFileName(IdentifiersDeobfuscation.printIdentifier(true, parts[i])));
+            ret.append(Helper.makeFileName(IdentifiersDeobfuscation.printIdentifier(true, parts.get(i).name)));
         }
         return ret.toString();
     }
 
     public List<String> toList() {
-        return new ArrayList<>(Arrays.asList(parts));
+        List<String> ret = new ArrayList<>();
+        for (PathPart p : parts) {
+            ret.add(p.name);
+        }
+        return ret;
     }
 
     public String toPrintableString(boolean as3) {
@@ -267,23 +318,17 @@ public class DottedChain implements Serializable, Comparable<DottedChain> {
 
     @Override
     public int hashCode() {
+        int hash = 7;
+        hash = 41 * hash + Objects.hashCode(this.parts);
+        hash = 41 * hash + (this.isNull ? 1 : 0);
         return hash;
-    }
-
-    private int calcHash() {
-        if (isNull) {
-            return 0;
-        }
-        int result = 1;
-        for (int i = 0; i < length; i++) {
-            result = 31 * result + parts[i].hashCode();
-        }
-
-        return result;
     }
 
     @Override
     public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
         if (obj == null) {
             return false;
         }
@@ -291,26 +336,57 @@ public class DottedChain implements Serializable, Comparable<DottedChain> {
             return false;
         }
         final DottedChain other = (DottedChain) obj;
-        if (isNull && other.isNull) {
-            return true;
-        }
-        if (length != other.length) {
+        if (this.isNull != other.isNull) {
             return false;
         }
-
-        for (int i = 0; i < length; i++) {
-            String s1 = parts[i];
-            String s2 = other.parts[i];
-            if (!s1.equals(s2)) {
-                return false;
-            }
-        }
-
-        return true;
+        return Objects.equals(this.parts, other.parts);
     }
 
     @Override
     public int compareTo(DottedChain o) {
         return toRawString().compareTo(o.toRawString());
+    }
+
+    private static class PathPart implements Serializable {
+
+        public String name;
+        public boolean attribute;
+        public String namespaceSuffix;
+
+        public PathPart(String name, boolean attribute, String namespaceSuffix) {
+            this.name = name;
+            this.attribute = attribute;
+            this.namespaceSuffix = namespaceSuffix;
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 5;
+            hash = 79 * hash + Objects.hashCode(this.name);
+            hash = 79 * hash + (this.attribute ? 1 : 0);
+            hash = 79 * hash + Objects.hashCode(this.namespaceSuffix);
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null) {
+                return false;
+            }
+            if (getClass() != obj.getClass()) {
+                return false;
+            }
+            final PathPart other = (PathPart) obj;
+            if (this.attribute != other.attribute) {
+                return false;
+            }
+            if (!Objects.equals(this.name, other.name)) {
+                return false;
+            }
+            return Objects.equals(this.namespaceSuffix, other.namespaceSuffix);
+        }                
     }
 }

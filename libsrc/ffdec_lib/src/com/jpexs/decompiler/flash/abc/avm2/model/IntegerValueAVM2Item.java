@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -24,7 +24,6 @@ import com.jpexs.decompiler.flash.configuration.Configuration;
 import com.jpexs.decompiler.flash.ecma.EcmaScript;
 import com.jpexs.decompiler.flash.helpers.GraphTextWriter;
 import com.jpexs.decompiler.graph.CompilationException;
-import com.jpexs.decompiler.graph.DottedChain;
 import com.jpexs.decompiler.graph.GraphSourceItem;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.SourceGenerator;
@@ -42,9 +41,9 @@ import java.util.Set;
  */
 public class IntegerValueAVM2Item extends NumberValueAVM2Item implements IntegerValueTypeItem {
 
-    public Long value;
+    public Integer value;
 
-    public IntegerValueAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, Long value) {
+    public IntegerValueAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, Integer value) {
         super(instruction, lineStartIns);
         this.value = value;
     }
@@ -147,8 +146,8 @@ public class IntegerValueAVM2Item extends NumberValueAVM2Item implements Integer
     }
 
     @Override
-    public GraphTargetItem returnType() {
-        return new TypeItem(DottedChain.INT);
+    public GraphTargetItem returnType() {        
+        return TypeItem.INT;
     }
 
     @Override

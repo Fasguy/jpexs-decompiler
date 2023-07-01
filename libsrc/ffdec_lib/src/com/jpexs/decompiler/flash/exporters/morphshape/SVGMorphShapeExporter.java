@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.exporters.morphshape;
 
 import com.jpexs.decompiler.flash.SWF;
@@ -51,8 +52,8 @@ public class SVGMorphShapeExporter extends DefaultSVGMorphShapeExporter {
 
     private final SVGExporter exporter;
 
-    public SVGMorphShapeExporter(SWF swf, SHAPE shape, SHAPE endShape, int id, SVGExporter exporter, Color defaultColor, ColorTransform colorTransform, double zoom) {
-        super(shape, endShape, colorTransform, zoom);
+    public SVGMorphShapeExporter(int morphShapeNum, SWF swf, SHAPE shape, SHAPE endShape, int id, SVGExporter exporter, Color defaultColor, ColorTransform colorTransform, double zoom) {
+        super(morphShapeNum, shape, endShape, colorTransform, zoom);
         this.swf = swf;
         this.id = id;
         this.defaultColor = defaultColor;
@@ -118,7 +119,7 @@ public class SVGMorphShapeExporter extends DefaultSVGMorphShapeExporter {
                 lastPatternId++;
                 String patternId = "PatternID_" + id + "_" + lastPatternId;
                 ImageFormat format = image.getImageFormat();
-                byte[] imageData = Helper.readStream(image.getImageData());
+                byte[] imageData = Helper.readStream(image.getConvertedImageData());
                 String base64ImgData = Helper.byteArrayToBase64String(imageData);
                 path.setAttribute("style", "fill:url(#" + patternId + ")");
                 Element pattern = exporter.createElement("pattern");

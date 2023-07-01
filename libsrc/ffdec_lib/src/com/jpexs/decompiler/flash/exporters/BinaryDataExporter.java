@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.exporters;
 
 import com.jpexs.decompiler.flash.AbortRetryIgnoreHandler;
@@ -40,6 +41,10 @@ public class BinaryDataExporter {
 
     public List<File> exportBinaryData(AbortRetryIgnoreHandler handler, String outdir, ReadOnlyTagList tags, BinaryDataExportSettings settings, EventListener evl) throws IOException, InterruptedException {
         List<File> ret = new ArrayList<>();
+        if (Thread.currentThread().isInterrupted()) {
+            return ret;
+        }
+        
         if (tags.isEmpty()) {
             return ret;
         }
@@ -76,6 +81,10 @@ public class BinaryDataExporter {
 
                 ret.add(file);
 
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
+                }
+        
                 if (evl != null) {
                     evl.handleExportedEvent("binarydata", currentIndex, count, t.getName());
                 }

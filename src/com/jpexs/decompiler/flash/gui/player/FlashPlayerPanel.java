@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -444,5 +444,35 @@ public final class FlashPlayerPanel extends Panel implements Closeable, MediaDis
             return Color.white;
         }
         return bgColor;
+    }
+
+    @Override
+    public void setDisplayed(boolean value) {
+        
+    }
+
+    @Override
+    public boolean isDisplayed() {
+        return true;
+    }
+
+    @Override
+    public void setFrozen(boolean value) {
+
+    }
+
+    @Override
+    public boolean alwaysDisplay() {
+        return true;
+    }
+
+    @Override
+    public void setMuted(boolean value) {
+        
+    }
+    
+    @Override
+    public boolean isMutable() {
+        return false;
     }
 }

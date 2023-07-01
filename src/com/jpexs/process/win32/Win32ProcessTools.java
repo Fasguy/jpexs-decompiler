@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS
+ *  Copyright (C) 2010-2023 JPEXS
  * 
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -58,9 +58,7 @@ import java.util.logging.Logger;
 public class Win32ProcessTools extends ProcessTools {
 
     private static long pointerToAddress(Pointer p) {
-        String s = p.toString();
-        s = s.replace("native@0x", "");
-        return Long.parseLong(s, 16);
+        return Pointer.nativeValue(p);
     }
 
     public static List<MEMORY_BASIC_INFORMATION> getPageRanges(WinNT.HANDLE hOtherProcess) {
@@ -73,7 +71,7 @@ public class Win32ProcessTools extends ProcessTools {
             mbi = new MEMORY_BASIC_INFORMATION();
             BaseTSD.SIZE_T t = Kernel32.INSTANCE.VirtualQueryEx(hOtherProcess, lpMem, mbi, new BaseTSD.SIZE_T(mbi.size()));
             if (t.longValue() == 0) {
-                Logger.getLogger(Win32ProcessTools.class.getName()).log(Level.SEVERE, "Cannot get page ranges. Last error:{0}", Kernel32.INSTANCE.GetLastError());
+                //Logger.getLogger(Win32ProcessTools.class.getName()).log(Level.SEVERE, "Cannot get page ranges. Last error:{0}", Kernel32.INSTANCE.GetLastError());
                 break;
             }
             ret.add(mbi);

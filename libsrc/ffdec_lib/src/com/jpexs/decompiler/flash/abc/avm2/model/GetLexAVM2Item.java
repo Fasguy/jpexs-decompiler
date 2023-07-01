@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,7 +23,6 @@ import com.jpexs.decompiler.graph.DottedChain;
 import com.jpexs.decompiler.graph.GraphSourceItem;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.SimpleValue;
-import com.jpexs.decompiler.graph.TypeItem;
 import com.jpexs.decompiler.graph.model.LocalData;
 import java.util.Objects;
 
@@ -34,13 +33,22 @@ import java.util.Objects;
 public class GetLexAVM2Item extends AVM2Item implements SimpleValue {
 
     public Multiname propertyName;
+    
+    public GraphTargetItem type;
+    
+    public GraphTargetItem callType;
+    
+    public boolean isStatic;        
 
     private final DottedChain fullPropertyName;
 
-    public GetLexAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, Multiname propertyName, AVM2ConstantPool constants) {
+    public GetLexAVM2Item(GraphSourceItem instruction, GraphSourceItem lineStartIns, Multiname propertyName, AVM2ConstantPool constants, GraphTargetItem type, GraphTargetItem callType, boolean isStatic) {
         super(instruction, lineStartIns, PRECEDENCE_PRIMARY);
         this.propertyName = propertyName;
+        this.type = type;
+        this.callType = callType;
         this.fullPropertyName = propertyName.getNameWithNamespace(constants, true);
+        this.isStatic = isStatic;
     }
 
     public String getRawPropertyName() {
@@ -56,7 +64,7 @@ public class GetLexAVM2Item extends AVM2Item implements SimpleValue {
 
     @Override
     public GraphTargetItem returnType() {
-        return TypeItem.UNBOUNDED;
+        return type;
     }
 
     @Override

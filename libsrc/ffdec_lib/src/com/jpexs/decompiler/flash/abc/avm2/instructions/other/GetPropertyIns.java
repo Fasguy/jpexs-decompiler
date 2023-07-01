@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -24,20 +24,32 @@ import com.jpexs.decompiler.flash.abc.avm2.LocalDataArea;
 import com.jpexs.decompiler.flash.abc.avm2.exceptions.AVM2ExecutionException;
 import com.jpexs.decompiler.flash.abc.avm2.instructions.AVM2Instruction;
 import com.jpexs.decompiler.flash.abc.avm2.instructions.InstructionDefinition;
+import com.jpexs.decompiler.flash.abc.avm2.model.ApplyTypeAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.FindPropertyAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.FullMultinameAVM2Item;
+import com.jpexs.decompiler.flash.abc.avm2.model.GetLexAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.GetPropertyAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.LocalRegAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.SetLocalAVM2Item;
+import com.jpexs.decompiler.flash.abc.avm2.parser.script.AbcIndexing;
+import com.jpexs.decompiler.flash.abc.types.MethodBody;
 import com.jpexs.decompiler.flash.abc.types.Multiname;
+import com.jpexs.decompiler.flash.abc.types.Namespace;
+import com.jpexs.decompiler.flash.abc.types.traits.Trait;
+import com.jpexs.decompiler.flash.abc.types.traits.TraitSlotConst;
 import com.jpexs.decompiler.flash.ecma.ArrayType;
 import com.jpexs.decompiler.flash.ecma.EcmaScript;
 import com.jpexs.decompiler.flash.ecma.ObjectType;
 import com.jpexs.decompiler.flash.ecma.Undefined;
+import com.jpexs.decompiler.graph.DottedChain;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.TranslateStack;
+import com.jpexs.decompiler.graph.TypeItem;
 import com.jpexs.decompiler.graph.model.DuplicateItem;
+import com.jpexs.helpers.Reference;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -121,7 +133,132 @@ public class GetPropertyIns extends InstructionDefinition {
                 }
             }
         }
-        stack.push(new GetPropertyAVM2Item(ins, localData.lineStartInstruction, obj, multiname));
+        Reference<Boolean> isStatic = new Reference<>(false);
+        Reference<GraphTargetItem> type = new Reference<>(null);
+        Reference<GraphTargetItem> callType = new Reference<>(null);
+        resolvePropertyType(localData, obj, multiname, isStatic, type, callType);
+
+        stack.push(new GetPropertyAVM2Item(ins, localData.lineStartInstruction, obj, multiname, type.getVal(), callType.getVal(), isStatic.getVal()));
+    }
+
+    public static void resolvePropertyType(
+            AVM2LocalData localData,
+            GraphTargetItem obj,
+            FullMultinameAVM2Item multiname,
+            Reference<Boolean> isStatic, Reference<GraphTargetItem> type, Reference<GraphTargetItem> callType) {
+        type.setVal(TypeItem.UNKNOWN);
+        callType.setVal(TypeItem.UNKNOWN);
+        String multinameStr = localData.abc.constants.getMultiname(multiname.multinameIndex).getName(localData.abc.constants, new ArrayList<>(), true, true);
+        if (obj instanceof FindPropertyAVM2Item) {
+            FindPropertyAVM2Item fprop = (FindPropertyAVM2Item) obj;
+            if (fprop.propertyName.equals(multiname)) {
+                for (int b = localData.callStack.size() - 1; b >= 0; b--) {
+                    MethodBody body = localData.callStack.get(b);
+                    for (Trait t : body.traits.traits) {
+                        if (t instanceof TraitSlotConst) {
+                            TraitSlotConst tsc = (TraitSlotConst) t;
+                            if (Objects.equals(
+                                    tsc.getName(localData.abc).getName(localData.abc.constants, new ArrayList<>(), true, true),
+                                    multinameStr
+                            )) {
+                                GraphTargetItem ty = AbcIndexing.multinameToType(tsc.type_index, localData.abc.constants);
+                                type.setVal(ty);
+                                callType.setVal(ty);
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                if (type.getVal().equals(TypeItem.UNKNOWN)) {
+                    if (localData.abcIndex != null) {
+                        String currentClassName = localData.classIndex == -1 ? null : localData.abc.instance_info.get(localData.classIndex).getName(localData.abc.constants).getNameWithNamespace(localData.abc.constants, true).toRawString();
+                        if (currentClassName != null) {
+                            localData.abcIndex.findPropertyTypeOrCallType(localData.abc, new TypeItem(currentClassName), multinameStr, localData.abc.constants.getMultiname(multiname.multinameIndex).namespace_index, true, true, true, type, callType);
+                        }
+                        if (type.getVal().equals(TypeItem.UNKNOWN)) {                            
+                            GraphTargetItem ti = AbcIndexing.multinameToType(multiname.multinameIndex, localData.abc.constants);//new TypeItem(localData.abc.constants.getMultiname(multiname.multinameIndex).getNameWithNamespace(localData.abc.constants, true));
+                            if (localData.abcIndex.findClass(ti, localData.abc, localData.scriptIndex) != null) {
+                                type.setVal(ti);
+                                callType.setVal(ti); //coercion  i = int(xx);
+                                isStatic.setVal(true);
+                                return;
+                            }
+
+                            Namespace ns = localData.abc.constants.getMultiname(multiname.multinameIndex).getNamespace(localData.abc.constants);
+                            if (ns != null) {
+                                String rawNs = ns.getRawName(localData.abc.constants);
+                                AbcIndexing.TraitIndex traitIndex = localData.abcIndex.findScriptProperty(multinameStr, DottedChain.parseWithSuffix(rawNs));
+                                if (traitIndex != null) {
+                                    type.setVal(traitIndex.returnType);
+                                    callType.setVal(traitIndex.callReturnType);
+                                    isStatic.setVal(true); //?
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            if (localData.abcIndex != null) {
+                GraphTargetItem receiverType = obj.returnType();
+                if (!receiverType.equals(TypeItem.UNBOUNDED) && !receiverType.equals(TypeItem.UNKNOWN)) {
+
+                    boolean parentStatic = false;
+                    if (obj instanceof GetLexAVM2Item) {
+                        if (((GetLexAVM2Item) obj).isStatic) {
+                            parentStatic = true;
+                        }
+                    }
+                    if (obj instanceof GetPropertyAVM2Item) {
+                        if (((GetPropertyAVM2Item) obj).isStatic) {
+                            parentStatic = true;
+                        }
+                    }
+                    if (receiverType instanceof ApplyTypeAVM2Item) {
+                        ApplyTypeAVM2Item ati = (ApplyTypeAVM2Item) receiverType;
+                        if (localData.abc.constants.getMultiname(multiname.multinameIndex).needsName()) {
+                            callType.setVal(TypeItem.UNBOUNDED);
+                            /*?*/
+                            type.setVal(ati.params.get(0));
+                            return;
+                        } else {
+                            receiverType = ati.object;
+
+                            if (receiverType.equals(new TypeItem("__AS3__.vec.Vector"))) {
+                                String paramStr = ati.params.get(0).toString();
+                                switch (paramStr) {
+                                    case "double":
+                                    case "int":
+                                    case "uint":
+                                        receiverType = new TypeItem("__AS3__.vec.Vector$" + paramStr);
+                                        break;
+                                    default:
+                                        receiverType = new TypeItem("__AS3__.vec.Vector$object");
+                                }
+                            }
+
+                            //TODO: handle method calls to return proper param type results
+                        }
+                    }
+                    if (localData.abc.constants.getMultiname(multiname.multinameIndex).isAttribute()) {
+                        type.setVal(new TypeItem("XMLList"));
+                        return;
+                    }
+                    if (receiverType.equals(new TypeItem("XMLList"))) {
+                        if (multiname.name != null && multiname.name.returnType().equals(TypeItem.INT)) {
+                            type.setVal(new TypeItem("XML"));
+                            return;
+                        }
+                    }
+                    localData.abcIndex.findPropertyTypeOrCallType(localData.abc, receiverType, multiname.resolvedMultinameName, localData.abc.constants.getMultiname(multiname.multinameIndex).namespace_index, parentStatic, !parentStatic, false, type, callType);
+                    if (receiverType.equals(new TypeItem("XML")) && !type.getVal().equals(new TypeItem("Function"))) {
+                        type.setVal(new TypeItem("XMLList"));
+                    }                    
+                }
+            }
+        }
     }
 
     @Override

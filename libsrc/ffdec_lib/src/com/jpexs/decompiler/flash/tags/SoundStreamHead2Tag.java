@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -40,7 +40,7 @@ import java.util.List;
  * @author JPEXS
  */
 @SWFVersion(from = 3)
-public class SoundStreamHead2Tag extends Tag implements SoundStreamHeadTypeTag {
+public class SoundStreamHead2Tag extends SoundStreamHeadTypeTag {
 
     public static final int ID = 45;
 
@@ -75,7 +75,7 @@ public class SoundStreamHead2Tag extends Tag implements SoundStreamHeadTypeTag {
     public int latencySeek;
 
     @Internal
-    private int virtualCharacterId = 0;
+    private int virtualCharacterId = -1;
 
     /**
      * Constructor
@@ -172,11 +172,6 @@ public class SoundStreamHead2Tag extends Tag implements SoundStreamHeadTypeTag {
     }
 
     @Override
-    public void setVirtualCharacterId(int ch) {
-        virtualCharacterId = ch;
-    }
-
-    @Override
     public int getSoundFormatId() {
         return streamSoundCompression;
     }
@@ -206,12 +201,7 @@ public class SoundStreamHead2Tag extends Tag implements SoundStreamHeadTypeTag {
 
     @Override
     public boolean importSupported() {
-        return false;
-    }
-
-    @Override
-    public boolean setSound(InputStream is, int newSoundFormat) {
-        return false;
+        return true;
     }
 
     @Override
@@ -261,6 +251,33 @@ public class SoundStreamHead2Tag extends Tag implements SoundStreamHeadTypeTag {
 
     @Override
     public String toString() {
-        return getName() + (virtualCharacterId > 0 ? " (" + virtualCharacterId + ")" : "");
+        return getName() + " (" + virtualCharacterId + ")";
     }
+    
+    //getNeededCharacters intentionally not defined
+    
+    @Override
+    public void setSoundSize(boolean soundSize) {
+        this.streamSoundSize = soundSize;
+    }
+
+    @Override
+    public void setSoundType(boolean soundType) {
+        this.streamSoundType = soundType;
+    }
+
+    @Override
+    public void setSoundSampleCount(long soundSampleCount) {
+        this.streamSoundSampleCount = (int) soundSampleCount;
+    }
+
+    @Override
+    public void setSoundCompression(int soundCompression) {
+        this.streamSoundCompression = soundCompression;
+    }
+    
+    @Override
+    public void setSoundRate(int soundRate) {
+        this.streamSoundRate = soundRate;
+    }       
 }

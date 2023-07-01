@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -62,7 +62,7 @@ public class MethodInfoParser {
                 int id = 0;
                 switch (symbValue.type) {
                     case ParsedSymbol.TYPE_INTEGER:
-                        value = new ValueKind(abc.constants.getIntId((Long) symbValue.value, true), ValueKind.CONSTANT_Int);
+                        value = new ValueKind(abc.constants.getIntId((Integer) symbValue.value, true), ValueKind.CONSTANT_Int);
                         break;
                     case ParsedSymbol.TYPE_FLOAT:
                         value = new ValueKind(abc.constants.getDoubleId((Double) symbValue.value, true), ValueKind.CONSTANT_Double);
@@ -177,7 +177,7 @@ public class MethodInfoParser {
                 if (symb.type == ParsedSymbol.TYPE_COLON) {
                     ParsedSymbol symbType = lexer.yylex();
                     if (symbType.type == ParsedSymbol.TYPE_STAR) {
-                        paramTypes.add((Long)0L);
+                        paramTypes.add((Long) 0L);
                     } else if (symbType.type == ParsedSymbol.TYPE_MULTINAME) {
                         paramTypes.add((Long) symbType.value);
                     } else {
@@ -200,7 +200,7 @@ public class MethodInfoParser {
                         int id = 0;
                         switch (symbValue.type) {
                             case ParsedSymbol.TYPE_INTEGER:
-                                optionalValues.add(new ValueKind(abc.constants.getIntId((Long) symbValue.value, true), ValueKind.CONSTANT_Int));
+                                optionalValues.add(new ValueKind(abc.constants.getIntId((Integer) symbValue.value, true), ValueKind.CONSTANT_Int));
                                 break;
                             case ParsedSymbol.TYPE_FLOAT:
                                 optionalValues.add(new ValueKind(abc.constants.getDoubleId((Double) symbValue.value, true), ValueKind.CONSTANT_Double));

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -33,32 +33,22 @@ import com.jpexs.decompiler.flash.exporters.settings.FrameExportSettings;
 import com.jpexs.decompiler.flash.exporters.settings.SpriteExportSettings;
 import com.jpexs.decompiler.flash.exporters.shape.CanvasShapeExporter;
 import com.jpexs.decompiler.flash.helpers.BMPFile;
-import com.jpexs.decompiler.flash.helpers.FontHelper;
 import com.jpexs.decompiler.flash.helpers.ImageHelper;
-import com.jpexs.decompiler.flash.tags.DefineEditTextTag;
 import com.jpexs.decompiler.flash.tags.DefineSpriteTag;
-import com.jpexs.decompiler.flash.tags.DefineText2Tag;
-import com.jpexs.decompiler.flash.tags.DefineTextTag;
 import com.jpexs.decompiler.flash.tags.SetBackgroundColorTag;
 import com.jpexs.decompiler.flash.tags.Tag;
 import com.jpexs.decompiler.flash.tags.base.CharacterTag;
-import com.jpexs.decompiler.flash.tags.base.DrawableTag;
 import com.jpexs.decompiler.flash.tags.base.FontTag;
 import com.jpexs.decompiler.flash.tags.base.RenderContext;
-import com.jpexs.decompiler.flash.tags.base.StaticTextTag;
-import com.jpexs.decompiler.flash.tags.base.TextTag;
 import com.jpexs.decompiler.flash.tags.enums.ImageFormat;
 import com.jpexs.decompiler.flash.timeline.DepthState;
 import com.jpexs.decompiler.flash.timeline.Frame;
 import com.jpexs.decompiler.flash.timeline.Timeline;
 import com.jpexs.decompiler.flash.timeline.Timelined;
 import com.jpexs.decompiler.flash.types.ColorTransform;
-import com.jpexs.decompiler.flash.types.DynamicTextGlyphEntry;
-import com.jpexs.decompiler.flash.types.GLYPHENTRY;
 import com.jpexs.decompiler.flash.types.RECT;
 import com.jpexs.decompiler.flash.types.RGB;
 import com.jpexs.decompiler.flash.types.RGBA;
-import com.jpexs.decompiler.flash.types.TEXTRECORD;
 import com.jpexs.decompiler.flash.types.filters.BEVELFILTER;
 import com.jpexs.decompiler.flash.types.filters.COLORMATRIXFILTER;
 import com.jpexs.decompiler.flash.types.filters.CONVOLUTIONFILTER;
@@ -75,27 +65,12 @@ import gnu.jpdf.PDFGraphics;
 import gnu.jpdf.PDFJob;
 import java.awt.AlphaComposite;
 import java.awt.Color;
-import java.awt.Composite;
 import java.awt.Font;
-import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.GraphicsConfiguration;
-import java.awt.Image;
-import java.awt.Paint;
 import java.awt.Point;
 import java.awt.Rectangle;
-import java.awt.RenderingHints;
-import java.awt.Shape;
-import java.awt.Stroke;
-import java.awt.font.FontRenderContext;
-import java.awt.font.GlyphVector;
-import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
-import java.awt.image.BufferedImageOp;
-import java.awt.image.ImageObserver;
-import java.awt.image.RenderedImage;
-import java.awt.image.renderable.RenderableImage;
 import java.awt.print.PageFormat;
 import java.awt.print.Paper;
 import java.io.BufferedOutputStream;
@@ -104,7 +79,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.text.AttributedCharacterIterator;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -195,6 +169,10 @@ public class FrameExporter {
 
     public List<File> exportFrames(AbortRetryIgnoreHandler handler, String outdir, final SWF swf, int containerId, List<Integer> frames, final FrameExportSettings settings, final EventListener evl) throws IOException, InterruptedException {
         final List<File> ret = new ArrayList<>();
+        if (Thread.currentThread().isInterrupted()) {
+            return ret;
+        }
+        
         if (swf.getTags().isEmpty()) {
             return ret;
         }
@@ -245,7 +223,7 @@ public class FrameExporter {
                         rect.xMax *= settings.zoom;
                         rect.yMax *= settings.zoom;
                         rect.xMin *= settings.zoom;
-                        rect.yMin *= settings.zoom;
+                        rect.yMin *= settings.zoom;                        
                         SVGExporter exporter = new SVGExporter(rect, settings.zoom);
                         if (fbackgroundColor != null) {
                             exporter.setBackGroundColor(fbackgroundColor);
@@ -256,6 +234,10 @@ public class FrameExporter {
                     }
                     ret.add(f);
                 }, handler).run();
+                
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
+                }
 
                 if (evl != null) {
                     Tag parentTag = tim.getParentTag();
@@ -424,6 +406,9 @@ public class FrameExporter {
 
             @Override
             public boolean hasNext() {
+                if (Thread.currentThread().isInterrupted()) {
+                    return false;
+                }
                 return fframes.size() > pos;
             }
 
@@ -433,7 +418,7 @@ public class FrameExporter {
             }
 
             @Override
-            public BufferedImage next() {
+            public BufferedImage next() {                
                 if (!hasNext()) {
                     return null;
                 }
@@ -446,8 +431,10 @@ public class FrameExporter {
                 }
 
                 int fframe = fframes.get(pos++);
-                BufferedImage result = SWF.frameToImageGet(tim, fframe, 0, null, 0, tim.displayRect, new Matrix(), null, fusesTransparency ? null : fbackgroundColor, settings.zoom).getBufferedImage();
-
+                BufferedImage result = SWF.frameToImageGet(tim, fframe, 0, null, 0, tim.displayRect, new Matrix(), null, fusesTransparency ? null : fbackgroundColor, settings.zoom, true).getBufferedImage();
+                if (Thread.currentThread().isInterrupted()) {
+                    return null;
+                }
                 if (evl != null) {
                     evl.handleExportedEvent("frame", pos, fframes.size(), tagName);
                 }
@@ -469,7 +456,10 @@ public class FrameExporter {
                     final int fi = i;
                     new RetryTask(() -> {
                         File f = new File(foutdir + File.separator + (fframes.get(fi) + 1) + ".bmp");
-                        BMPFile.saveBitmap(frameImages.next(), f);
+                        BufferedImage img = frameImages.next();
+                        if (img != null) {
+                            BMPFile.saveBitmap(img, f);
+                        }
                         ret.add(f);
                     }, handler).run();
                 }
@@ -479,8 +469,11 @@ public class FrameExporter {
                     final int fi = i;
                     new RetryTask(() -> {
                         File file = new File(foutdir + File.separator + (fframes.get(fi) + 1) + ".png");
-                        ImageHelper.write(frameImages.next(), ImageFormat.PNG, file);
-                        ret.add(file);
+                        BufferedImage img = frameImages.next();
+                        if (img != null) {
+                            ImageHelper.write(img, ImageFormat.PNG, file);
+                            ret.add(file);
+                        }
                     }, handler).run();
                 }
 
@@ -558,16 +551,15 @@ public class FrameExporter {
                             renderContext.stateUnderCursor = new ArrayList<>();
 
                             try {
-                                tim.toImage(fframe, fframe, renderContext, image, image, false, m, new Matrix(), m, null, zoom, true, new ExportRectangle(rect), m, true, Timeline.DRAW_MODE_ALL);
+                                tim.toImage(fframe, fframe, renderContext, image, image, false, m, new Matrix(), m, null, zoom, true, new ExportRectangle(rect), m, true, Timeline.DRAW_MODE_ALL, 0, true);
                             } catch (Exception ex) {
                                 ex.printStackTrace();
                             }
                             g.dispose();
-                            /*if (frameImages.hasNext()) {
-                                img = frameImages.next();
-                            } else {
-                                break;
-                            }*/
+
+                            if (Thread.currentThread().isInterrupted()) {
+                                return;
+                            }
                             pos++;
                         }
 
@@ -587,7 +579,6 @@ public class FrameExporter {
 
         return ret;
     }
-
 
     private static void drawText(float x, float y, Matrix trans, int textColor, Map<Integer, Font> existingFonts, FontTag font, String text, int textHeight, Graphics g) {
         int fontId = font.getFontId();
@@ -616,7 +607,7 @@ public class FrameExporter {
                 }
             } else {
                 FontExporter fe = new FontExporter();
-                File tempFile;
+                File tempFile = null;
                 try {
                     tempFile = File.createTempFile("ffdec_font_export_", ".ttf");
                     fe.exportFont(font, FontExportMode.TTF, tempFile);
@@ -625,6 +616,9 @@ public class FrameExporter {
                     g2.setTtfFont(f, tempFile);
                 } catch (IOException ex) {
                     Logger.getLogger(FrameExporter.class.getName()).log(Level.SEVERE, null, ex);
+                }
+                if (tempFile != null && tempFile.exists()) {
+                    tempFile.delete();
                 }
             }
         }
@@ -650,7 +644,11 @@ public class FrameExporter {
         try {
             out.write(0, img0, 1);
             while (images.hasNext()) {
-                out.write(0, images.next(), 1);
+                BufferedImage img = images.next();
+                if (img == null) {
+                    break;
+                }
+                out.write(0, img, 1);
             }
         } finally {
             out.close();
@@ -667,7 +665,11 @@ public class FrameExporter {
         encoder.start(file.getAbsolutePath());
         encoder.setDelay((int) (1000.0 / frameRate));
         while (images.hasNext()) {
-            encoder.addFrame(images.next());
+            BufferedImage img = images.next();
+            if (img == null) {
+                break;
+            }
+            encoder.addFrame(img);
         }
 
         encoder.finish();
@@ -684,7 +686,11 @@ public class FrameExporter {
             writer.writeToSequence(img0);
 
             while (images.hasNext()) {
-                writer.writeToSequence(images.next());
+                BufferedImage img = images.next();
+                if (img == null) {
+                    break;
+                }
+                writer.writeToSequence(img);
             }
 
             writer.close();
@@ -706,6 +712,10 @@ public class FrameExporter {
         int maxDepth = timeline.getMaxDepth();
         Stack<Integer> clipDepths = new Stack<>();
         for (int frame : frames) {
+            
+            if (Thread.currentThread().isInterrupted()) {
+                break;
+            }
             result.append("\t\tcase ").append(frame).append(":\r\n");
             Frame frameObj = timeline.getFrame(frame);
             for (int i = 1; i <= maxDepth + 1; i++) {
@@ -727,14 +737,14 @@ public class FrameExporter {
                     continue;
                 }
                 DepthState layer = frameObj.layers.get(i);
-                if (!timeline.swf.getCharacters().containsKey(layer.characterId)) {
-                    continue;
-                }
                 if (!layer.isVisible) {
                     continue;
                 }
 
-                CharacterTag character = timeline.swf.getCharacter(layer.characterId);
+                CharacterTag character = layer.getCharacter();
+                if (character == null) {
+                    continue;
+                }
 
                 Matrix placeMatrix = new Matrix(layer.matrix);
                 placeMatrix.scaleX /= unitDivisor;
@@ -783,7 +793,7 @@ public class FrameExporter {
                             + ctrans.getRedMulti() + "," + ctrans.getGreenMulti() + "," + ctrans.getBlueMulti() + "," + ctrans.getAlphaMulti()
                             + "))";
                 }
-                result.append("\t\t\tplace(\"").append(SWF.getTypePrefix(character)).append(layer.characterId).append("\",canvas,ctx,[").append(placeMatrix.scaleX).append(",")
+                result.append("\t\t\tplace(\"").append(SWF.getTypePrefix(character)).append(layer.getCharacter().getCharacterId()).append("\",canvas,ctx,[").append(placeMatrix.scaleX).append(",")
                         .append(placeMatrix.rotateSkew0).append(",")
                         .append(placeMatrix.rotateSkew1).append(",")
                         .append(placeMatrix.scaleY).append(",")

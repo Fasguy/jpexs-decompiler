@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.action.swf4;
 
 import com.jpexs.decompiler.flash.BaseLocalData;
@@ -66,15 +67,15 @@ public class ActionGetURL2 extends Action {
     @Reserved
     public int reserved;
 
-    public ActionGetURL2(int sendVarsMethod, boolean loadVariablesFlag, boolean loadTargetFlag) {
-        super(0x9A, 1);
+    public ActionGetURL2(int sendVarsMethod, boolean loadVariablesFlag, boolean loadTargetFlag, String charset) {
+        super(0x9A, 1, charset);
         this.loadTargetFlag = loadTargetFlag;
         this.loadVariablesFlag = loadVariablesFlag;
         this.sendVarsMethod = sendVarsMethod;
     }
 
-    public ActionGetURL2(int actionLength, SWFInputStream sis) throws IOException {
-        super(0x9A, actionLength);
+    public ActionGetURL2(int actionLength, SWFInputStream sis, String charset) throws IOException {
+        super(0x9A, actionLength, charset);
         loadVariablesFlag = sis.readUB(1, "loadVariablesFlag") == 1;
         loadTargetFlag = sis.readUB(1, "loadTargetFlag") == 1;
         reserved = (int) sis.readUB(4, "reserved");
@@ -104,8 +105,8 @@ public class ActionGetURL2 extends Action {
         return 1;
     }
 
-    public ActionGetURL2(FlasmLexer lexer) throws IOException, ActionParseException {
-        super(0x9A, -1);
+    public ActionGetURL2(FlasmLexer lexer, String charset) throws IOException, ActionParseException {
+        super(0x9A, -1, charset);
         loadVariablesFlag = lexBoolean(lexer);
         loadTargetFlag = lexBoolean(lexer);
         sendVarsMethod = (int) lexLong(lexer);

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -32,9 +32,13 @@ import com.jpexs.decompiler.flash.abc.avm2.model.PostIncrementAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.SetSlotAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.operations.PreDecrementAVM2Item;
 import com.jpexs.decompiler.flash.abc.avm2.model.operations.PreIncrementAVM2Item;
+import com.jpexs.decompiler.flash.abc.avm2.parser.script.AbcIndexing;
 import com.jpexs.decompiler.flash.abc.types.Multiname;
+import com.jpexs.decompiler.flash.abc.types.traits.Trait;
+import com.jpexs.decompiler.flash.abc.types.traits.TraitSlotConst;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.TranslateStack;
+import com.jpexs.decompiler.graph.TypeItem;
 import com.jpexs.decompiler.graph.model.CompoundableBinaryOp;
 import com.jpexs.helpers.Reference;
 import java.util.List;
@@ -136,13 +140,26 @@ public class SetSlotIns extends InstructionDefinition implements SetTypeIns {
             }
         }
 
-        SetSlotAVM2Item result = new SetSlotAVM2Item(ins, localData.lineStartInstruction, obj, objnoreg, slotIndex, slotname, value);
+        GraphTargetItem slotType = TypeItem.UNBOUNDED;
+        if (obj instanceof NewActivationAVM2Item) {
+            for (Trait t : localData.methodBody.traits.traits) {
+                if (t instanceof TraitSlotConst) {
+                    TraitSlotConst tsc = (TraitSlotConst)t;
+                    if (tsc.slot_id == slotIndex) {
+                        slotType = AbcIndexing.multinameToType(tsc.type_index, localData.abc.constants);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        SetSlotAVM2Item result = new SetSlotAVM2Item(ins, localData.lineStartInstruction, obj, objnoreg, slotIndex, slotname, value, slotType);
 
         if (value.getNotCoerced() instanceof CompoundableBinaryOp) {
             if (!obj.hasSideEffect()) {
                 CompoundableBinaryOp binaryOp = (CompoundableBinaryOp) value.getNotCoerced();
-                if (binaryOp.getLeftSide() instanceof GetSlotAVM2Item) {
-                    GetSlotAVM2Item getSlot = (GetSlotAVM2Item) binaryOp.getLeftSide();
+                if (binaryOp.getLeftSide().getNotCoerced() instanceof GetSlotAVM2Item) {
+                    GetSlotAVM2Item getSlot = (GetSlotAVM2Item) binaryOp.getLeftSide().getNotCoerced();
                     if (Objects.equals(obj, getSlot.scope.getThroughDuplicate()) && slotIndex == getSlot.slotIndex) {
                         result.compoundValue = binaryOp.getRightSide();
                         result.compoundOperator = binaryOp.getOperator();
@@ -151,7 +168,7 @@ public class SetSlotIns extends InstructionDefinition implements SetTypeIns {
             }
         }
 
-        SetTypeIns.handleResult(value, stack, output, localData, result, -1);
+        SetTypeIns.handleResult(value, stack, output, localData, result, -1, slotType);
     }
 
     @Override

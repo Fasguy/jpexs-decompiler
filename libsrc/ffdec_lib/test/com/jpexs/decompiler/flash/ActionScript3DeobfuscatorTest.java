@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -22,6 +22,7 @@ import com.jpexs.decompiler.flash.abc.avm2.deobfuscation.AVM2DeobfuscatorGroupPa
 import com.jpexs.decompiler.flash.abc.avm2.deobfuscation.AVM2DeobfuscatorJumps;
 import com.jpexs.decompiler.flash.abc.avm2.parser.AVM2ParseException;
 import com.jpexs.decompiler.flash.abc.avm2.parser.pcode.ASM3Parser;
+import com.jpexs.decompiler.flash.abc.avm2.parser.script.AbcIndexing;
 import com.jpexs.decompiler.flash.abc.avm2.parser.script.ActionScript3Parser;
 import com.jpexs.decompiler.flash.abc.types.ABCException;
 import com.jpexs.decompiler.flash.abc.types.ConvertData;
@@ -87,6 +88,10 @@ public class ActionScript3DeobfuscatorTest extends ActionScriptTestBase {
             public int compareTo(ABCContainerTag o) {
                 return 0;
             }
+
+            @Override
+            public void setABC(ABC abc) {
+            }
         });
         MethodBody b = new MethodBody(abc, new Traits(), new byte[0], new ABCException[0]);
         AVM2Code code = ASM3Parser.parse(abc, new StringReader(str), null, b, new MethodInfo());
@@ -118,12 +123,19 @@ public class ActionScript3DeobfuscatorTest extends ActionScriptTestBase {
             public int compareTo(ABCContainerTag o) {
                 return 0;
             }
+
+            @Override
+            public void setABC(ABC abc) {
+            }
         });
-        ActionScript3Parser par = new ActionScript3Parser(abc, new ArrayList<>());
+        AbcIndexing index = swf.getAbcIndex();
+        index.addAbc(abc);
+        index.rebuildPkgToObjectsNameMap();
+        ActionScript3Parser par = new ActionScript3Parser(index);
         HighlightedTextWriter writer = new HighlightedTextWriter(new CodeFormatting(), false);
         par.addScript(str, "Test.as", 0, 0);
 
-        abc.script_info.get(0).getPacks(abc, 0, "", new ArrayList<>()).get(0).toSource(writer, abc.script_info.get(0).traits.traits, new ConvertData(), ScriptExportMode.AS, false, false);
+        abc.script_info.get(0).getPacks(abc, 0, "", new ArrayList<>()).get(0).toSource(swf.getAbcIndex(), writer, abc.script_info.get(0).traits.traits, new ConvertData(), ScriptExportMode.AS, false, false);
         return writer.toString();
     }
 

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash;
 
 import com.jpexs.decompiler.flash.abc.ABC;
@@ -49,7 +50,7 @@ public class RecompileTest extends FileTestBase {
     public void testAS3InstructionParsing(String filePath) {
         try {
             Configuration._debugCopy.set(false);
-            try (FileInputStream fis = new FileInputStream(filePath)) {
+            try ( FileInputStream fis = new FileInputStream(filePath)) {
                 SWF swf = new SWF(new BufferedInputStream(fis), false);
                 for (ABCContainerTag abcTag : swf.getAbcList()) {
                     ABC abc = abcTag.getABC();
@@ -68,7 +69,7 @@ public class RecompileTest extends FileTestBase {
     @Test(dataProvider = "provideFiles")
     public void testRecompile(String filePath) {
         try {
-            try (FileInputStream fis = new FileInputStream(filePath)) {
+            try ( FileInputStream fis = new FileInputStream(filePath)) {
                 Configuration._debugCopy.set(true);
                 SWF swf = new SWF(new BufferedInputStream(fis), false);
                 swf.saveTo(new ByteArrayOutputStream());

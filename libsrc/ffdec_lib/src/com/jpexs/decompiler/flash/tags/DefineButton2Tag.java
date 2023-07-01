@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.tags;
 
 import com.jpexs.decompiler.flash.SWF;
@@ -108,7 +109,7 @@ public class DefineButton2Tag extends ButtonTag implements ASMSourceContainer {
         reserved = (int) sis.readUB(7, "reserved");
         trackAsMenu = sis.readUB(1, "trackAsMenu") == 1;
         int actionOffset = sis.readUI16("actionOffset");
-        characters = sis.readBUTTONRECORDList(true, "characters");
+        characters = sis.readBUTTONRECORDList(swf, this, "characters");
         if (actionOffset > 0) {
             actions = sis.readBUTTONCONDACTIONList(swf, this, "actions");
         }
@@ -127,7 +128,7 @@ public class DefineButton2Tag extends ButtonTag implements ASMSourceContainer {
         sos.writeUB(1, trackAsMenu ? 1 : 0);
 
         ByteArrayOutputStream baos2 = new ByteArrayOutputStream();
-        try (SWFOutputStream sos2 = new SWFOutputStream(baos2, getVersion())) {
+        try (SWFOutputStream sos2 = new SWFOutputStream(baos2, getVersion(), getCharset())) {
             sos2.writeBUTTONRECORDList(characters, true);
         }
         byte[] brdata = baos2.toByteArray();
@@ -206,6 +207,7 @@ public class DefineButton2Tag extends ButtonTag implements ASMSourceContainer {
         }
 
         RECT rect = new RECT(Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE);
+        boolean foundSomething = false;
         for (BUTTONRECORD r : characters) {
             CharacterTag ch = swf.getCharacter(r.characterId);
             if (ch instanceof BoundedTag) {
@@ -222,8 +224,13 @@ public class DefineButton2Tag extends ButtonTag implements ASMSourceContainer {
                     rect.Ymin = Math.min(r2.Ymin, rect.Ymin);
                     rect.Xmax = Math.max(r2.Xmax, rect.Xmax);
                     rect.Ymax = Math.max(r2.Ymax, rect.Ymax);
+                    foundSomething = true;
                 }
             }
+        }
+        
+        if (!foundSomething) {
+            rect = new RECT();
         }
 
         if (cache != null) {
@@ -296,4 +303,14 @@ public class DefineButton2Tag extends ButtonTag implements ASMSourceContainer {
 
         timeline.addFrame(frameHit);
     }
+
+    @Override
+    public int getFrameCount() {
+        return 4;
+    }
+
+    @Override
+    public void setFrameCount(int frameCount) {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }               
 }

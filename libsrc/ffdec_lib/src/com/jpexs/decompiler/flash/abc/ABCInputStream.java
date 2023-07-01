@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,8 @@
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library. */
+ * License along with this library.
+ */
 package com.jpexs.decompiler.flash.abc;
 
 import com.jpexs.decompiler.flash.EndOfStreamException;
@@ -236,7 +237,7 @@ public class ABCInputStream implements AutoCloseable {
         return ret;
     }
 
-    public long readS32(String name) throws IOException {
+    public int readS32(String name) throws IOException {
         int i;
         long ret = 0;
         int bytePos = 0;
@@ -258,7 +259,7 @@ public class ABCInputStream implements AutoCloseable {
             }
         } while (nextByte && byteCount < 5);
         endDumpLevel(ret);
-        return ret;
+        return (int) ret;
     }
 
     public int available() throws IOException {

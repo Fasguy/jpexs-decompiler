@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -17,10 +17,12 @@
 package com.jpexs.decompiler.flash.action;
 
 import com.jpexs.decompiler.flash.BaseLocalData;
+import com.jpexs.decompiler.graph.GraphPart;
 import com.jpexs.decompiler.graph.GraphSourceItem;
 import com.jpexs.decompiler.graph.GraphTargetItem;
 import com.jpexs.decompiler.graph.SecondPassData;
 import java.util.HashMap;
+import java.util.Set;
 
 /**
  *
@@ -51,10 +53,11 @@ public class ActionLocalData extends BaseLocalData {
         this.secondPassData = secondPassData;
         variables = new HashMap<>();
         functions = new HashMap<>();
-        this.insideDoInitAction = insideDoInitAction;
+        this.insideDoInitAction = insideDoInitAction;        
     }
 
-    public ActionLocalData(SecondPassData secondPassData, boolean insideDoInitAction, HashMap<Integer, String> regNames, HashMap<String, GraphTargetItem> variables, HashMap<String, GraphTargetItem> functions) {
+    public ActionLocalData(Set<GraphPart> switchParts, SecondPassData secondPassData, boolean insideDoInitAction, HashMap<Integer, String> regNames, HashMap<String, GraphTargetItem> variables, HashMap<String, GraphTargetItem> functions) {
+        this.allSwitchParts = switchParts;
         this.regNames = regNames;
         this.variables = variables;
         this.functions = functions;

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -178,6 +178,7 @@ public class TryActionItem extends ActionItem implements Block {
     public List<GraphSourceItem> toSource(SourceGeneratorLocalData localData, SourceGenerator generator) throws CompilationException {
         List<GraphSourceItem> ret = new ArrayList<>();
         ActionSourceGenerator asGenerator = (ActionSourceGenerator) generator;
+        String charset = asGenerator.getCharset();
         List<Action> tryCommandsA = asGenerator.toActionList(asGenerator.generate(localData, tryCommands));
         List<Action> finallyCommandsA = finallyCommands == null ? null : asGenerator.toActionList(asGenerator.generate(localData, finallyCommands));
         List<Action> catchCommandsA = null;
@@ -212,7 +213,7 @@ public class TryActionItem extends ActionItem implements Block {
 
                 if (!allCatched) {
                     fullCatchBody.addAll(0, GraphTargetItem.toSourceMerge(localData, generator,
-                            new ActionPush(new RegisterNumber(catchRegister)),
+                            new ActionPush(new RegisterNumber(catchRegister), charset),
                             new ActionThrow()
                     ));
                 }
@@ -225,19 +226,19 @@ public class TryActionItem extends ActionItem implements Block {
                         fullCatchBody.addAll(0, GraphTargetItem.toSourceMerge(localData, generator,
                                 new DirectValueActionItem(new RegisterNumber(catchRegister)),
                                 ename,
-                                new ActionStackSwap(),
+                                new ActionStackSwap(charset),
                                 new ActionDefineLocal(),
                                 ebody
                         ));
                     } else {
                         List<GraphSourceItem> ifBody = GraphTargetItem.toSourceMerge(localData, generator,
                                 ename,
-                                new ActionStackSwap(),
+                                new ActionStackSwap(charset),
                                 new ActionDefineLocal(),
                                 ebody);
                         fullCatchBody.add(0, new ActionPop());
                         int toFinishSize = Action.actionsToBytes(asGenerator.toActionList(fullCatchBody), false, SWF.DEFAULT_VERSION).length;
-                        ActionJump finishJump = new ActionJump(toFinishSize);
+                        ActionJump finishJump = new ActionJump(toFinishSize, charset);
                         ifBody.add(finishJump);
                         List<Action> ifBodyA = asGenerator.toActionList(ifBody);
                         int ifBodySize = Action.actionsToBytes(ifBodyA, false, SWF.DEFAULT_VERSION).length;
@@ -245,12 +246,12 @@ public class TryActionItem extends ActionItem implements Block {
                         fullCatchBody.addAll(0,
                                 GraphTargetItem.toSourceMerge(localData, generator,
                                         etype,
-                                        new ActionPush(new RegisterNumber(catchRegister)),
+                                        new ActionPush(new RegisterNumber(catchRegister), charset),
                                         new ActionCastOp(),
-                                        new ActionPushDuplicate(),
-                                        new ActionPush(Null.INSTANCE),
+                                        new ActionPushDuplicate(charset),
+                                        new ActionPush(Null.INSTANCE, charset),
                                         new ActionEquals2(),
-                                        new ActionIf(ifBodySize)
+                                        new ActionIf(ifBodySize, charset)
                                 ));
 
                     }
@@ -259,14 +260,14 @@ public class TryActionItem extends ActionItem implements Block {
             }
             catchCommandsA = asGenerator.toActionList(fullCatchBody);
             catchSize = Action.actionsToBytes(catchCommandsA, false, SWF.DEFAULT_VERSION).length;
-            tryCommandsA.add(new ActionJump(catchSize));
+            tryCommandsA.add(new ActionJump(catchSize, charset));
         }
         int finallySize = 0;
         if (finallyCommandsA != null) {
             finallySize = Action.actionsToBytes(finallyCommandsA, false, SWF.DEFAULT_VERSION).length;
         }
         int trySize = Action.actionsToBytes(tryCommandsA, false, SWF.DEFAULT_VERSION).length;
-        ret.add(new ActionTry(catchInRegisterFlag, finallyCommands != null, !catchCommands.isEmpty(), catchName, catchRegister, trySize, catchSize, finallySize, SWF.DEFAULT_VERSION));
+        ret.add(new ActionTry(catchInRegisterFlag, finallyCommands != null, !catchCommands.isEmpty(), catchName, catchRegister, trySize, catchSize, finallySize, SWF.DEFAULT_VERSION, charset));
         ret.addAll(tryCommandsA);
         if (catchCommandsA != null) {
             ret.addAll(catchCommandsA);

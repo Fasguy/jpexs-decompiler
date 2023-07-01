@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010-2021 JPEXS, All rights reserved.
+ *  Copyright (C) 2010-2023 JPEXS, All rights reserved.
  * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -16,6 +16,7 @@
  */
 package com.jpexs.decompiler.flash.importers;
 
+import com.jpexs.decompiler.flash.ValueTooLargeException;
 import com.jpexs.decompiler.flash.action.ConstantPoolTooBigException;
 import com.jpexs.decompiler.flash.action.parser.ActionParseException;
 import com.jpexs.decompiler.flash.action.parser.pcode.ASMParser;
@@ -82,7 +83,9 @@ public class AS2ScriptImporter {
 
                 ActionScript2Parser par = new ActionScript2Parser(asm.getSwf(), asm);
                 try {
-                    asm.setActions(par.actionsFromString(txt));
+                    asm.setActions(par.actionsFromString(txt, asm.getSwf().getCharset()));
+                } catch (ValueTooLargeException ex) {
+                    logger.log(Level.SEVERE, "Script or some of its functions are too large, file: {0}", fileName);
                 } catch (ActionParseException ex) {
                     logger.log(Level.SEVERE, "%error% on line %line%, file: %file%".replace("%error%", ex.text).replace("%line%", Long.toString(ex.line)).replace("%file%", fileName), ex);
                 } catch (CompilationException ex) {
@@ -108,7 +111,7 @@ public class AS2ScriptImporter {
                 String txt = Helper.readTextFile(fileName);
 
                 try {
-                    asm.setActions(ASMParser.parse(0, true, txt, asm.getSwf().version, false));
+                    asm.setActions(ASMParser.parse(0, true, txt, asm.getSwf().version, false, asm.getSwf().getCharset()));
                 } catch (IOException ex) {
                     logger.log(Level.SEVERE, "error during script import, file: %file%".replace("%file%", fileName), ex);
                 } catch (ActionParseException ex) {
